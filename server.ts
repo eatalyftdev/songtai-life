@@ -224,7 +224,8 @@ async function awardCommission(
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const parsedPort = parseInt(process.env.PORT ?? "");
+  const PORT = Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 5000;
 
   app.use(express.json());
 
@@ -338,9 +339,17 @@ Answer concisely, helpfully, and professionally. Support both English and French
     try {
       const signatureHeader = req.headers["x-mesomb-signature"] || req.headers["X-MeSomb-Signature"];
       const rawBody = JSON.stringify(req.body);
-      const signatureKey = process.env.MESOMB_SIGNATURE_KEY || "songtai-secret";
+      const signatureKey = process.env.MESOMB_SIGNATURE_KEY;
+      if (!signatureKey && process.env.NODE_ENV === "production") {
+        console.error("[Webhook] MESOMB_SIGNATURE_KEY is not set — cannot verify signatures in production.");
+        return res.status(500).json({ error: "Webhook signature key not configured." });
+      }
 
       if (signatureHeader) {
+        if (!signatureKey) {
+          console.warn("[Webhook] Received signed webhook but MESOMB_SIGNATURE_KEY is not set — rejecting.");
+          return res.status(500).json({ error: "Webhook signature key not configured." });
+        }
         const computedSignature = crypto.createHmac("sha256", signatureKey).update(rawBody).digest("hex");
         if (signatureHeader !== computedSignature) {
           console.warn("[Webhook] HMAC-SHA256 signature verification failed. Rejecting.");
