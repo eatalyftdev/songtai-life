@@ -12,8 +12,6 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { DistributorLogin, DistributorSignup, AdminLogin } from "./components/auth/AuthViews";
 import AdminPortal from "./components/admin/AdminPortal";
 import { runCommissionEngine } from "./lib/commissionEngine";
-import { db } from "./lib/firebase";
-import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 import { 
   ShoppingBag, X, Plus, Minus, Trash2, ShieldCheck, 
@@ -137,7 +135,7 @@ function AppContent() {
           pvPoints: cartTotalPV,
           phone: checkoutPhone,
           provider: checkoutProvider,
-          userId: user?.uid || "guest",
+          userId: user?.id || "guest",
           cart: cart.map(item => ({ id: item.product.id, name: item.product.name, qty: item.quantity }))
         })
       });

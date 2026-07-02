@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { db } from "../../lib/firebase";
-import { 
-  collection, query, getDocs, updateDoc, doc, onSnapshot, 
-  setDoc, addDoc, deleteDoc, serverTimestamp, writeBatch 
-} from "firebase/firestore";
+import { supabase } from "../../lib/supabase";
 import { 
   Users, FileCheck2, ShieldAlert, CheckCircle, XCircle, Award, 
   TrendingUp, Layers, LogOut, Search, UserCheck, RefreshCw,
@@ -249,11 +245,10 @@ export default function AdminPortal({
   // Log corporate action helper
   const logAdminAction = async (action: string, details: string) => {
     try {
-      await addDoc(collection(db, "auditLogs"), {
-        adminEmail: userProfile?.email || "system@songtai.life",
+      await supabase.from("audit_logs").insert({
+        admin_email: userProfile?.email || "system@songtai.life",
         action,
         details,
-        createdAt: serverTimestamp()
       });
     } catch (err) {
       console.error("Audit logging failure:", err);
@@ -264,123 +259,142 @@ export default function AdminPortal({
   useEffect(() => {
     setLoading(true);
 
-    // Synchronize Users
-    const unsubUsers = onSnapshot(collection(db, "users"), (usersSnap) => {
-      const uMap: Record<string, any> = {};
-      usersSnap.forEach(uDoc => {
-        uMap[uDoc.id] = uDoc.data();
-      });
-      setUsersMap(uMap);
-    }, (err) => {
-      console.error("Error subscribing to users collection:", err);
-    });
+    const loadAll = async () => {
+      const [profilesRes, distsRes, productsRes, ordersRes, blogsRes, eventsRes, messagesRes, subsRes, auditRes] = await Promise.all([
+        supabase.from("profiles").select("*"),
+        supabase.from("distributors").select("*"),
+        supabase.from("products").select("*"),
+        supabase.from("orders").select("*").order("created_at", { ascending: false }),
+        supabase.from("blog_posts").select("*"),
+        supabase.from("events").select("*"),
+        supabase.from("contact_messages").select("*").order("created_at", { ascending: false }),
+        supabase.from("newsletter_subscribers").select("*"),
+        supabase.from("audit_logs").select("*").order("created_at", { ascending: false }),
+      ]);
 
-    // Synchronize Distributors
-    const unsubDists = onSnapshot(collection(db, "distributors"), (distsSnap) => {
-      const list: any[] = [];
-      distsSnap.forEach(dDoc => {
-        list.push({ uid: dDoc.id, ...dDoc.data() });
-      });
-      setRawDistributors(list);
-    }, (err) => {
-      console.error("Error subscribing to distributors collection:", err);
-    });
-
-    // Synchronize Products
-    const unsubProducts = onSnapshot(collection(db, "products"), (snap) => {
-      const list: AdminProduct[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as AdminProduct);
-      });
-      setProducts(list);
-    }, (err) => {
-      console.error("Error subscribing to products collection:", err);
-    });
-
-    // Synchronize Orders
-    const unsubOrders = onSnapshot(collection(db, "orders"), (snap) => {
-      const list: AdminOrder[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as AdminOrder);
-      });
-      // Sort newest first
-      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setOrders(list);
-    }, (err) => {
-      console.error("Error subscribing to orders collection:", err);
-    });
-
-    // Synchronize Blogs
-    const unsubBlogs = onSnapshot(collection(db, "blogs"), (snap) => {
-      const list: BlogPost[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as BlogPost);
-      });
-      setBlogs(list);
-    }, (err) => {
-      console.error("Error subscribing to blogs collection:", err);
-    });
-
-    // Synchronize Events
-    const unsubEvents = onSnapshot(collection(db, "events"), (snap) => {
-      const list: CompanyEvent[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as CompanyEvent);
-      });
-      setEvents(list);
-    }, (err) => {
-      console.error("Error subscribing to events collection:", err);
-    });
-
-    // Synchronize Messages
-    const unsubMessages = onSnapshot(collection(db, "contactMessages"), (snap) => {
-      const list: ContactMessage[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as ContactMessage);
-      });
-      setMessages(list);
-    }, (err) => {
-      console.error("Error subscribing to contactMessages collection:", err);
-    });
-
-    // Synchronize Subscribers
-    const unsubSubscribers = onSnapshot(collection(db, "subscribers"), (snap) => {
-      const list: NewsletterSubscriber[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as NewsletterSubscriber);
-      });
-      setSubscribers(list);
-    }, (err) => {
-      console.error("Error subscribing to subscribers collection:", err);
-    });
-
-    // Synchronize Audit Trail
-    const unsubAudit = onSnapshot(collection(db, "auditLogs"), (snap) => {
-      const list: AuditLog[] = [];
-      snap.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() } as AuditLog);
-      });
-      // Sort newest first
-      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setAuditLogs(list);
+      if (profilesRes.data) {
+        const uMap: Record<string, any> = {};
+        profilesRes.data.forEach(u => { uMap[u.id] = u; });
+        setUsersMap(uMap);
+      }
+      if (distsRes.data) {
+        setRawDistributors(distsRes.data.map(d => ({
+          uid: d.id,
+          distributorCode: d.distributor_code,
+          sponsorId: d.sponsor_id,
+          placementId: d.placement_id,
+          rank: d.rank,
+          kycStatus: d.kyc_status,
+          joinedAt: d.joined_at,
+          pv: d.pv,
+        })));
+      }
+      if (productsRes.data) {
+        setProducts(productsRes.data.map(p => ({
+          id: p.id,
+          slug: p.slug ?? "",
+          name: p.name,
+          description: p.description ?? "",
+          priceXaf: p.price_xaf,
+          pvPoints: p.pv_points ?? 0,
+          category: p.category_id ?? "Health",
+          image: p.image ?? (p.images?.[0] ?? ""),
+          stock: p.stock ?? 0,
+          isActive: p.is_active,
+          benefits: [],
+          usage: "",
+        })));
+      }
+      if (ordersRes.data) {
+        setOrders(ordersRes.data.map(o => ({
+          id: o.id,
+          orderId: o.order_id,
+          userId: o.user_id,
+          amountXaf: o.amount_xaf,
+          pvPoints: o.pv_points ?? 0,
+          phone: o.phone ?? "",
+          provider: o.provider ?? "",
+          status: o.status,
+          createdAt: o.created_at,
+          cart: o.cart ?? [],
+        })));
+      }
+      if (blogsRes.data) {
+        setBlogs(blogsRes.data.map(b => ({
+          id: b.id,
+          slug: b.slug,
+          title: b.title,
+          excerpt: b.excerpt ?? "",
+          body: b.body,
+          category: b.category ?? "",
+          publishedAt: b.published_at ?? "",
+          image: b.image ?? "",
+          author: b.author ?? "",
+        })));
+      }
+      if (eventsRes.data) {
+        setEvents(eventsRes.data.map(e => ({
+          id: e.id,
+          slug: e.slug,
+          title: e.title,
+          startAt: e.start_at,
+          endAt: e.end_at ?? "",
+          location: e.location ?? "",
+          capacity: e.capacity ?? 0,
+          registrants: e.registrants ?? [],
+          description: e.description ?? "",
+          image: e.image ?? "",
+        })));
+      }
+      if (messagesRes.data) {
+        setMessages(messagesRes.data.map(m => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          phone: m.phone ?? "",
+          message: m.message,
+          status: m.status ?? "unread",
+          createdAt: m.created_at,
+        })));
+      }
+      if (subsRes.data) {
+        setSubscribers(subsRes.data.map(s => ({
+          id: s.id,
+          email: s.email,
+          createdAt: s.created_at,
+        })));
+      }
+      if (auditRes.data) {
+        setAuditLogs(auditRes.data.map(a => ({
+          id: a.id,
+          adminEmail: a.admin_email ?? "",
+          action: a.action ?? a.event ?? "",
+          details: a.details ?? "",
+          createdAt: a.created_at,
+        })));
+      }
       setLoading(false);
-    }, (err) => {
-      console.error("Error subscribing to auditLogs collection:", err);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubUsers();
-      unsubDists();
-      unsubProducts();
-      unsubOrders();
-      unsubBlogs();
-      unsubEvents();
-      unsubMessages();
-      unsubSubscribers();
-      unsubAudit();
     };
+
+    loadAll();
+
+    // Realtime channels — re-fetch all on any change
+    const channel = supabase
+      .channel("admin-portal")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "distributors" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "blog_posts" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "contact_messages" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "newsletter_subscribers" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "audit_logs" }, () => loadAll())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
+
 
   const handleLogout = async () => {
     await logout();
@@ -392,16 +406,19 @@ export default function AdminPortal({
   const handleSaveNewProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const pId = newProduct.id || `prod-${Date.now().toString().substring(8)}`;
-      await setDoc(doc(db, "products", pId), {
-        ...newProduct,
-        id: pId,
-        priceXaf: Number(newProduct.priceXaf || 0),
-        pvPoints: Number(newProduct.pvPoints || 0),
-        stock: Number(newProduct.stock || 0)
+      const { error } = await supabase.from("products").insert({
+        slug: newProduct.slug || `prod-${Date.now()}`,
+        name: newProduct.name,
+        description: newProduct.description,
+        price_xaf: Number(newProduct.priceXaf || 0),
+        pv_points: Number(newProduct.pvPoints || 0),
+        stock: Number(newProduct.stock || 0),
+        images: newProduct.image ? [newProduct.image] : [],
+        is_active: newProduct.isActive ?? true,
       });
+      if (error) throw error;
       addNotification("Corporate Catalog item added.", "success");
-      await logAdminAction("Catalog Item Created", `Added product: ${newProduct.name} (${pId})`);
+      await logAdminAction("Catalog Item Created", `Added product: ${newProduct.name}`);
       setIsAddingProduct(false);
       setNewProduct({
         name: "", slug: "", description: "", priceXaf: 0, pvPoints: 0, category: "Health",
@@ -416,12 +433,16 @@ export default function AdminPortal({
     e.preventDefault();
     if (!editingProduct) return;
     try {
-      await setDoc(doc(db, "products", editingProduct.id), {
-        ...editingProduct,
-        priceXaf: Number(editingProduct.priceXaf),
-        pvPoints: Number(editingProduct.pvPoints),
-        stock: Number(editingProduct.stock)
-      }, { merge: true });
+      const { error } = await supabase.from("products").update({
+        name: editingProduct.name,
+        description: editingProduct.description,
+        price_xaf: Number(editingProduct.priceXaf),
+        pv_points: Number(editingProduct.pvPoints),
+        stock: Number(editingProduct.stock),
+        images: editingProduct.image ? [editingProduct.image] : [],
+        is_active: editingProduct.isActive,
+      }).eq("id", editingProduct.id);
+      if (error) throw error;
       addNotification("Corporate Catalog item updated.", "success");
       await logAdminAction("Catalog Item Updated", `Updated product: ${editingProduct.name} (Qty: ${editingProduct.stock})`);
       setEditingProduct(null);
@@ -433,7 +454,8 @@ export default function AdminPortal({
   const handleDeleteProduct = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete ${name}?`)) return;
     try {
-      await deleteDoc(doc(db, "products", id));
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) throw error;
       addNotification("Catalog item deleted.", "success");
       await logAdminAction("Catalog Item Deleted", `Deleted product: ${name} (${id})`);
     } catch (err: any) {
@@ -444,8 +466,8 @@ export default function AdminPortal({
   // KYC OPERATIONS
   const handleUpdateKyc = async (uid: string, status: "verified" | "rejected") => {
     try {
-      const distRef = doc(db, "distributors", uid);
-      await updateDoc(distRef, { kycStatus: status });
+      const { error } = await supabase.from("distributors").update({ kyc_status: status }).eq("id", uid);
+      if (error) throw error;
       addNotification(`KYC updated to ${status} for distributor.`, "success");
       await logAdminAction("KYC Audited", `Set KYC status of distributor ${uid} to ${status.toUpperCase()}`);
     } catch (err: any) {
@@ -462,37 +484,26 @@ export default function AdminPortal({
     }
 
     try {
-      // Check if target distributor exists
-      const targetSnap = await getDocs(collection(db, "distributors"));
-      let targetDocId = "";
-      targetSnap.forEach(d => {
-        if (d.data().distributorCode === overrideDistId || d.id === overrideDistId) {
-          targetDocId = d.id;
-        }
-      });
+      // Find target distributor by distributor_code or id
+      const { data: allDists } = await supabase.from("distributors").select("id, distributor_code");
 
-      if (!targetDocId) {
+      const target = allDists?.find(d => d.distributor_code === overrideDistId || d.id === overrideDistId);
+      if (!target) {
         addNotification("Target Distributor code not found.", "info");
         return;
       }
 
-      // Verify that sponsor code exists
-      let sponsorExists = false;
-      targetSnap.forEach(d => {
-        if (d.data().distributorCode === overrideSponsorCode || overrideSponsorCode === "Root") {
-          sponsorExists = true;
-        }
-      });
-
+      const sponsorExists = overrideSponsorCode === "Root" || allDists?.some(d => d.distributor_code === overrideSponsorCode);
       if (!sponsorExists) {
         addNotification("New Sponsor Code does not exist.", "info");
         return;
       }
 
-      await updateDoc(doc(db, "distributors", targetDocId), {
-        sponsorId: overrideSponsorCode,
-        placementId: overridePlacementCode || overrideSponsorCode
-      });
+      const { error } = await supabase.from("distributors").update({
+        sponsor_id: overrideSponsorCode,
+        placement_id: overridePlacementCode || overrideSponsorCode
+      }).eq("id", target.id);
+      if (error) throw error;
 
       addNotification("Unilevel Genealogy tree manually rewired.", "success");
       await logAdminAction("Genealogy Manual Override", `Rewired sponsor of ${overrideDistId} to ${overrideSponsorCode}`);
@@ -508,7 +519,8 @@ export default function AdminPortal({
   // ORDER UPDATES
   const handleUpdateOrderStatus = async (id: string, status: AdminOrder["status"]) => {
     try {
-      await updateDoc(doc(db, "orders", id), { status });
+      const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+      if (error) throw error;
       addNotification(`Order status updated to ${status}.`, "success");
       await logAdminAction("Order Status Audit", `Updated order ${id} status to ${status.toUpperCase()}`);
     } catch (err: any) {
@@ -520,12 +532,18 @@ export default function AdminPortal({
   const handleSaveBlog = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const bId = `blog-${Date.now().toString().substring(8)}`;
-      await setDoc(doc(db, "blogs", bId), {
-        ...newBlog,
-        id: bId,
-        publishedAt: new Date().toISOString().substring(0, 10)
+      const { error } = await supabase.from("blog_posts").insert({
+        slug: newBlog.slug || `blog-${Date.now()}`,
+        title: newBlog.title,
+        excerpt: newBlog.excerpt,
+        body: newBlog.body,
+        category: newBlog.category,
+        author: newBlog.author,
+        image: newBlog.image,
+        published_at: new Date().toISOString().substring(0, 10),
+        status: "published",
       });
+      if (error) throw error;
       addNotification("New blog post published.", "success");
       await logAdminAction("Blog Created", `Published article: ${newBlog.title}`);
       setIsAddingBlog(false);
@@ -541,7 +559,8 @@ export default function AdminPortal({
   const handleDeleteBlog = async (id: string, title: string) => {
     if (!confirm("Delete this blog post?")) return;
     try {
-      await deleteDoc(doc(db, "blogs", id));
+      const { error } = await supabase.from("blog_posts").delete().eq("id", id);
+      if (error) throw error;
       addNotification("Blog post removed.", "success");
       await logAdminAction("Blog Deleted", `Deleted article: ${title}`);
     } catch (err: any) {
@@ -553,12 +572,18 @@ export default function AdminPortal({
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const evId = `event-${Date.now().toString().substring(8)}`;
-      await setDoc(doc(db, "events", evId), {
-        ...newEvent,
-        id: evId,
-        registrants: []
+      const { error } = await supabase.from("events").insert({
+        slug: newEvent.slug || `event-${Date.now()}`,
+        title: newEvent.title,
+        start_at: newEvent.startAt,
+        end_at: newEvent.endAt,
+        location: newEvent.location,
+        capacity: newEvent.capacity,
+        description: newEvent.description,
+        image: newEvent.image,
+        registrants: [],
       });
+      if (error) throw error;
       addNotification("New company event created.", "success");
       await logAdminAction("Event Scheduled", `Created event: ${newEvent.title} at ${newEvent.location}`);
       setIsAddingEvent(false);
@@ -574,7 +599,8 @@ export default function AdminPortal({
   const handleDeleteEvent = async (id: string, title: string) => {
     if (!confirm("Delete this event?")) return;
     try {
-      await deleteDoc(doc(db, "events", id));
+      const { error } = await supabase.from("events").delete().eq("id", id);
+      if (error) throw error;
       addNotification("Event deleted.", "success");
       await logAdminAction("Event Cancelled", `Removed event: ${title}`);
     } catch (err: any) {
@@ -585,7 +611,8 @@ export default function AdminPortal({
   // CONTACTS OPERATIONS
   const handleMarkMessageRead = async (id: string) => {
     try {
-      await updateDoc(doc(db, "contactMessages", id), { status: "read" });
+      const { error } = await supabase.from("contact_messages").update({ status: "read" }).eq("id", id);
+      if (error) throw error;
       addNotification("Message marked as read.", "success");
     } catch (err: any) {
       addNotification("Error updating message status.", "info");
@@ -600,7 +627,7 @@ export default function AdminPortal({
     }
     const csvContent = "data:text/csv;charset=utf-8," 
       + ["Email,SubscribedAt"].join("\n") + "\n"
-      + subscribers.map(s => `${s.email},${s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000).toISOString() : ""}`).join("\n");
+      + subscribers.map(s => `${s.email},${s.createdAt ? new Date(s.createdAt).toISOString() : ""}`).join("\n");
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -634,20 +661,11 @@ export default function AdminPortal({
   const adminName = userProfile?.email ? userProfile.email.split("@")[0].toUpperCase() : "ADMIN";
   const adminInitials = adminName.substring(0, 2);
 
-  // Helper to robustly get Date object from various formats (Firestore Timestamp, string, number, etc.)
+  // Helper to robustly get Date object from ISO string or number
   const getDateFromValue = (val: any): Date | null => {
     if (!val) return null;
-    if (val.seconds !== undefined) {
-      return new Date(val.seconds * 1000);
-    }
-    if (val.toDate && typeof val.toDate === "function") {
-      return val.toDate();
-    }
     const d = new Date(val);
-    if (!isNaN(d.getTime())) {
-      return d;
-    }
-    return null;
+    return isNaN(d.getTime()) ? null : d;
   };
 
   // Dynamic daily aggregated analytics data

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { ShieldCheck, X, FileText, Check, Landmark, Lock, HelpCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { db } from "../lib/firebase";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { supabase } from "../lib/supabase";
 
 interface PrivacyPolicyModalProps {
   isOpen: boolean;
@@ -16,7 +15,6 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
   const [hasAcceptedBefore, setHasAcceptedBefore] = useState(false);
   const [acceptedDate, setAcceptedDate] = useState<string | null>(null);
 
-  // Load previous acceptance from localStorage
   useEffect(() => {
     const acceptedVal = localStorage.getItem("songtai_privacy_accepted");
     const acceptedAt = localStorage.getItem("songtai_privacy_accepted_at");
@@ -49,16 +47,17 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
       localStorage.setItem("songtai_privacy_accepted", "true");
       localStorage.setItem("songtai_privacy_accepted_at", timestamp.toString());
 
-      // If user is authenticated, update their Firestore profile with the acceptance
-      if (user?.uid) {
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, {
-          privacyAcceptedAt: serverTimestamp(),
-          privacyAcceptedVersion: "1.0.0",
-        }).catch((err) => {
-          // Log but don't block user experience if user doc doesn't allow update yet
-          console.warn("Failed to sync privacy acceptance to user document:", err);
-        });
+      if (user?.id) {
+        await supabase
+          .from("profiles")
+          .update({
+            privacy_accepted_at: new Date().toISOString(),
+            privacy_accepted_version: "1.0.0",
+          })
+          .eq("id", user.id)
+          .then(({ error }) => {
+            if (error) console.warn("Failed to sync privacy acceptance to profile:", error.message);
+          });
       }
 
       addNotification("Privacy & Cybersecurity Policy accepted successfully.", "success");
@@ -72,14 +71,14 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 text-left font-sans select-none animate-fade-in">
       {/* Backdrop overlay */}
-      <div 
-        className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300" 
-        onClick={onClose} 
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300"
+        onClick={onClose}
       />
 
       {/* Modal Container */}
       <div className="bg-stone-900 border border-stone-800 rounded-[32px] max-w-2xl w-full max-h-[85vh] flex flex-col relative z-10 overflow-hidden shadow-2xl shadow-emerald-950/20">
-        
+
         {/* Modal Header */}
         <div className="p-6 bg-stone-950 border-b border-stone-850 flex justify-between items-center flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -91,8 +90,8 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
               <p className="text-[10px] text-stone-500 font-semibold tracking-wider uppercase mt-0.5">Songtai Life Digital Compliance</p>
             </div>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-1.5 hover:bg-stone-800 rounded-full text-stone-400 hover:text-white transition-colors cursor-pointer"
             aria-label="Close modal"
           >
@@ -102,7 +101,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
 
         {/* Scrollable Policy Content */}
         <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-stone-950/30 text-stone-300 text-xs sm:text-sm leading-relaxed scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent">
-          
+
           {hasAcceptedBefore && acceptedDate && (
             <div className="p-3 bg-emerald-950/25 border border-emerald-900/30 rounded-xl flex items-center gap-2.5 text-emerald-400 text-xs mb-4">
               <Check className="w-4 h-4 flex-shrink-0" />
@@ -141,13 +140,13 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
             </p>
             <ul className="list-disc list-inside pl-2 text-stone-400 space-y-1">
               <li>
-                <strong>Encryption at Rest (AES-256):</strong> All persistent customer profiles, unilevel hierarchy nodes, wallet allocations, and financial logs stored in Google Cloud Firestore are fully encrypted using the <strong>AES-256 (Advanced Encryption Standard)</strong> standard.
+                <strong>Encryption at Rest (AES-256):</strong> All persistent customer profiles, unilevel hierarchy nodes, wallet allocations, and financial logs stored in Supabase PostgreSQL are fully encrypted using the <strong>AES-256</strong> standard.
               </li>
               <li>
-                <strong>Encryption in Transit (TLS 1.3):</strong> Any telemetry, payment calls (via MeSomb API handshakes), or authentication commands traveling between your device and our servers are protected using the high-security, low-latency <strong>TLS 1.3 (Transport Layer Security)</strong> protocol, preventing man-in-the-middle exploits.
+                <strong>Encryption in Transit (TLS 1.3):</strong> Any telemetry, payment calls (via MeSomb API handshakes), or authentication commands traveling between your device and our servers are protected using <strong>TLS 1.3</strong>.
               </li>
               <li>
-                <strong>Server-Side Security Bounds:</strong> Secrets like your private key vectors, payment authorization tokens, and API credentials never compile on or leak to client-side browsers, ensuring zero exposure.
+                <strong>Server-Side Security Bounds:</strong> Secrets like your private key vectors, payment authorization tokens, and API credentials never compile on or leak to client-side browsers.
               </li>
             </ul>
           </div>
@@ -163,10 +162,10 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
             </p>
             <ul className="list-decimal list-inside pl-2 text-stone-400 space-y-1.5">
               <li>
-                <strong>Cameroon Law No. 2010/012 of 21 December 2010 on cybersecurity and cybercriminality in Cameroon:</strong> This law governs transactional message integrity, payload hashing (via HMAC-SHA256 signature verification), digital trace auditing, and absolute data storage confidentiality.
+                <strong>Cameroon Law No. 2010/012 of 21 December 2010 on cybersecurity and cybercriminality in Cameroon:</strong> Governing transactional message integrity, payload hashing (via HMAC-SHA256), digital trace auditing, and data storage confidentiality.
               </li>
               <li>
-                <strong>MINPOSTEL (Ministry of Posts and Telecommunications) Directives:</strong> Enforcing strict user consent before data enrollment, end-to-end telemetry encryption, and regional server residency guidelines for payment processors.
+                <strong>MINPOSTEL (Ministry of Posts and Telecommunications) Directives:</strong> Enforcing strict user consent before data enrollment, end-to-end telemetry encryption, and regional server residency guidelines.
               </li>
               <li>
                 <strong>Sovereign Consumer Protections:</strong> Providing clear self-service mechanisms allowing you to request full audit summaries of your unilevel profile or request account decommissioning through our help channel.
@@ -185,16 +184,16 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
             </p>
             <ul className="list-disc list-inside pl-2 text-stone-400 space-y-1.5">
               <li>
-                <strong>Automated Session & Token Expiry:</strong> Active client-side session tokens and local application state caches are automatically invalidated after 24 hours of inactivity, requiring re-authentication.
+                <strong>Automated Session & Token Expiry:</strong> Active client-side session tokens are automatically invalidated after 24 hours of inactivity, requiring re-authentication.
               </li>
               <li>
-                <strong>Ephemeral Audit Logs Purging:</strong> Secondary network trace logs, unilevel calculation snapshots, and intermediary API sync logs are systematically purged from Firestore collections after 90 days of storage.
+                <strong>Ephemeral Audit Logs Purging:</strong> Secondary network trace logs and audit snapshots are systematically purged from the database after 90 days.
               </li>
               <li>
-                <strong>Abandoned Checkout & Cart Lifecycle:</strong> Uncompleted local shopping carts, temporary checkouts, and guest transactions are automatically scrubbed from local memory structures within 30 days.
+                <strong>Abandoned Checkout & Cart Lifecycle:</strong> Uncompleted checkouts and guest transactions are automatically scrubbed from local memory structures within 30 days.
               </li>
               <li>
-                <strong>Coordinated Account Decommissioning:</strong> Upon an official request to terminate your distributor agreement under the "Right to be Forgotten", all associated PII, transaction archives, and downline coordinates are fully scrubbed, de-identified, and irreversibly erased from active Firestore collections within 14 business days.
+                <strong>Coordinated Account Decommissioning:</strong> Upon an official request under the "Right to be Forgotten", all associated PII, transaction archives, and downline coordinates are fully scrubbed within 14 business days.
               </li>
             </ul>
           </div>
@@ -203,11 +202,11 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
 
         {/* Modal Footer / Acceptance Controls */}
         <div className="p-6 bg-stone-950 border-t border-stone-850 flex flex-col gap-4 flex-shrink-0">
-          
+
           {/* Interactive Checkbox */}
           <label className="flex items-start gap-3 cursor-pointer group">
             <div className="relative flex items-center mt-0.5">
-              <input 
+              <input
                 type="checkbox"
                 checked={isChecked}
                 onChange={(e) => setIsChecked(e.target.checked)}
@@ -215,15 +214,15 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
                 disabled={hasAcceptedBefore}
               />
               <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
-                isChecked 
-                  ? "bg-[#006224] border-[#006224] text-white" 
+                isChecked
+                  ? "bg-[#006224] border-[#006224] text-white"
                   : "border-stone-700 bg-stone-900 group-hover:border-stone-500"
               } ${hasAcceptedBefore ? "opacity-60 cursor-not-allowed" : ""}`}>
                 {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
               </div>
             </div>
             <span className="text-[11px] sm:text-xs text-stone-400 leading-snug font-medium select-none">
-              I acknowledge, understand, and agree to the data handling terms, Firestore AES-256 encryption standards, and legal compliance structures under Cameroon Law No. 2010/012.
+              I acknowledge, understand, and agree to the data handling terms, AES-256 encryption standards, and legal compliance structures under Cameroon Law No. 2010/012.
             </span>
           </label>
 
@@ -235,14 +234,14 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
             >
               {hasAcceptedBefore ? "Dismiss" : "Cancel"}
             </button>
-            
+
             {!hasAcceptedBefore && (
               <button
                 onClick={handleAccept}
                 disabled={!isChecked}
                 className={`px-6 py-2.5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md cursor-pointer ${
-                  isChecked 
-                    ? "bg-[#006224] hover:bg-[#00531d] shadow-emerald-950/40" 
+                  isChecked
+                    ? "bg-[#006224] hover:bg-[#00531d] shadow-emerald-950/40"
                     : "bg-stone-800 text-stone-500 border border-stone-850 opacity-55 cursor-not-allowed"
                 }`}
               >

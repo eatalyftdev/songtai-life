@@ -1,18 +1,14 @@
 import { useState, useEffect, FormEvent, ChangeEvent, useRef, MouseEvent } from "react";
 import { useAuth } from "../context/AuthContext";
-import { db } from "../lib/firebase";
-import { 
-  collection, query, where, getDocs, onSnapshot, addDoc, 
-  setDoc, doc, updateDoc, serverTimestamp, orderBy 
-} from "firebase/firestore";
-import { 
-  Users, Wallet, Award, ArrowUpRight, ArrowDownLeft, Send, Sparkles, Plus, 
-  Trash2, FileCheck2, UserPlus, UploadCloud, Smartphone, CreditCard, 
-  CheckCircle2, ShieldAlert, BadgeInfo, Copy, Check, ZoomIn, ZoomOut, Move, ShoppingBag 
+import { supabase } from "../lib/supabase";
+import {
+  Users, Wallet, Award, ArrowUpRight, ArrowDownLeft, Send, Sparkles, Plus,
+  Trash2, FileCheck2, UserPlus, UploadCloud, Smartphone, CreditCard,
+  CheckCircle2, ShieldAlert, BadgeInfo, Copy, Check, ZoomIn, ZoomOut, Move, ShoppingBag
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
-interface FirebaseTransaction {
+interface Transaction {
   id: string;
   type: "commission" | "withdrawal" | "adjustment" | "refund";
   amountXaf: number;
@@ -20,7 +16,7 @@ interface FirebaseTransaction {
   createdAt: any;
 }
 
-interface FirebaseOrder {
+interface Order {
   id: string;
   amountXaf: number;
   pvPoints: number;
@@ -30,11 +26,8 @@ interface FirebaseOrder {
 
 export default function DistributorPortal({ addNotification }: { addNotification: any }) {
   const { user, userProfile, distributorProfile, wallet, logout } = useAuth();
-  
-  // Tab states
-  const [activePanel, setActivePanel] = useState<"dashboard" | "genealogy" | "wallet" | "orders" | "referral" | "kyc">("dashboard");
 
-  // State controls for forms
+  const [activePanel, setActivePanel] = useState<"dashboard" | "genealogy" | "wallet" | "orders" | "referral" | "kyc">("dashboard");
   const [payoutProvider, setPayoutProvider] = useState<"mtn_momo" | "orange_money">("mtn_momo");
   const [payoutPhone, setPayoutPhone] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
@@ -45,81 +38,117 @@ export default function DistributorPortal({ addNotification }: { addNotification
   const [kycLoading, setKycLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Lists fetched from Firestore
-  const [transactions, setTransactions] = useState<FirebaseTransaction[]>([]);
-  const [orders, setOrders] = useState<FirebaseOrder[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [downlineList, setDownlineList] = useState<any[]>([]);
 
-  // Tree interactive states (zoom / pan)
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // Load data in real-time
+  // Initial data fetch + realtime subscriptions
   useEffect(() => {
     if (!user || !distributorProfile) return;
 
-    // A. Subscribe to downline distributors sponsorId
-    const qDownline = query(
-      collection(db, "distributors"),
-      where("sponsorId", "==", distributorProfile.distributorCode)
-    );
-    const unsubDownline = onSnapshot(qDownline, (snap) => {
-      const list: any[] = [];
-      snap.forEach(dDoc => {
-        list.push({ uid: dDoc.id, ...dDoc.data() });
-      });
-      setDownlineList(list);
-    });
+    const sponsorCode = distributorProfile.distributorCode;
+    const userId = user.id;
 
-    // B. Subscribe to transactions
-    const qTx = query(
-      collection(db, "walletTransactions"),
-      where("walletId", "==", user.uid)
-    );
-    const unsubTx = onSnapshot(qTx, (snap) => {
-      const list: FirebaseTransaction[] = [];
-      snap.forEach(tDoc => {
-        const data = tDoc.data();
-        list.push({
-          id: tDoc.id,
-          type: data.type,
-          amountXaf: data.amountXaf,
-          description: data.description,
-          createdAt: data.createdAt
-        });
-      });
-      setTransactions(list);
-    });
+    // --- Initial Fetches ---
+    const loadData = async () => {
+      const [downlineRes, txRes, commissionsRes] = await Promise.all([
+        supabase.from("distributors").select("*").eq("sponsor_id", sponsorCode),
+        supabase.from("wallet_transactions").select("*").eq("wallet_id", userId).order("created_at", { ascending: false }),
+        supabase.from("commissions").select("*").eq("distributor_id", userId).order("created_at", { ascending: false }),
+      ]);
 
-    // C. Subscribe to orders / purchases
-    const qOrd = query(
-      collection(db, "commissions"), // using commissions or purchases log
-      where("distributorId", "==", user.uid)
-    );
-    const unsubOrd = onSnapshot(qOrd, (snap) => {
-      const list: any[] = [];
-      snap.forEach(oDoc => {
-        const data = oDoc.data();
-        list.push({
-          id: oDoc.id,
-          amountXaf: data.amountXaf || 55000,
-          pvPoints: data.level === 0 ? 100 : 50,
+      if (downlineRes.data) {
+        setDownlineList(downlineRes.data.map((d) => ({
+          uid: d.id,
+          distributorCode: d.distributor_code,
+          rank: d.rank,
+          sponsorId: d.sponsor_id,
+        })));
+      }
+
+      if (txRes.data) {
+        setTransactions(txRes.data.map((t) => ({
+          id: t.id,
+          type: t.type,
+          amountXaf: t.amount_xaf,
+          description: t.description,
+          createdAt: t.created_at,
+        })));
+      }
+
+      if (commissionsRes.data) {
+        setOrders(commissionsRes.data.map((c) => ({
+          id: c.id,
+          amountXaf: c.amount_xaf ?? 55000,
+          pvPoints: c.level === 0 ? 100 : 50,
           status: "processed",
-          createdAt: data.createdAt
-        });
-      });
-      setOrders(list);
-    });
-
-    return () => {
-      unsubDownline();
-      unsubTx();
-      unsubOrd();
+          createdAt: c.created_at,
+        })));
+      }
     };
-  }, [user, distributorProfile]);
+
+    loadData();
+
+    // --- Realtime Channels ---
+    const channel = supabase
+      .channel(`portal-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "distributors", filter: `sponsor_id=eq.${sponsorCode}` },
+        async () => {
+          const { data } = await supabase.from("distributors").select("*").eq("sponsor_id", sponsorCode);
+          if (data) {
+            setDownlineList(data.map((d) => ({
+              uid: d.id,
+              distributorCode: d.distributor_code,
+              rank: d.rank,
+              sponsorId: d.sponsor_id,
+            })));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "wallet_transactions", filter: `wallet_id=eq.${userId}` },
+        async () => {
+          const { data } = await supabase.from("wallet_transactions").select("*").eq("wallet_id", userId).order("created_at", { ascending: false });
+          if (data) {
+            setTransactions(data.map((t) => ({
+              id: t.id,
+              type: t.type,
+              amountXaf: t.amount_xaf,
+              description: t.description,
+              createdAt: t.created_at,
+            })));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "commissions", filter: `distributor_id=eq.${userId}` },
+        async () => {
+          const { data } = await supabase.from("commissions").select("*").eq("distributor_id", userId).order("created_at", { ascending: false });
+          if (data) {
+            setOrders(data.map((c) => ({
+              id: c.id,
+              amountXaf: c.amount_xaf ?? 55000,
+              pvPoints: c.level === 0 ? 100 : 50,
+              status: "processed",
+              createdAt: c.created_at,
+            })));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, distributorProfile?.distributorCode]);
 
   // Handle mobile money withdrawal cashouts
   const handlePayoutSubmit = async (e: FormEvent) => {
@@ -142,30 +171,31 @@ export default function DistributorPortal({ addNotification }: { addNotification
     setPayoutLoading(true);
 
     try {
-      // 1. Create a withdrawal document
-      await addDoc(collection(db, "withdrawals"), {
-        distributorId: user.uid,
-        amountXaf: amountNum,
+      // 1. Log withdrawal document
+      await supabase.from("withdrawals").insert({
+        distributor_id: user.id,
+        amount_xaf: amountNum,
         method: payoutProvider,
         status: "pending",
-        createdAt: serverTimestamp()
       });
 
-      // 2. Create a wallet transaction debit entry
-      await addDoc(collection(db, "walletTransactions"), {
-        walletId: user.uid,
+      // 2. Log wallet transaction debit entry
+      await supabase.from("wallet_transactions").insert({
+        wallet_id: user.id,
         type: "withdrawal",
-        amountXaf: amountNum,
+        amount_xaf: amountNum,
         description: `MeSomb Cashout request to ${payoutProvider === "mtn_momo" ? "MTN MoMo" : "Orange Money"} (+237 ${payoutPhone})`,
-        createdAt: serverTimestamp()
+        status: "pending",
       });
 
-      // 3. Deduct from wallet balance in Firestore
-      const walletRef = doc(db, "wallets", user.uid);
-      await setDoc(walletRef, {
-        balanceXaf: wallet.balanceXaf - amountNum,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      // 3. Deduct from wallet balance
+      await supabase
+        .from("wallets")
+        .update({
+          balance_xaf: wallet.balanceXaf - amountNum,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
 
       addNotification(`Cashout Request logged! ${amountNum.toLocaleString()} XAF pending MeSomb handshake.`, "success");
       setPayoutAmount("");
@@ -178,41 +208,23 @@ export default function DistributorPortal({ addNotification }: { addNotification
     }
   };
 
-  // Sponsoring a new downline member under yourself
+  // Sponsoring a new downline member
   const handleAddMember = async (e: FormEvent) => {
     e.preventDefault();
     if (!user || !distributorProfile || !newMemberName.trim()) return;
 
     try {
       const generatedCode = `ST-DOWN-${Math.floor(1000 + Math.random() * 9000)}`;
-      const mockUid = `downline-uid-${Math.floor(10000 + Math.random() * 90000)}`;
+      // Create a mock UUID for simulated downline (server-side registration in production)
+      const mockId = crypto.randomUUID();
 
-      // Create simulated downline user
-      const userRef = doc(db, "users", mockUid);
-      await setDoc(userRef, {
-        email: `${newMemberName.replace(/\s+/g, "").toLowerCase()}@songtailife.com`,
-        phone: "+237 677 88 99 00",
-        role: "distributor",
-        locale: "fr",
-        createdAt: serverTimestamp()
-      });
-
-      // Create downline distributor
-      const distRef = doc(db, "distributors", mockUid);
-      await setDoc(distRef, {
-        distributorCode: generatedCode,
-        sponsorId: distributorProfile.distributorCode,
-        placementId: distributorProfile.distributorCode,
+      await supabase.from("distributors").insert({
+        id: mockId,
+        distributor_code: generatedCode,
+        sponsor_id: distributorProfile.distributorCode,
+        placement_id: distributorProfile.distributorCode,
         rank: "bronze",
-        kycStatus: "none",
-        joinedAt: serverTimestamp()
-      });
-
-      // Create downline wallet
-      const walletRef = doc(db, "wallets", mockUid);
-      await setDoc(walletRef, {
-        balanceXaf: 0,
-        updatedAt: serverTimestamp()
+        kyc_status: "none",
       });
 
       addNotification(`New member ${newMemberName} added directly to your matrix tree!`, "success");
@@ -231,24 +243,24 @@ export default function DistributorPortal({ addNotification }: { addNotification
       setKycLoading(true);
 
       try {
-        // Secure upload to Firebase Storage or direct Firestore link representation
-        // For premium resilience and zero bucket failure, we log the doc reference on Firestore
-        const docId = `kyc-${user?.uid}`;
-        await setDoc(doc(db, "kycDocuments", docId), {
-          distributorId: user?.uid,
-          documentType: "National ID Card / Passport",
-          fileUrl: `https://webmail-7159a.firebasestorage.app/kyc/${user?.uid}/${file.name}`,
+        const docId = `kyc-${user?.id}`;
+        const { error: kycError } = await supabase.from("kyc_documents").upsert({
+          id: docId,
+          distributor_id: user?.id,
+          document_type: "National ID Card / Passport",
+          file_url: `https://auyjxchghtetxpiyecds.supabase.co/storage/v1/object/public/kyc/${user?.id}/${file.name}`,
           status: "pending",
-          createdAt: serverTimestamp()
         });
 
-        // Set kycStatus to pending on distributors doc
-        const distRef = doc(db, "distributors", user?.uid);
-        await updateDoc(distRef, {
-          kycStatus: "pending"
-        });
+        if (kycError) throw kycError;
 
-        addNotification("Identity document uploaded to cloud storage. Pending Admin Audit review.", "success");
+        // Update KYC status on distributor record
+        await supabase
+          .from("distributors")
+          .update({ kyc_status: "pending" })
+          .eq("id", user?.id);
+
+        addNotification("Identity document uploaded. Pending Admin Audit review.", "success");
       } catch (err: any) {
         console.error(err);
         addNotification("Verification upload failed.", "info");
@@ -267,7 +279,6 @@ export default function DistributorPortal({ addNotification }: { addNotification
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Zoom / Pan handlers
   const handleMouseDown = (e: MouseEvent) => {
     setIsDragging(true);
     dragStart.current = { x: e.clientX - panX, y: e.clientY - panY };
@@ -286,7 +297,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-12 font-sans relative select-none text-left">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-        
+
         {/* Portal Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-stone-850">
           <div>
@@ -353,7 +364,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
           </div>
 
           {/* Compliance Status Card */}
-          <div 
+          <div
             onClick={() => setActivePanel("kyc")}
             className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left cursor-pointer hover:border-[#0A7D32]/40 transition-all group"
           >
@@ -381,8 +392,8 @@ export default function DistributorPortal({ addNotification }: { addNotification
               )}
             </span>
             <div className="flex items-center gap-1 mt-4 text-[11px] text-stone-500 group-hover:text-stone-300 transition-colors">
-              {distributorProfile?.kycStatus === "rejected" 
-                ? "Click to re-upload document" 
+              {distributorProfile?.kycStatus === "rejected"
+                ? "Click to re-upload document"
                 : "Click to view compliance tab"}
             </div>
           </div>
@@ -417,15 +428,13 @@ export default function DistributorPortal({ addNotification }: { addNotification
         {activePanel === "dashboard" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-8 space-y-8">
-              {/* Welcome box */}
               <div className="p-8 bg-gradient-to-r from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] relative overflow-hidden">
                 <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-emerald-900/10 rounded-full blur-3xl pointer-events-none" />
                 <h3 className="font-sans font-black text-2xl text-white">Sovereign Growth, {userProfile?.email.split("@")[0]}</h3>
                 <p className="text-stone-400 text-sm mt-2 max-w-lg leading-relaxed">
                   Your team volume overrides and commissions are calculating live using the unilevel integration logic.
                 </p>
-                
-                {/* Dynamic KYC Compliance Alert Indicator */}
+
                 {distributorProfile?.kycStatus === "verified" ? (
                   <div className="mt-6 p-4 bg-emerald-950/30 border border-emerald-900/40 rounded-2xl flex items-center justify-between gap-3 text-xs text-emerald-400">
                     <div className="flex gap-3">
@@ -457,7 +466,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                         <p className="text-stone-400">Your submission was disapproved. Please upload a high-resolution identity document.</p>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setActivePanel("kyc")}
                       className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors flex-shrink-0 text-center"
                     >
@@ -473,7 +482,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                         <p className="text-stone-400">Upload your national CNI card or Passport to unlock full unilevel withdrawal privileges.</p>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setActivePanel("kyc")}
                       className="px-4 py-2 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors flex-shrink-0 text-center"
                     >
@@ -483,12 +492,11 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 )}
               </div>
 
-              {/* Recent Commissions earned list */}
+              {/* Recent Commissions */}
               <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-6">
                 <h4 className="font-sans font-bold text-lg text-white mb-6 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-emerald-400" /> Recent Volume Commission Overrides
                 </h4>
-
                 <div className="divide-y divide-stone-850/60">
                   {transactions.filter(t => t.type === "commission").length === 0 ? (
                     <div className="py-12 text-center text-stone-500 text-xs">
@@ -511,14 +519,13 @@ export default function DistributorPortal({ addNotification }: { addNotification
               </div>
             </div>
 
-            {/* Quick action: Sponsor Member */}
+            {/* Sponsor Member Form */}
             <div className="lg:col-span-4">
               <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] p-6 space-y-6">
                 <h4 className="font-sans font-bold text-lg text-white">Sponsor Downline Member</h4>
                 <p className="text-stone-400 text-xs leading-relaxed">
                   Register a recruit directly to your team matrix structure. They will generate commissions into your active ledger instantly.
                 </p>
-
                 <form onSubmit={handleAddMember} className="space-y-4">
                   <div>
                     <label className="text-stone-400 text-xs block mb-1.5 font-bold">Recruit's Full Name</label>
@@ -531,7 +538,6 @@ export default function DistributorPortal({ addNotification }: { addNotification
                       className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none"
                     />
                   </div>
-
                   <button
                     type="submit"
                     className="w-full py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
@@ -553,8 +559,6 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 <h3 className="font-sans font-bold text-lg text-white">Unilevel Genealogy Map</h3>
                 <p className="text-stone-500 text-xs mt-0.5">Zoom (+ / -) and drag to pan across your network structure.</p>
               </div>
-
-              {/* Navigation help */}
               <div className="flex gap-2.5">
                 <button onClick={() => { setZoom(prev => Math.min(prev + 0.1, 1.5)) }} className="p-2.5 bg-stone-950 border border-stone-850 rounded-lg hover:border-emerald-500 text-stone-400 hover:text-white cursor-pointer"><ZoomIn className="w-4 h-4" /></button>
                 <button onClick={() => { setZoom(prev => Math.max(prev - 0.1, 0.5)) }} className="p-2.5 bg-stone-950 border border-stone-850 rounded-lg hover:border-emerald-500 text-stone-400 hover:text-white cursor-pointer"><ZoomOut className="w-4 h-4" /></button>
@@ -562,15 +566,14 @@ export default function DistributorPortal({ addNotification }: { addNotification
               </div>
             </div>
 
-            {/* Tree SVG Render Canvas */}
-            <div 
+            <div
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
               className="relative w-full min-h-[460px] bg-stone-950 rounded-2xl border border-stone-850/60 overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center"
             >
-              <div 
+              <div
                 style={{
                   transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
                   transformOrigin: "center center",
@@ -578,20 +581,16 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 }}
                 className="absolute"
               >
-                {/* SVG Structure */}
                 <svg width="600" height="400" className="overflow-visible">
-                  {/* Connectors (Bezier paths) */}
                   {downlineList.map((node, index) => {
                     const startX = 300;
                     const startY = 80;
-                    // Distribute child nodes evenly
                     const total = downlineList.length;
                     const spacing = 150;
                     const endX = 300 + (index - (total - 1) / 2) * spacing;
                     const endY = 250;
-
                     return (
-                      <path 
+                      <path
                         key={node.uid}
                         d={`M ${startX} ${startY} C ${startX} ${(startY + endY) / 2}, ${endX} ${(startY + endY) / 2}, ${endX} ${endY}`}
                         stroke="#0A7D32"
@@ -602,7 +601,6 @@ export default function DistributorPortal({ addNotification }: { addNotification
                     );
                   })}
 
-                  {/* Root Node (You) */}
                   <g transform="translate(300, 80)">
                     <rect x="-90" y="-30" width="180" height="60" rx="14" fill="#0A7D32" fillOpacity="0.1" stroke="#0A7D32" strokeWidth="2" />
                     <text x="0" y="-8" textAnchor="middle" fill="#white" fontSize="11" fontWeight="bold">You (Sovereign Root)</text>
@@ -610,13 +608,11 @@ export default function DistributorPortal({ addNotification }: { addNotification
                     <text x="0" y="20" textAnchor="middle" fill="#888" fontSize="8" fontWeight="bold">Rank: {distributorProfile?.rank}</text>
                   </g>
 
-                  {/* Downlines Level 1 Nodes */}
                   {downlineList.map((node, index) => {
                     const total = downlineList.length;
                     const spacing = 150;
                     const endX = 300 + (index - (total - 1) / 2) * spacing;
                     const endY = 250;
-
                     return (
                       <g key={node.uid} transform={`translate(${endX}, ${endY})`}>
                         <rect x="-80" y="-30" width="160" height="60" rx="12" fill="#1c1917" stroke="#ecc246" strokeWidth="1.5" strokeOpacity="0.7" />
@@ -634,7 +630,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                   <Users className="w-10 h-10 text-stone-700" />
                   <div>
                     <h5 className="font-bold text-white text-sm">No downlines registered yet</h5>
-                    <p className="text-stone-500 text-xs mt-1">Copy your referral credentials to initiate your unilevel network matrix matrix!</p>
+                    <p className="text-stone-500 text-xs mt-1">Copy your referral credentials to initiate your unilevel network matrix!</p>
                   </div>
                 </div>
               )}
@@ -645,13 +641,10 @@ export default function DistributorPortal({ addNotification }: { addNotification
         {/* 3. WALLET LEDGER VIEW */}
         {activePanel === "wallet" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            {/* Left Col: Ledger ledger transactions */}
             <div className="lg:col-span-8 bg-stone-900/40 border border-stone-850 rounded-[32px] p-6">
               <h3 className="font-sans font-bold text-lg text-white mb-6 flex items-center gap-2">
                 <Smartphone className="w-5 h-5 text-emerald-400" /> MeSomb Transaction Ledger
               </h3>
-
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs text-stone-400">
                   <thead className="text-[10px] uppercase bg-stone-950 border-b border-stone-850/80 text-stone-500 font-bold">
@@ -696,79 +689,34 @@ export default function DistributorPortal({ addNotification }: { addNotification
               </div>
             </div>
 
-            {/* Right Col: Withdrawal Form */}
+            {/* Withdrawal Form */}
             <div className="lg:col-span-4 bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] p-6">
               <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">MeSomb Gateway</span>
               <h3 className="font-sans font-bold text-lg text-white mt-1">Request Mobile Money Cashout</h3>
-
               <form onSubmit={handlePayoutSubmit} className="mt-6 space-y-4">
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPayoutProvider("mtn_momo")}
-                    className={`p-3.5 rounded-xl border text-xs font-bold transition-all ${
-                      payoutProvider === "mtn_momo"
-                        ? "bg-yellow-500/10 border-yellow-500 text-yellow-500"
-                        : "bg-stone-950 border-stone-850 text-stone-400"
-                    }`}
-                  >
-                    MTN MoMo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPayoutProvider("orange_money")}
-                    className={`p-3.5 rounded-xl border text-xs font-bold transition-all ${
-                      payoutProvider === "orange_money"
-                        ? "bg-orange-500/10 border-orange-500 text-orange-500"
-                        : "bg-stone-950 border-stone-850 text-stone-400"
-                    }`}
-                  >
-                    Orange Money
-                  </button>
+                  <button type="button" onClick={() => setPayoutProvider("mtn_momo")} className={`p-3.5 rounded-xl border text-xs font-bold transition-all ${payoutProvider === "mtn_momo" ? "bg-yellow-500/10 border-yellow-500 text-yellow-500" : "bg-stone-950 border-stone-850 text-stone-400"}`}>MTN MoMo</button>
+                  <button type="button" onClick={() => setPayoutProvider("orange_money")} className={`p-3.5 rounded-xl border text-xs font-bold transition-all ${payoutProvider === "orange_money" ? "bg-orange-500/10 border-orange-500 text-orange-500" : "bg-stone-950 border-stone-850 text-stone-400"}`}>Orange Money</button>
                 </div>
-
                 <div>
                   <label className="text-stone-400 text-xs block mb-1.5 font-bold">Cameroon Phone Number</label>
                   <div className="relative">
                     <Smartphone className="absolute left-3.5 top-3.5 w-4 h-4 text-stone-600" />
-                    <input
-                      type="tel"
-                      required
-                      value={payoutPhone}
-                      onChange={(e) => setPayoutPhone(e.target.value)}
-                      placeholder="+237 6xx xxx xxx"
-                      className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none"
-                    />
+                    <input type="tel" required value={payoutPhone} onChange={(e) => setPayoutPhone(e.target.value)} placeholder="+237 6xx xxx xxx" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
                   </div>
                 </div>
-
                 <div>
                   <label className="text-stone-400 text-xs block mb-1.5 font-bold">Cashout Amount (XAF)</label>
                   <div className="relative">
                     <CreditCard className="absolute left-3.5 top-3.5 w-4 h-4 text-stone-600" />
-                    <input
-                      type="number"
-                      required
-                      value={payoutAmount}
-                      onChange={(e) => setPayoutAmount(e.target.value)}
-                      placeholder="e.g. 5000"
-                      className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none"
-                    />
+                    <input type="number" required value={payoutAmount} onChange={(e) => setPayoutAmount(e.target.value)} placeholder="e.g. 5000" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
                   </div>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={payoutLoading}
-                  className="w-full py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
+                <button type="submit" disabled={payoutLoading} className="w-full py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                   {payoutLoading ? (
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <>
-                      <Send className="w-4 h-4 text-[#ecc246]" />
-                      <span>Initiate MeSomb Cashout</span>
-                    </>
+                    <><Send className="w-4 h-4 text-[#ecc246]" /><span>Initiate MeSomb Cashout</span></>
                   )}
                 </button>
               </form>
@@ -782,7 +730,6 @@ export default function DistributorPortal({ addNotification }: { addNotification
             <h3 className="font-sans font-bold text-lg text-white mb-6 flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-emerald-400" /> My Purchases History
             </h3>
-
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-stone-400">
                 <thead className="text-[10px] uppercase bg-stone-950 border-b border-stone-850/80 text-stone-500 font-bold">
@@ -795,22 +742,14 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 </thead>
                 <tbody className="divide-y divide-stone-850/60">
                   {orders.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-stone-500 text-xs">
-                        No purchases registered yet. Shop products on the store!
-                      </td>
-                    </tr>
+                    <tr><td colSpan={4} className="px-6 py-12 text-center text-stone-500 text-xs">No purchases registered yet. Shop products on the store!</td></tr>
                   ) : (
                     orders.map((ord) => (
                       <tr key={ord.id} className="hover:bg-stone-900/20 transition-all">
                         <td className="px-6 py-4 font-mono text-[10px] text-white">{ord.id}</td>
                         <td className="px-6 py-4 font-bold text-white">{ord.amountXaf.toLocaleString()} XAF</td>
                         <td className="px-6 py-4 text-[#ecc246] font-bold">+{ord.pvPoints} PV</td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 rounded-full text-[9px] uppercase font-bold">
-                            Processed
-                          </span>
-                        </td>
+                        <td className="px-6 py-4"><span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 rounded-full text-[9px] uppercase font-bold">Processed</span></td>
                       </tr>
                     ))
                   )}
@@ -828,10 +767,9 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">Unilevel Recruitment Link</span>
                 <h3 className="font-sans font-bold text-xl text-white mt-1">Share Your Referral ID</h3>
                 <p className="text-stone-400 text-xs leading-relaxed mt-2">
-                  Recruiters gain 10% on direct sales volume plus team matrix overriding overrides. Let your applicants use your unique unilevel code.
+                  Recruiters gain 10% on direct sales volume plus team matrix overriding overrides.
                 </p>
               </div>
-
               <div className="space-y-4">
                 <div>
                   <label className="text-stone-500 text-[10px] font-bold uppercase block mb-1">My Distributor Code</label>
@@ -842,7 +780,6 @@ export default function DistributorPortal({ addNotification }: { addNotification
                     </button>
                   </div>
                 </div>
-
                 <div>
                   <label className="text-stone-500 text-[10px] font-bold uppercase block mb-1">Referral Registration URL</label>
                   <div className="p-4 bg-stone-950 rounded-xl border border-stone-850 flex justify-between items-center text-xs text-stone-300">
@@ -855,15 +792,14 @@ export default function DistributorPortal({ addNotification }: { addNotification
               </div>
             </div>
 
-            {/* QR Code generator */}
             <div className="bg-stone-900 border border-stone-850 rounded-[32px] p-8 flex flex-col items-center justify-center text-center space-y-4">
               <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">Luminous QR Code</span>
               <div className="p-4 bg-white/5 rounded-3xl border border-stone-800">
-                <QRCodeSVG 
-                  value={`https://songtailife.cm/join?ref=${distributorProfile?.distributorCode}`} 
-                  size={160} 
-                  fgColor="#ecc246" 
-                  bgColor="transparent" 
+                <QRCodeSVG
+                  value={`https://songtailife.cm/join?ref=${distributorProfile?.distributorCode}`}
+                  size={160}
+                  fgColor="#ecc246"
+                  bgColor="transparent"
                 />
               </div>
               <div>
@@ -905,7 +841,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                       <ShieldAlert className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
                       <div>
                         <strong className="block text-white font-bold mb-0.5">Verification Disapproved</strong>
-                        Your previously uploaded document was rejected by administrators. Please upload a high-resolution, clear copy of your National ID Card or Passport to continue.
+                        Your previously uploaded document was rejected. Please upload a high-resolution, clear copy.
                       </div>
                     </div>
                   )}

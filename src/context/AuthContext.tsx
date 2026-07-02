@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { User, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase";
 
 export interface UserProfile {
   uid: string;
@@ -38,11 +37,45 @@ interface AuthContextType {
   signup: (email: string, password: string, phone: string, role: UserProfile["role"]) => Promise<void>;
   becomeDistributor: (sponsorCode: string) => Promise<void>;
   logout: () => Promise<void>;
-  simulatePhoneOTP: (phone: string) => Promise<string>; // returns simulated verification code
+  simulatePhoneOTP: (phone: string) => Promise<string>;
   verifyPhoneOTPAndLogin: (phone: string, code: string, enteredCode: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Map Supabase snake_case row → camelCase DistributorProfile
+function mapDistributor(uid: string, row: any): DistributorProfile {
+  return {
+    uid,
+    distributorCode: row.distributor_code,
+    sponsorId: row.sponsor_id ?? null,
+    placementId: row.placement_id ?? null,
+    rank: row.rank ?? "bronze",
+    kycStatus: row.kyc_status ?? "none",
+    joinedAt: row.joined_at,
+  };
+}
+
+// Map Supabase snake_case row → camelCase Wallet
+function mapWallet(uid: string, row: any): Wallet {
+  return {
+    uid,
+    balanceXaf: row.balance_xaf ?? 0,
+    updatedAt: row.updated_at,
+  };
+}
+
+// Map Supabase snake_case row → camelCase UserProfile
+function mapProfile(uid: string, row: any): UserProfile {
+  return {
+    uid,
+    email: row.email,
+    phone: row.phone ?? "",
+    role: row.role,
+    locale: row.locale ?? "fr",
+    createdAt: row.created_at,
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -51,45 +84,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch distributor and wallet for a given uid
+  async function fetchDistributorData(uid: string) {
+    const [distRes, walletRes] = await Promise.all([
+      supabase.from("distributors").select("*").eq("id", uid).maybeSingle(),
+      supabase.from("wallets").select("*").eq("id", uid).maybeSingle(),
+    ]);
+    setDistributorProfile(distRes.data ? mapDistributor(uid, distRes.data) : null);
+    setWallet(walletRes.data ? mapWallet(uid, walletRes.data) : null);
+  }
+
   useEffect(() => {
-    // 1. Listen for standard Firebase Auth changes
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      
-      if (!firebaseUser) {
-        setUserProfile(null);
-        setDistributorProfile(null);
-        setWallet(null);
-        setLoading(false);
-        return;
-      }
+    // Auth state listener
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        const supabaseUser = session?.user ?? null;
+        setUser(supabaseUser);
 
-      // 2. Fetch or subscribe to user doc from Firestore
-      const userRef = doc(db, "users", firebaseUser.uid);
-      
-      const unsubUser = onSnapshot(userRef, async (userDoc) => {
-        if (userDoc.exists()) {
-          const profile = { uid: firebaseUser.uid, ...userDoc.data() } as UserProfile;
+        if (!supabaseUser) {
+          setUserProfile(null);
+          setDistributorProfile(null);
+          setWallet(null);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch profile from Supabase
+        const { data: profileRow } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", supabaseUser.id)
+          .maybeSingle();
+
+        if (profileRow) {
+          const profile = mapProfile(supabaseUser.id, profileRow);
           setUserProfile(profile);
-
-          // 3. If role is distributor, subscribe to distributor details & wallet
           if (profile.role === "distributor") {
-            const distRef = doc(db, "distributors", firebaseUser.uid);
-            const wallRef = doc(db, "wallets", firebaseUser.uid);
-
-            const distSnap = await getDoc(distRef);
-            if (distSnap.exists()) {
-              setDistributorProfile({ uid: firebaseUser.uid, ...distSnap.data() } as DistributorProfile);
-            } else {
-              setDistributorProfile(null);
-            }
-
-            const wallSnap = await getDoc(wallRef);
-            if (wallSnap.exists()) {
-              setWallet({ uid: firebaseUser.uid, ...wallSnap.data() } as Wallet);
-            } else {
-              setWallet(null);
-            }
+            await fetchDistributorData(supabaseUser.id);
           } else {
             setDistributorProfile(null);
             setWallet(null);
@@ -98,41 +129,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserProfile(null);
         }
         setLoading(false);
-      }, (error) => {
-        console.error("Error subscribing to user profile:", error);
-        setLoading(false);
-      });
+      }
+    );
 
-      return () => unsubUser();
-    });
-
-    return () => unsubscribeAuth();
+    return () => authSub.unsubscribe();
   }, []);
+
+  // Realtime: keep wallet + distributor live after auth is established
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`user-data-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
+        async () => {
+          const { data } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+          if (data) {
+            const profile = mapProfile(user.id, data);
+            setUserProfile(profile);
+            if (profile.role === "distributor") {
+              await fetchDistributorData(user.id);
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "wallets", filter: `id=eq.${user.id}` },
+        async () => {
+          const { data } = await supabase.from("wallets").select("*").eq("id", user.id).maybeSingle();
+          if (data) setWallet(mapWallet(user.id, data));
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: any) {
-      if (email === "admin@songtailife.com" && password === "SongtaiAdmin2026!") {
-        try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-          const uid = userCredential.user.uid;
-          
-          const userRef = doc(db, "users", uid);
-          await setDoc(userRef, {
-            email,
-            phone: "+237699999999",
-            role: "admin",
-            locale: "en",
-            createdAt: serverTimestamp()
-          });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // Admin bootstrap: auto-create admin account on first login attempt
+        if (email === "admin@songtailife.com" && password === "SongtaiAdmin2026!") {
+          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email, password });
+          if (signUpErr) throw signUpErr;
+          if (signUpData.user) {
+            await supabase.from("profiles").upsert({
+              id: signUpData.user.id,
+              email,
+              phone: "+237699999999",
+              role: "admin",
+              locale: "en",
+            });
+          }
           setLoading(false);
           return;
-        } catch (regErr: any) {
-          console.error("Auto-seed admin creation failed or account already exists:", regErr);
         }
+        setLoading(false);
+        throw error;
       }
+    } catch (err) {
       setLoading(false);
       throw err;
     }
@@ -141,38 +201,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string, phone: string, role: UserProfile["role"]) => {
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      const uid = data.user!.id;
 
-      // Create primary user profile document
-      const userRef = doc(db, "users", uid);
-      await setDoc(userRef, {
+      await supabase.from("profiles").upsert({
+        id: uid,
         email,
         phone,
         role,
         locale: "fr",
-        createdAt: serverTimestamp()
       });
 
-      // If user is signing up directly as a distributor, generate initial profiles
       if (role === "distributor") {
         const uniqueId = Math.floor(1000 + Math.random() * 9000);
         const distCode = `ST-REG-${uniqueId}`;
 
-        const distRef = doc(db, "distributors", uid);
-        await setDoc(distRef, {
-          distributorCode: distCode,
-          sponsorId: "ST-ELENA-88", // Default root sponsor
-          placementId: "ST-ELENA-88",
+        await supabase.from("distributors").upsert({
+          id: uid,
+          distributor_code: distCode,
+          sponsor_id: "ST-ELENA-88",
+          placement_id: "ST-ELENA-88",
           rank: "bronze",
-          kycStatus: "none",
-          joinedAt: serverTimestamp()
+          kyc_status: "none",
         });
 
-        const walletRef = doc(db, "wallets", uid);
-        await setDoc(walletRef, {
-          balanceXaf: 0,
-          updatedAt: serverTimestamp()
+        await supabase.from("wallets").upsert({
+          id: uid,
+          balance_xaf: 0,
         });
       }
     } catch (err) {
@@ -183,35 +239,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const becomeDistributor = async (sponsorCode: string) => {
     if (!user || !userProfile) throw new Error("No active authenticated session.");
-
     setLoading(true);
     try {
-      // Create distributor document
       const uniqueId = Math.floor(1000 + Math.random() * 9000);
       const newDistCode = `ST-DIST-${uniqueId}`;
 
-      const distRef = doc(db, "distributors", user.uid);
-      await setDoc(distRef, {
-        distributorCode: newDistCode,
-        sponsorId: sponsorCode,
-        placementId: sponsorCode,
+      await supabase.from("distributors").upsert({
+        id: user.id,
+        distributor_code: newDistCode,
+        sponsor_id: sponsorCode,
+        placement_id: sponsorCode,
         rank: "bronze",
-        kycStatus: "none",
-        joinedAt: serverTimestamp()
+        kyc_status: "none",
       });
 
-      // Initialize wallet with 0 balance
-      const walletRef = doc(db, "wallets", user.uid);
-      await setDoc(walletRef, {
-        balanceXaf: 0,
-        updatedAt: serverTimestamp()
+      await supabase.from("wallets").upsert({
+        id: user.id,
+        balance_xaf: 0,
       });
 
-      // Upgrade user role to distributor
-      const userRef = doc(db, "users", user.uid);
-      await setDoc(userRef, {
-        role: "distributor"
-      }, { merge: true });
+      await supabase.from("profiles").update({ role: "distributor" }).eq("id", user.id);
 
       setLoading(false);
     } catch (err) {
@@ -223,16 +270,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     setLoading(true);
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (err) {
       setLoading(false);
       throw err;
     }
   };
 
-  // Simulated OTP sender
-  const simulatePhoneOTP = async (phone: string) => {
-    // Generates a 6-digit code
+  const simulatePhoneOTP = async (phone: string): Promise<string> => {
     const mockCode = Math.floor(100000 + Math.random() * 900000).toString();
     console.log(`[SMS-OTP-GATEWAY] Sending verification code ${mockCode} to ${phone}`);
     return mockCode;
@@ -242,54 +288,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (code !== enteredCode) {
       throw new Error("Invalid verification code. Please request a new OTP code.");
     }
-
     setLoading(true);
     try {
-      // Find or create a user with this phone number
-      // For standard web integration, we use a deterministic mock email based on phone number to authenticate them securely via Firebase
       const sanitizedPhone = phone.replace(/\s+/g, "").replace("+", "");
       const simulatedEmail = `${sanitizedPhone}@songtailife.otp`;
       const fallbackPassword = `OTP-Pass-${sanitizedPhone}`;
 
-      try {
-        await signInWithEmailAndPassword(auth, simulatedEmail, fallbackPassword);
-      } catch (signInError: any) {
-        if (signInError.code === "auth/user-not-found" || signInError.code === "auth/invalid-credential") {
-          // If the user doesn't exist, sign up
-          const userCredential = await createUserWithEmailAndPassword(auth, simulatedEmail, fallbackPassword);
-          const uid = userCredential.user.uid;
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: simulatedEmail,
+        password: fallbackPassword,
+      });
 
-          const userRef = doc(db, "users", uid);
-          await setDoc(userRef, {
-            email: simulatedEmail,
-            phone: phone,
-            role: "distributor", // Default to distributor for convenience
-            locale: "fr",
-            createdAt: serverTimestamp()
-          });
+      if (signInError) {
+        // User doesn't exist — sign up
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+          email: simulatedEmail,
+          password: fallbackPassword,
+        });
+        if (signUpErr) throw signUpErr;
 
-          // Create distributor sub-profile
-          const uniqueId = Math.floor(1000 + Math.random() * 9000);
-          const distCode = `ST-OTP-${uniqueId}`;
+        const uid = signUpData.user!.id;
+        const uniqueId = Math.floor(1000 + Math.random() * 9000);
+        const distCode = `ST-OTP-${uniqueId}`;
 
-          const distRef = doc(db, "distributors", uid);
-          await setDoc(distRef, {
-            distributorCode: distCode,
-            sponsorId: "ST-ELENA-88",
-            placementId: "ST-ELENA-88",
-            rank: "bronze",
-            kycStatus: "none",
-            joinedAt: serverTimestamp()
-          });
+        await supabase.from("profiles").upsert({
+          id: uid,
+          email: simulatedEmail,
+          phone,
+          role: "distributor",
+          locale: "fr",
+        });
 
-          const walletRef = doc(db, "wallets", uid);
-          await setDoc(walletRef, {
-            balanceXaf: 10000, // 10,000 XAF welcome bonus!
-            updatedAt: serverTimestamp()
-          });
-        } else {
-          throw signInError;
-        }
+        await supabase.from("distributors").upsert({
+          id: uid,
+          distributor_code: distCode,
+          sponsor_id: "ST-ELENA-88",
+          placement_id: "ST-ELENA-88",
+          rank: "bronze",
+          kyc_status: "none",
+        });
+
+        await supabase.from("wallets").upsert({
+          id: uid,
+          balance_xaf: 10000, // Welcome bonus
+        });
       }
     } catch (err) {
       setLoading(false);
@@ -310,7 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         becomeDistributor,
         logout,
         simulatePhoneOTP,
-        verifyPhoneOTPAndLogin
+        verifyPhoneOTPAndLogin,
       }}
     >
       {children}

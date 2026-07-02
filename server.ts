@@ -3,212 +3,178 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import admin from "firebase-admin";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 dotenv.config();
 
-// Initialize Firebase Admin SDK
-try {
-  admin.initializeApp({
-    projectId: "webmail-7159a"
-  });
-  console.log("Firebase Admin SDK initialized successfully");
-} catch (e: any) {
-  console.log("Firebase Admin already initialized or encountered error: ", e.message);
+// Initialize Supabase Admin client (service role — bypasses RLS)
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error(
+    "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set. Server cannot start without database access."
+  );
+  process.exit(1);
 }
 
-const db = getFirestore();
+const db = createClient(supabaseUrl, supabaseServiceKey);
+console.log("Supabase Admin client initialized successfully");
 
 // Pre-hydrate collections with seeds on startup if they are empty
 async function hydrateSeeds() {
   try {
-    const productsSnap = await db.collection("products").limit(1).get();
-    if (productsSnap.empty) {
-      console.log("Hydrating initial products seed into Firestore...");
-      const PRODUCTS_SEED = [
+    const { data: existingProducts } = await db.from("products").select("id").limit(1);
+    if (!existingProducts || existingProducts.length === 0) {
+      console.log("Hydrating initial products seed into Supabase...");
+
+      // Fetch category IDs
+      const { data: cats } = await db.from("product_categories").select("id, slug");
+      const catMap: Record<string, string> = {};
+      if (cats) cats.forEach((c) => { catMap[c.slug] = c.id; });
+
+      await db.from("products").upsert([
         {
-          id: "prod-cell-vital",
           slug: "cellular-vitality-pro",
           name: "Cellular Vitality Pro",
-          description: "Premium wellness capsule formulated with advanced antioxidants, organic African moringa extracts, and active micro-nutrients. Promotes deep energetic recovery, cellular rejuvenation, and supports your natural daily immune system defense with high-potency bio-availability.",
-          priceXaf: 32000,
-          pvPoints: 60,
-          category: "Health",
-          image: "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800",
-          stock: 120,
-          isActive: true,
-          benefits: [
-            "Enhances cellular rejuvenation and everyday bio-energy",
-            "Rich in natural antioxidants from premium moringa and green tea",
-            "Improves daily physical stamina and mental clarity"
+          description:
+            "Premium wellness capsule formulated with advanced antioxidants, organic African moringa extracts, and active micro-nutrients.",
+          price_xaf: 32000,
+          pv_points: 60,
+          category_id: catMap["health"] ?? null,
+          images: [
+            "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800",
           ],
-          usage: "Take 2 capsules daily in the morning with warm water."
+          is_active: true,
         },
         {
-          id: "prod-luminous-gold",
           slug: "luminous-gold-serum",
           name: "Luminous Gold Elixir",
-          description: "An ultra-premium revitalizing face serum powered by pure rosehip extract, cold-pressed argan oils, and light-reflecting natural minerals. Designed to combat hyperpigmentation, smooth fine lines, and give your skin a beautiful, balanced, golden radiance perfect for the West African climate.",
-          priceXaf: 28500,
-          pvPoints: 50,
-          category: "Beauty",
-          image: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800",
-          stock: 85,
-          isActive: true,
-          benefits: [
-            "Visibly brightens and unifies skin tone from first week",
-            "Protects against environmental dust and daily stress damage",
-            "Intensely hydrates without clogging pores"
+          description:
+            "An ultra-premium revitalizing face serum powered by pure rosehip extract, cold-pressed argan oils, and light-reflecting natural minerals.",
+          price_xaf: 28500,
+          pv_points: 50,
+          category_id: catMap["beauty"] ?? null,
+          images: [
+            "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=800",
           ],
-          usage: "Apply 3-4 drops to cleansed face and neck every evening."
+          is_active: true,
         },
         {
-          id: "prod-bio-yield",
           slug: "bio-yield-max-liquid",
           name: "Bio-Yield Max (Agriculture)",
-          description: "An ecological liquid bio-stimulant and fertilizer engineered to maximize harvest yield and restore crop soil microbiome. Highly trusted by Cameroonian growers for cacao, coffee, maize, and organic vegetable cultivation.",
-          priceXaf: 18000,
-          pvPoints: 35,
-          category: "Agriculture",
-          image: "https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=80&w=800",
-          stock: 240,
-          isActive: true,
-          benefits: [
-            "Increases overall crop output and fruit-weight by up to 35%",
-            "100% biodegradable and non-toxic to beneficial field insects",
-            "Restores microbial balance and nitrogen fixation in depleted soil"
+          description:
+            "An ecological liquid bio-stimulant and fertilizer engineered to maximize harvest yield and restore crop soil microbiome.",
+          price_xaf: 18000,
+          pv_points: 35,
+          category_id: catMap["agriculture"] ?? null,
+          images: [
+            "https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=80&w=800",
           ],
-          usage: "Dilute 50ml in 15 Liters of water. Apply to roots."
-        }
-      ];
-
-      for (const prod of PRODUCTS_SEED) {
-        await db.collection("products").doc(prod.id).set(prod);
-      }
+          is_active: true,
+        },
+      ], { onConflict: "slug" });
     }
 
-    const blogsSnap = await db.collection("blogs").limit(1).get();
-    if (blogsSnap.empty) {
-      console.log("Hydrating initial blog posts seed into Firestore...");
-      const BLOGS_SEED = [
+    const { data: existingBlogs } = await db.from("blog_posts").select("id").limit(1);
+    if (!existingBlogs || existingBlogs.length === 0) {
+      console.log("Hydrating initial blog posts seed into Supabase...");
+      const { data: blogCats } = await db.from("blog_categories").select("id, name");
+      const blogCatMap: Record<string, string> = {};
+      if (blogCats) blogCats.forEach((c) => { blogCatMap[c.name.toLowerCase()] = c.id; });
+
+      await db.from("blog_posts").upsert([
         {
-          id: "blog-moringa-power",
           slug: "harnessing-moringa-african-health",
           title: "Harnessing the Green Power of Moringa for West African Wellness",
-          excerpt: "Discover why local organic Moringa is designated as the 'miracle tree' and how integrating its powder can fight fatigue.",
           body: "For generations, the Moringa Oleifera tree has stood tall in our villages... Sourced from northern cooperatives.",
-          category: "Wellness",
-          publishedAt: "2026-06-15",
-          image: "https://images.unsplash.com/photo-1543589077-47d8160677a0?auto=format&fit=crop&q=80&w=800",
-          author: "Dr. Elena Ndip, Chief Medical Advisor"
-        }
-      ];
-      for (const blog of BLOGS_SEED) {
-        await db.collection("blogs").doc(blog.id).set(blog);
-      }
+          category_id: blogCatMap["nutraceuticals"] ?? null,
+          status: "published",
+        },
+      ], { onConflict: "slug" });
     }
 
-    const eventsSnap = await db.collection("events").limit(1).get();
-    if (eventsSnap.empty) {
-      console.log("Hydrating initial events seed into Firestore...");
-      const EVENTS_SEED = [
+    const { data: existingEvents } = await db.from("events").select("id").limit(1);
+    if (!existingEvents || existingEvents.length === 0) {
+      console.log("Hydrating initial events seed into Supabase...");
+      await db.from("events").upsert([
         {
-          id: "event-annual-conv",
           slug: "songtai-annual-convention-2026",
           title: "Songtai Life Grand Annual Convention 2026",
-          startAt: "2026-08-15T09:00:00Z",
-          endAt: "2026-08-15T18:00:00Z",
+          start_at: "2026-08-15T09:00:00Z",
+          end_at: "2026-08-15T18:00:00Z",
           location: "Palais des Sports, Yaoundé",
           capacity: 3500,
-          registrants: [],
-          description: "Join thousands of visionary leaders, health advocates, and agricultural partners for the largest wellness event of the year!",
-          image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800"
-        }
-      ];
-      for (const ev of EVENTS_SEED) {
-        await db.collection("events").doc(ev.id).set(ev);
-      }
+        },
+      ], { onConflict: "slug" });
     }
   } catch (err: any) {
     console.error("Hydration error:", err.message);
   }
 }
 
-// Unilevel Multi-Generation Commission Calculation Engine (Server-side)
-async function calculateUnilevelCommissions(orderId: string, purchaserUid: string, amountXaf: number, pvPoints: number) {
+// Unilevel Multi-Generation Commission Calculation Engine (server-side)
+async function calculateUnilevelCommissions(
+  orderId: string,
+  purchaserUid: string,
+  amountXaf: number,
+  pvPoints: number
+) {
   try {
     console.log(`[MLM-Engine] Computing commissions for Order ${orderId}, Purchaser ${purchaserUid}, PV ${pvPoints}`);
 
-    // Retrieve purchaser distributor profile
-    const purchaserSnap = await db.collection("distributors").doc(purchaserUid).get();
-    if (!purchaserSnap.exists) {
+    const { data: purchaserData } = await db
+      .from("distributors")
+      .select("*")
+      .eq("id", purchaserUid)
+      .maybeSingle();
+
+    if (!purchaserData) {
       console.log(`[MLM-Engine] User ${purchaserUid} is not a registered distributor. No unilevel overrides generated.`);
       return;
     }
 
-    const purchaserData = purchaserSnap.data() || {};
-    
-    // Increment purchaser's total PV points
+    // Update PV and rank
     const currentPv = purchaserData.pv || 0;
     const newPv = currentPv + pvPoints;
-    
-    // Evaluate rank promotion
     let nextRank = purchaserData.rank || "bronze";
     if (newPv >= 10000) nextRank = "diamond";
     else if (newPv >= 5000) nextRank = "platinum";
     else if (newPv >= 2000) nextRank = "gold";
     else if (newPv >= 500) nextRank = "silver";
 
-    await db.collection("distributors").doc(purchaserUid).update({
-      pv: newPv,
-      rank: nextRank
-    });
+    await db.from("distributors").update({ pv: newPv, rank: nextRank }).eq("id", purchaserUid);
+    console.log(`[MLM-Engine] Updated purchaser ${purchaserUid} PV to ${newPv}. Rank: ${nextRank}`);
 
-    console.log(`[MLM-Engine] Updated purchaser ${purchaserUid} PV to ${newPv}. Current Rank: ${nextRank}`);
-
-    // Commission Rates per Level:
-    // Level 0 (Self): 10% direct bonus
-    // Level 1 (Sponsor): 5% override
-    // Level 2: 3% override
-    // Level 3: 2% override
-    // Level 4: 1% override
+    // Commission rates per level
     const rates = [0.10, 0.05, 0.03, 0.02, 0.01];
-    let currentSponsorId = purchaserUid;
+    let currentUid = purchaserUid;
 
     for (let level = 0; level < rates.length; level++) {
       if (level === 0) {
-        // Direct bonus
         const payout = Math.floor(amountXaf * rates[level]);
-        await awardCommission(purchaserUid, orderId, "direct_bonus", level, payout, `Direct Purchase Volume Bonus (${rates[level]*100}%)`);
+        await awardCommission(purchaserUid, orderId, "direct_bonus", level, payout, `Direct Purchase Volume Bonus (${rates[level] * 100}%)`);
       } else {
-        // Traverse sponsor tree upwards
-        const currentSnap = await db.collection("distributors").doc(currentSponsorId).get();
-        if (!currentSnap.exists) break;
+        const { data: currentDist } = await db.from("distributors").select("sponsor_id").eq("id", currentUid).maybeSingle();
+        if (!currentDist || !currentDist.sponsor_id || currentDist.sponsor_id === "Root") break;
 
-        const sponsorCode = currentSnap.data()?.sponsorId;
-        if (!sponsorCode || sponsorCode === "Root") break;
+        const { data: sponsorDoc } = await db
+          .from("distributors")
+          .select("id")
+          .eq("distributor_code", currentDist.sponsor_id)
+          .maybeSingle();
 
-        // Find sponsor ID by matching distributorCode
-        const sponsorQuery = await db.collection("distributors")
-          .where("distributorCode", "==", sponsorCode)
-          .limit(1)
-          .get();
-
-        if (sponsorQuery.empty) {
-          console.log(`[MLM-Engine] Sponsor code ${sponsorCode} not found in database.`);
+        if (!sponsorDoc) {
+          console.log(`[MLM-Engine] Sponsor code ${currentDist.sponsor_id} not found.`);
           break;
         }
 
-        const sponsorDoc = sponsorQuery.docs[0];
         const sponsorUid = sponsorDoc.id;
-
         const payout = Math.floor(amountXaf * rates[level]);
-        await awardCommission(sponsorUid, orderId, "unilevel_override", level, payout, `Generation ${level} Unilevel Override (${rates[level]*100}%)`);
+        await awardCommission(sponsorUid, orderId, "unilevel_override", level, payout, `Generation ${level} Unilevel Override (${rates[level] * 100}%)`);
 
-        // Move up the tree
-        currentSponsorId = sponsorUid;
+        currentUid = sponsorUid;
       }
     }
   } catch (err: any) {
@@ -216,44 +182,38 @@ async function calculateUnilevelCommissions(orderId: string, purchaserUid: strin
   }
 }
 
-// Reward commission helper
-async function awardCommission(uid: string, orderId: string, type: string, level: number, amountXaf: number, description: string) {
+// Atomic wallet credit + commission + transaction log
+async function awardCommission(
+  uid: string,
+  orderId: string,
+  type: string,
+  level: number,
+  amountXaf: number,
+  description: string
+) {
   if (amountXaf <= 0) return;
 
-  // Update wallet
-  const walletRef = db.collection("wallets").doc(uid);
-  await db.runTransaction(async (transaction) => {
-    const walletSnap = await transaction.get(walletRef);
-    let currentBalance = 0;
-    if (walletSnap.exists) {
-      currentBalance = walletSnap.data()?.balanceXaf || 0;
-    }
-    transaction.set(walletRef, {
-      balanceXaf: currentBalance + amountXaf,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-  });
+  // Atomic wallet increment via RPC
+  await db.rpc("increment_wallet_balance", { p_user_id: uid, p_amount: amountXaf });
 
   // Log commission entry
-  await db.collection("commissions").add({
-    distributorId: uid,
-    orderId,
+  await db.from("commissions").insert({
+    distributor_id: uid,
+    order_id: orderId,
     type,
     level,
-    amountXaf,
+    amount_xaf: amountXaf,
     status: "completed",
-    createdAt: FieldValue.serverTimestamp()
   });
 
-  // Log transaction entry
-  await db.collection("walletTransactions").add({
-    walletId: uid,
+  // Log wallet transaction
+  await db.from("wallet_transactions").insert({
+    wallet_id: uid,
     type: "commission",
-    amountXaf,
-    referenceId: orderId,
+    amount_xaf: amountXaf,
+    reference_id: orderId,
     description,
     status: "completed",
-    createdAt: FieldValue.serverTimestamp()
   });
 
   console.log(`[MLM-Engine] Credited ${amountXaf} XAF to ${uid} (Level ${level} ${type})`);
@@ -265,30 +225,23 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Run Hydration
   await hydrateSeeds();
 
-  // Safe lazy-loaded Gemini client initialization
+  // Gemini client
   let aiClient: GoogleGenAI | null = null;
   function getGemini(): GoogleGenAI {
     if (!aiClient) {
       const key = process.env.GEMINI_API_KEY;
-      if (!key) {
-        throw new Error("GEMINI_API_KEY environment variable is missing.");
-      }
+      if (!key) throw new Error("GEMINI_API_KEY environment variable is missing.");
       aiClient = new GoogleGenAI({
         apiKey: key,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
+        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
       });
     }
     return aiClient;
   }
 
-  // Gemini chat routing
+  // Gemini chat
   app.post("/api/gemini/chat", async (req, res) => {
     try {
       const { message, history } = req.body;
@@ -300,29 +253,28 @@ Your knowledge is based strictly on the Technical Specification & Implementation
 Key details of Songtai Life:
 - Target market: Cameroon, high-end consumer audience in West Africa.
 - Currency: CFA Franc (XAF), no decimals.
-- Direct-selling network: Adjacency-list based unilevel/binary structure in PostgreSQL.
+- Direct-selling network: Adjacency-list based unilevel/binary structure in PostgreSQL via Supabase.
 - Payments: MeSomb gateway for MTN Mobile Money and Orange Money.
 - Brand colors: Songtai Green (#0A7D32) and Refined Gold accents.
-- Modern Web stack: Next.js 15, NestJS backend, Payload CMS, Prisma ORM, Redis for sessions and BullMQ queues.
+- Stack: React + Vite frontend, Express backend, Supabase (PostgreSQL + Auth + Realtime).
 You can answer questions about:
 1. DB schemas (e.g. generating PostgreSQL DDL, explaining relations)
-2. MeSomb integration (e.g. handling Orange Money / MTN MoMo API webhooks, HMAC signature verification, generating test callbacks)
+2. MeSomb integration (e.g. handling Orange Money / MTN MoMo API webhooks, HMAC signature verification)
 3. Compensation plans (e.g. how levels, PVs, direct bonuses, and rank promotions are calculated)
 4. Genealogy trees (adjacency lists, downlines, caching reads)
 5. Designing UI modules with Luminous Vitality theme guidelines.
-
-Answer concisely, helpfully, and professionally. Support both English and French if the user asks. Include code snippets or schema layouts if relevant.
+Answer concisely, helpfully, and professionally. Support both English and French if the user asks.
 `;
 
       const response = await ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents: [
-          { role: "user", parts: [{ text: `Conversation history so far:\n${JSON.stringify(history)}\n\nUser Question:\n${message}` }] }
+          {
+            role: "user",
+            parts: [{ text: `Conversation history so far:\n${JSON.stringify(history)}\n\nUser Question:\n${message}` }],
+          },
         ],
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        }
+        config: { systemInstruction, temperature: 0.7 },
       });
 
       res.json({ text: response.text });
@@ -345,28 +297,23 @@ Answer concisely, helpfully, and professionally. Support both English and French
         return res.status(400).json({ error: "Missing required checkout parameters: amountXaf, phone, provider" });
       }
 
-      // Create a unique order document in Firestore
-      const orderRef = db.collection("orders").doc();
       const orderId = `ord-${crypto.randomBytes(4).toString("hex")}`;
-      
-      const orderPayload = {
-        orderId,
-        userId: userId || "guest",
-        amountXaf: Number(amountXaf),
-        pvPoints: Number(pvPoints || 0),
+
+      const { error } = await db.from("orders").insert({
+        order_id: orderId,
+        user_id: userId || "guest",
+        amount_xaf: Number(amountXaf),
+        pv_points: Number(pvPoints || 0),
         phone,
         provider,
         cart: cart || [],
         status: "pending",
-        createdAt: FieldValue.serverTimestamp()
-      };
+      });
 
-      await orderRef.set(orderPayload);
+      if (error) throw new Error(error.message);
       console.log(`[Payments] Order ${orderId} created in pending state.`);
 
-      // Check if real MeSomb credentials are provided
       const mesombApiKey = process.env.MESOMB_API_KEY;
-
       if (mesombApiKey && mesombApiKey !== "your_mesomb_api_key") {
         console.log("[Payments] Proceeding with live MeSomb Payment request...");
       }
@@ -375,7 +322,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
         success: true,
         orderId,
         status: "pending",
-        message: "Payment handshake initiated. Confirm carrier verification on your handset."
+        message: "Payment handshake initiated. Confirm carrier verification on your handset.",
       });
     } catch (err: any) {
       console.error("[Checkout-API-Error] Payment checkout failed:", err.message);
@@ -390,12 +337,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
       const rawBody = JSON.stringify(req.body);
       const signatureKey = process.env.MESOMB_SIGNATURE_KEY || "songtai-secret";
 
-      // Verify HMAC-SHA256 signature
       if (signatureHeader) {
-        const computedSignature = crypto.createHmac("sha256", signatureKey)
-          .update(rawBody)
-          .digest("hex");
-
+        const computedSignature = crypto.createHmac("sha256", signatureKey).update(rawBody).digest("hex");
         if (signatureHeader !== computedSignature) {
           console.warn("[Webhook] HMAC-SHA256 signature verification failed. Continuing for sandbox validation.");
         } else {
@@ -406,60 +349,52 @@ Answer concisely, helpfully, and professionally. Support both English and French
       }
 
       const { orderId, transactionId } = req.body;
+      if (!orderId) return res.status(400).json({ error: "Missing orderId in webhook body." });
 
-      if (!orderId) {
-        return res.status(400).json({ error: "Missing orderId in webhook body." });
-      }
+      // Idempotency check
+      const { data: alreadyProcessed } = await db
+        .from("processed_payments")
+        .select("order_id")
+        .eq("order_id", orderId)
+        .maybeSingle();
 
-      // Idempotency check: Ensure webhook hasn't processed this order before
-      const idempotencyRef = db.collection("processedPayments").doc(orderId);
-      const idempotencySnap = await idempotencyRef.get();
-      if (idempotencySnap.exists) {
-        console.log(`[Webhook] Duplicate callback skipped for Order ${orderId}. Already processed.`);
+      if (alreadyProcessed) {
+        console.log(`[Webhook] Duplicate callback skipped for Order ${orderId}.`);
         return res.json({ success: true, message: "Duplicate callback skipped." });
       }
 
-      // Fetch the order from Firestore
-      const ordersSnap = await db.collection("orders")
-        .where("orderId", "==", orderId)
-        .limit(1)
-        .get();
+      // Fetch the order
+      const { data: orderData } = await db
+        .from("orders")
+        .select("*")
+        .eq("order_id", orderId)
+        .maybeSingle();
 
-      if (ordersSnap.empty) {
-        return res.status(404).json({ error: `Order ${orderId} not found in database.` });
-      }
-
-      const orderDoc = ordersSnap.docs[0];
-      const orderData = orderDoc.data();
-
+      if (!orderData) return res.status(404).json({ error: `Order ${orderId} not found.` });
       if (orderData.status === "paid") {
         console.log(`[Webhook] Order ${orderId} is already marked as paid.`);
         return res.json({ success: true });
       }
 
-      // Mark the order as paid
-      await orderDoc.ref.update({
-        status: "paid",
-        transactionId: transactionId || `tx-${crypto.randomBytes(6).toString("hex")}`,
-        paidAt: FieldValue.serverTimestamp()
-      });
+      const finalTxId = transactionId || `tx-${crypto.randomBytes(6).toString("hex")}`;
 
-      // Mark as processed (Idempotency ledger)
-      await idempotencyRef.set({
-        processedAt: FieldValue.serverTimestamp(),
-        transactionId: transactionId || "mock-webhook-tx"
+      // Mark order as paid
+      await db.from("orders").update({
+        status: "paid",
+        transaction_id: finalTxId,
+        paid_at: new Date().toISOString(),
+      }).eq("order_id", orderId);
+
+      // Mark as processed for idempotency
+      await db.from("processed_payments").insert({
+        order_id: orderId,
+        transaction_id: finalTxId,
       });
 
       console.log(`[Webhook] Order ${orderId} marked as PAID. Initializing commission calculations.`);
 
-      // Trigger MLM commission calculations for this order
-      if (orderData.userId && orderData.userId !== "guest") {
-        await calculateUnilevelCommissions(
-          orderId,
-          orderData.userId,
-          orderData.amountXaf,
-          orderData.pvPoints
-        );
+      if (orderData.user_id && orderData.user_id !== "guest") {
+        await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
       }
 
       res.json({ success: true, message: "Order processed successfully." });
@@ -479,50 +414,42 @@ Answer concisely, helpfully, and professionally. Support both English and French
       }
 
       const amount = Number(amountXaf);
-      const walletRef = db.collection("wallets").doc(userId);
-      const walletSnap = await walletRef.get();
 
-      if (!walletSnap.exists) {
-        return res.status(400).json({ error: "User has no wallet ledger configured." });
-      }
+      const { data: walletData } = await db.from("wallets").select("*").eq("id", userId).maybeSingle();
+      if (!walletData) return res.status(400).json({ error: "User has no wallet ledger configured." });
 
-      const walletData = walletSnap.data() || {};
-      const currentBalance = Number(walletData.balanceXaf || 0);
-
+      const currentBalance = Number(walletData.balance_xaf || 0);
       if (currentBalance < amount) {
         return res.status(400).json({ error: "Insufficient wallet balance to request this payout." });
       }
 
-      // Deduct from wallet and create pending transaction
-      const nextBalance = currentBalance - amount;
-      await walletRef.update({
-        balanceXaf: nextBalance,
-        updatedAt: FieldValue.serverTimestamp()
-      });
+      // Deduct from wallet
+      await db.from("wallets").update({
+        balance_xaf: currentBalance - amount,
+        updated_at: new Date().toISOString(),
+      }).eq("id", userId);
 
       const txId = `wd-${crypto.randomBytes(5).toString("hex")}`;
-      await db.collection("walletTransactions").doc(txId).set({
+      await db.from("wallet_transactions").insert({
         id: txId,
-        walletId: userId,
+        wallet_id: userId,
         type: "withdrawal",
-        amountXaf: amount,
+        amount_xaf: amount,
         description: `MeSomb Payout withdrawal initiated to ${phone} (${provider.toUpperCase()})`,
         status: "pending",
-        createdAt: FieldValue.serverTimestamp()
       });
 
       console.log(`[Payout] Withdrawal request logged for User ${userId}, amount ${amount} XAF. Status: Pending.`);
 
-      // Simulate webhook callbacks for withdrawal payouts to complete them
+      // Simulate completion after 5s
       setTimeout(async () => {
         try {
-          await db.collection("walletTransactions").doc(txId).update({
+          await db.from("wallet_transactions").update({
             status: "completed",
-            completedAt: FieldValue.serverTimestamp()
-          });
-          console.log(`[Payout-Cron] Withdrawal transaction ${txId} successfully completed on mobile ledger.`);
+          }).eq("id", txId);
+          console.log(`[Payout-Cron] Withdrawal transaction ${txId} successfully completed.`);
         } catch (subErr: any) {
-          console.error("[Payout-Cron-Error] Error finalizing withdrawal:", subErr.message);
+          console.error("[Payout-Cron-Error]", subErr.message);
         }
       }, 5000);
 
@@ -530,7 +457,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
         success: true,
         transactionId: txId,
         status: "pending",
-        message: "Sovereign Payout initiated securely. Funds will clear within minutes."
+        message: "Sovereign Payout initiated securely. Funds will clear within minutes.",
       });
     } catch (err: any) {
       console.error("[Payout-API-Error] withdrawal failed:", err.message);
@@ -539,11 +466,11 @@ Answer concisely, helpfully, and professionally. Support both English and French
   });
 
   // Health check endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", service: "Songtai Life Backend" });
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", service: "Songtai Life Backend — Supabase Edition" });
   });
 
-  // Vite middleware for local development, fallback asset server for production
+  // Vite dev middleware / production static files
   if (process.env.NODE_ENV !== "production") {
     console.log("Starting server in development mode...");
     const vite = await createViteServer({
@@ -555,7 +482,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
     console.log("Starting server in production mode...");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
