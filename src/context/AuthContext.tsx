@@ -8,6 +8,7 @@ export interface UserProfile {
   phone: string;
   role: "customer" | "distributor" | "content_editor" | "admin" | "superadmin";
   locale: string;
+  mustChangePassword: boolean;
   createdAt: any;
 }
 
@@ -73,6 +74,7 @@ function mapProfile(uid: string, row: any): UserProfile {
     phone: row.phone ?? "",
     role: row.role,
     locale: row.locale ?? "fr",
+    mustChangePassword: row.must_change_password ?? false,
     createdAt: row.created_at,
   };
 }
@@ -173,25 +175,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        // Admin bootstrap: auto-create admin account on first login attempt
-        if (email === "admin@songtailife.com" && password === "SongtaiAdmin2026!") {
-          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email, password });
-          if (signUpErr) throw signUpErr;
-          if (signUpData.user) {
-            await supabase.from("profiles").upsert({
-              id: signUpData.user.id,
-              email,
-              phone: "+237699999999",
-              role: "admin",
-              locale: "en",
-            });
-          }
+        // Only count FAILED attempts toward the rate limit bucket.
+        // check_rate_limit returns false when the bucket is already full (no insert),
+        // true when the attempt was recorded and we're still under the cap.
+        const { data: allowed, error: rlError } = await supabase.rpc("check_rate_limit", {
+          p_bucket: "login",
+          p_identifier: email.toLowerCase(),
+          p_max_attempts: 5,
+          p_window_seconds: 300,
+        });
+        // If RPC is available and signals we've hit the cap, override the error message.
+        if (!rlError && allowed === false) {
           setLoading(false);
-          return;
+          throw new Error("Too many failed login attempts. Please wait 5 minutes and try again.");
         }
         setLoading(false);
         throw error;
       }
+      // Successful login — do NOT record a rate-limit event; let the bucket drain naturally.
     } catch (err) {
       setLoading(false);
       throw err;

@@ -428,10 +428,10 @@ export function AdminLogin({ addNotification }: { addNotification: any }) {
             Verify KYC uploads, monitor total unilevel ledger volumes, and dispatch commission adjustments.
           </p>
           
-          <div className="mt-4 p-3.5 bg-[#ecc246]/10 border border-[#ecc246]/20 rounded-xl text-left">
-            <span className="text-[10px] text-[#ecc246] font-black uppercase tracking-wider block mb-1">✦ Default Admin Account (Auto-Seeded)</span>
-            <p className="text-[11px] text-stone-300 font-mono">Email: <span className="text-white select-all">admin@songtailife.com</span></p>
-            <p className="text-[11px] text-stone-300 font-mono">Password: <span className="text-white select-all">SongtaiAdmin2026!</span></p>
+          <div className="mt-4 p-3.5 bg-stone-800/50 border border-stone-700/50 rounded-xl text-left">
+            <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider block">
+              Use the credentials created via the admin bootstrap script.
+            </span>
           </div>
         </div>
 

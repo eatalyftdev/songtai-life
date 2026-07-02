@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
+import HeroCarousel from "./HeroCarousel";
 import { 
   Sprout, Award, TrendingUp, Users, ArrowRight, Sparkles, Check, 
   Clock, Calendar, BookOpen, Volume2, Download, HelpCircle, Phone, Globe, ChevronRight
@@ -153,32 +154,15 @@ export default function HomeSection({ onNavigate, onAddToCart }: HomeSectionProp
             </motion.div>
           </div>
 
-          {/* Hero Product Visual Parallax */}
-          <div className="lg:col-span-5 relative flex justify-center items-center">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="relative w-80 h-80 sm:w-96 sm:h-96 rounded-[40px] overflow-hidden border border-stone-800/80 shadow-2xl bg-stone-900/40 p-4"
-            >
-              <img 
-                src="https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&q=80&w=800" 
-                alt="Songtai Life Botanical"
-                className="w-full h-full object-cover rounded-[32px] opacity-85"
-              />
-              {/* Overlapping Glass Stats Info */}
-              <div className="absolute bottom-6 left-6 right-6 backdrop-blur-md bg-stone-950/60 border border-stone-800/80 p-4 rounded-2xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase text-[#C9A227] font-extrabold block">Featured Solution</span>
-                  <span className="text-white text-xs font-bold block mt-0.5">Cellular Vitality Capsules</span>
-                </div>
-                <span className="text-xs font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-900/50 px-2 py-1 rounded-md">98.2% Bioactive</span>
-              </div>
-            </motion.div>
-
-            {/* Glowing gold dot */}
-            <div className="absolute -top-6 -right-6 w-12 h-12 rounded-full bg-[#C9A227]/20 blur-xl" />
-          </div>
+          {/* Hero Carousel */}
+          <motion.div
+            className="lg:col-span-5"
+            initial={{ opacity: 0, scale: 0.93 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <HeroCarousel />
+          </motion.div>
 
         </div>
 

@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
 import { Phone, MapPin, Mail, Clock, Send, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { supabase } from "../../lib/supabase";
 
 interface ContactProps {
   addNotification: (msg: string, type: "success" | "info" | "gold") => void;
@@ -12,19 +13,45 @@ export default function Contact({ addNotification }: ContactProps) {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim() && email.trim() && message.trim()) {
-      setSubmitted(true);
-      addNotification("Your message has been logged! Our Yaoundé head office will reply in 24 hours.", "success");
-      setTimeout(() => {
-        setName("");
-        setEmail("");
-        setSubject("");
-        setMessage("");
-        setSubmitted(false);
-      }, 3000);
+    if (!name.trim() || !email.trim() || !message.trim()) return;
+
+    // Rate limit: 3 contact messages per 10 minutes per email
+    const { data: allowed, error: rlError } = await supabase.rpc("check_rate_limit", {
+      p_bucket: "contact_form",
+      p_identifier: email.toLowerCase(),
+      p_max_attempts: 3,
+      p_window_seconds: 600,
+    });
+    if (!rlError && allowed === false) {
+      addNotification("Too many messages submitted. Please wait 10 minutes.", "info");
+      return;
     }
+
+    // Insert into contact_messages table — only proceed on success
+    const { error: insertError } = await supabase.from("contact_messages").insert({
+      name: name.trim(),
+      email: email.trim(),
+      phone: null,
+      message: (subject.trim() ? `[${subject.trim()}] ` : "") + message.trim(),
+      status: "unread",
+    });
+
+    if (insertError) {
+      addNotification("Failed to send message. Please try again.", "info");
+      return;
+    }
+
+    setSubmitted(true);
+    addNotification("Your message has been logged! Our Yaoundé head office will reply in 24 hours.", "success");
+    setTimeout(() => {
+      setName("");
+      setEmail("");
+      setSubject("");
+      setMessage("");
+      setSubmitted(false);
+    }, 3000);
   };
 
   const handleWhatsApp = () => {

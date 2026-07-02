@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Product } from "../types";
+import SEO from "./SEO";
 import { 
   Home, Info, ShoppingBag, TrendingUp, Calendar, BookOpen, 
   Image as ImageIcon, Video, HelpCircle, Phone, Sparkles, Sprout
@@ -41,6 +43,16 @@ type BrandSubPage =
   | "contact" 
   | "join";
 
+const PAGE_SEO: Record<string, { titleKey: string; descKey: string }> = {
+  home:        { titleKey: "hero.slogan",       descKey: "hero.sub" },
+  about:       { titleKey: "about.title",       descKey: "about.subtitle" },
+  products:    { titleKey: "products.title",    descKey: "products.subtitle" },
+  faq:         { titleKey: "faq.title",         descKey: "faq.subtitle" },
+  contact:     { titleKey: "contact.title",     descKey: "contact.subtitle" },
+  blog:        { titleKey: "blog.title",        descKey: "blog.subtitle" },
+  events:      { titleKey: "events.title",      descKey: "events.subtitle" },
+};
+
 export default function BrandShowcase({ 
   brandPage, 
   setBrandPage, 
@@ -50,6 +62,8 @@ export default function BrandShowcase({
   openPrivacyPolicy 
 }: BrandShowcaseProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const seo = PAGE_SEO[brandPage] ?? PAGE_SEO.home;
 
   // Smooth scroll to top when brand sub-page transitions
   useEffect(() => {
@@ -58,7 +72,8 @@ export default function BrandShowcase({
 
   return (
     <div className="relative min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans select-none antialiased">
-      
+      <SEO title={t(seo.titleKey)} description={t(seo.descKey)} />
+
       {/* Primary Brand Sub-Page Router Switch */}
       <div className="flex-grow">
         {brandPage === "home" && (

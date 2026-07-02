@@ -1,17 +1,20 @@
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import ForcePasswordChange from "./auth/ForcePasswordChange";
 
 interface ProtectedRouteProps {
   children: ReactNode;
   allowedRoles?: ("customer" | "distributor" | "content_editor" | "admin" | "superadmin")[];
   fallbackPath?: string;
+  addNotification?: (msg: string, type: "success" | "info" | "gold") => void;
 }
 
 export default function ProtectedRoute({
   children,
   allowedRoles,
-  fallbackPath = "/distributor/login"
+  fallbackPath = "/distributor/login",
+  addNotification,
 }: ProtectedRouteProps) {
   const { user, userProfile, loading } = useAuth();
 
@@ -35,11 +38,20 @@ export default function ProtectedRoute({
   // 3. User is authenticated, check role authorization
   if (allowedRoles) {
     if (!userProfile || !allowedRoles.includes(userProfile.role)) {
-      // Redirect to unauthorized display or login
       return <Navigate to={fallbackPath} replace />;
     }
   }
 
-  // 4. Authorized -> render content safely with no flash
+  // 4. Force password change if flagged on profile
+  if (userProfile?.mustChangePassword) {
+    return (
+      <ForcePasswordChange
+        onComplete={() => window.location.reload()}
+        addNotification={addNotification ?? (() => {})}
+      />
+    );
+  }
+
+  // 5. Authorized -> render content safely with no flash
   return <>{children}</>;
 }

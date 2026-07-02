@@ -40,9 +40,12 @@ async function hydrateSeeds() {
       await db.from("products").upsert([
         {
           slug: "cellular-vitality-pro",
-          name: "Cellular Vitality Pro",
-          description:
+          name_en: "Cellular Vitality Pro",
+          name_fr: "Vitalité Cellulaire Pro",
+          description_en:
             "Premium wellness capsule formulated with advanced antioxidants, organic African moringa extracts, and active micro-nutrients.",
+          description_fr:
+            "Capsule de bien-être premium formulée avec des antioxydants avancés, des extraits de moringa africain bio et des micro-nutriments actifs.",
           price_xaf: 32000,
           pv_points: 60,
           category_id: catMap["health"] ?? null,
@@ -53,9 +56,12 @@ async function hydrateSeeds() {
         },
         {
           slug: "luminous-gold-serum",
-          name: "Luminous Gold Elixir",
-          description:
+          name_en: "Luminous Gold Elixir",
+          name_fr: "Élixir Or Lumineux",
+          description_en:
             "An ultra-premium revitalizing face serum powered by pure rosehip extract, cold-pressed argan oils, and light-reflecting natural minerals.",
+          description_fr:
+            "Un sérum visage ultra-premium revitalisant à base d'extrait pur de rose musquée, d'huiles d'argan pressées à froid et de minéraux naturels réfléchissants.",
           price_xaf: 28500,
           pv_points: 50,
           category_id: catMap["beauty"] ?? null,
@@ -66,9 +72,12 @@ async function hydrateSeeds() {
         },
         {
           slug: "bio-yield-max-liquid",
-          name: "Bio-Yield Max (Agriculture)",
-          description:
+          name_en: "Bio-Yield Max (Agriculture)",
+          name_fr: "Bio-Rendement Max (Agriculture)",
+          description_en:
             "An ecological liquid bio-stimulant and fertilizer engineered to maximize harvest yield and restore crop soil microbiome.",
+          description_fr:
+            "Un bio-stimulant liquide écologique et engrais conçu pour maximiser le rendement des récoltes et restaurer le microbiome du sol.",
           price_xaf: 18000,
           pv_points: 35,
           category_id: catMap["agriculture"] ?? null,
@@ -541,6 +550,86 @@ Answer concisely, helpfully, and professionally. Support both English and French
     } catch (err: any) {
       console.error("[AddDownline-Error]", err.message);
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Simple in-memory rate limiter for bootstrap endpoint (max 3 attempts per 15 min per IP)
+  const bootstrapAttempts = new Map<string, { count: number; resetAt: number }>();
+
+  // Admin bootstrap endpoint — creates the initial superadmin account server-side.
+  // Uses the service role key to bypass Supabase email validation.
+  // Guarded by: ADMIN_BOOTSTRAP_KEY env, "no superadmin exists" DB check, and IP rate limiting.
+  app.post("/api/admin/bootstrap", async (req, res) => {
+    const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
+
+    // IP rate limit
+    const now = Date.now();
+    const existing = bootstrapAttempts.get(clientIp);
+    if (existing) {
+      if (now < existing.resetAt && existing.count >= 3) {
+        return res.status(429).json({ error: "Too many bootstrap attempts. Try again later." });
+      }
+      if (now >= existing.resetAt) {
+        bootstrapAttempts.delete(clientIp);
+      }
+    }
+    const entry = bootstrapAttempts.get(clientIp) ?? { count: 0, resetAt: now + 15 * 60 * 1000 };
+    entry.count++;
+    bootstrapAttempts.set(clientIp, entry);
+
+    try {
+      const bootstrapKey = process.env.ADMIN_BOOTSTRAP_KEY;
+      if (!bootstrapKey) {
+        return res.status(503).json({ error: "Admin bootstrap is not configured on this server. Set ADMIN_BOOTSTRAP_KEY." });
+      }
+      const { bootstrapKey: provided, email, password } = req.body;
+      if (!provided || provided !== bootstrapKey) {
+        return res.status(401).json({ error: "Invalid bootstrap key." });
+      }
+      if (!email || !password || password.length < 8) {
+        return res.status(400).json({ error: "email and password (min 8 chars) are required." });
+      }
+
+      // Guard: only allow bootstrap when no superadmin exists yet
+      const { data: existing, error: existErr } = await db
+        .from("profiles")
+        .select("id")
+        .eq("role", "superadmin")
+        .limit(1);
+      if (existErr) throw existErr;
+      if (existing && existing.length > 0) {
+        return res.status(409).json({ error: "A superadmin already exists. Bootstrap is disabled." });
+      }
+
+      // Create the auth user (bypasses email validation)
+      const { data: authData, error: authErr } = await db.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+      if (authErr) throw authErr;
+
+      const uid = authData.user.id;
+
+      // Upsert the profile with superadmin role
+      const { error: profileErr } = await db.from("profiles").upsert({
+        id: uid,
+        email,
+        phone: "+237699999999",
+        role: "superadmin",
+        locale: "en",
+        must_change_password: true,
+      });
+      if (profileErr) throw profileErr;
+
+      // Clear IP rate limit counter on success
+      bootstrapAttempts.delete(clientIp);
+
+      console.log(`[Bootstrap] Superadmin created: ${email} (${uid})`);
+      return res.json({ success: true, uid, message: "Superadmin account created. Log in and change your password immediately." });
+    } catch (err: any) {
+      console.error("[Bootstrap] Error:", err.message);
+      return res.status(500).json({ error: err.message });
     }
   });
 

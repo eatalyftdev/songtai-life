@@ -40,9 +40,12 @@ interface AdminDistributor {
 interface AdminProduct {
   id: string;
   slug: string;
-  name: string;
-  description: string;
+  nameEn: string;
+  nameFr: string;
+  descriptionEn: string;
+  descriptionFr: string;
   priceXaf: number;
+  strikePriceXaf: number | null;
   pvPoints: number;
   category: string;
   image: string;
@@ -215,8 +218,10 @@ export default function AdminPortal({
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<AdminProduct>>({
-    name: "", slug: "", description: "", priceXaf: 0, pvPoints: 0, category: "Health",
-    image: "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800", stock: 100, isActive: true, benefits: [], usage: ""
+    nameEn: "", nameFr: "", slug: "", descriptionEn: "", descriptionFr: "",
+    priceXaf: 0, strikePriceXaf: null, pvPoints: 0, category: "Health",
+    image: "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800",
+    stock: 100, isActive: true, benefits: [], usage: ""
   });
 
   // Blog CMS State
@@ -293,9 +298,12 @@ export default function AdminPortal({
         setProducts(productsRes.data.map(p => ({
           id: p.id,
           slug: p.slug ?? "",
-          name: p.name,
-          description: p.description ?? "",
+          nameEn: p.name_en ?? p.name ?? "",
+          nameFr: p.name_fr ?? "",
+          descriptionEn: p.description_en ?? p.description ?? "",
+          descriptionFr: p.description_fr ?? "",
           priceXaf: p.price_xaf,
+          strikePriceXaf: p.strike_price_xaf ?? null,
           pvPoints: p.pv_points ?? 0,
           category: p.category_id ?? "Health",
           image: p.image ?? (p.images?.[0] ?? ""),
@@ -408,9 +416,12 @@ export default function AdminPortal({
     try {
       const { error } = await supabase.from("products").insert({
         slug: newProduct.slug || `prod-${Date.now()}`,
-        name: newProduct.name,
-        description: newProduct.description,
+        name_en: newProduct.nameEn,
+        name_fr: newProduct.nameFr || null,
+        description_en: newProduct.descriptionEn,
+        description_fr: newProduct.descriptionFr || null,
         price_xaf: Number(newProduct.priceXaf || 0),
+        strike_price_xaf: newProduct.strikePriceXaf ? Number(newProduct.strikePriceXaf) : null,
         pv_points: Number(newProduct.pvPoints || 0),
         stock: Number(newProduct.stock || 0),
         images: newProduct.image ? [newProduct.image] : [],
@@ -418,11 +429,13 @@ export default function AdminPortal({
       });
       if (error) throw error;
       addNotification("Corporate Catalog item added.", "success");
-      await logAdminAction("Catalog Item Created", `Added product: ${newProduct.name}`);
+      await logAdminAction("Catalog Item Created", `Added product: ${newProduct.nameEn}`);
       setIsAddingProduct(false);
       setNewProduct({
-        name: "", slug: "", description: "", priceXaf: 0, pvPoints: 0, category: "Health",
-        image: "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800", stock: 100, isActive: true, benefits: [], usage: ""
+        nameEn: "", nameFr: "", slug: "", descriptionEn: "", descriptionFr: "",
+        priceXaf: 0, strikePriceXaf: null, pvPoints: 0, category: "Health",
+        image: "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800",
+        stock: 100, isActive: true, benefits: [], usage: ""
       });
     } catch (err: any) {
       addNotification("Error creating product.", "info");
@@ -434,9 +447,12 @@ export default function AdminPortal({
     if (!editingProduct) return;
     try {
       const { error } = await supabase.from("products").update({
-        name: editingProduct.name,
-        description: editingProduct.description,
+        name_en: editingProduct.nameEn,
+        name_fr: editingProduct.nameFr || null,
+        description_en: editingProduct.descriptionEn,
+        description_fr: editingProduct.descriptionFr || null,
         price_xaf: Number(editingProduct.priceXaf),
+        strike_price_xaf: editingProduct.strikePriceXaf ? Number(editingProduct.strikePriceXaf) : null,
         pv_points: Number(editingProduct.pvPoints),
         stock: Number(editingProduct.stock),
         images: editingProduct.image ? [editingProduct.image] : [],
@@ -444,7 +460,7 @@ export default function AdminPortal({
       }).eq("id", editingProduct.id);
       if (error) throw error;
       addNotification("Corporate Catalog item updated.", "success");
-      await logAdminAction("Catalog Item Updated", `Updated product: ${editingProduct.name} (Qty: ${editingProduct.stock})`);
+      await logAdminAction("Catalog Item Updated", `Updated product: ${editingProduct.nameEn} (Qty: ${editingProduct.stock})`);
       setEditingProduct(null);
     } catch (err: any) {
       addNotification("Error updating product.", "info");
@@ -452,7 +468,7 @@ export default function AdminPortal({
   };
 
   const handleDeleteProduct = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete ${name}?`)) return;
     try {
       const { error } = await supabase.from("products").delete().eq("id", id);
       if (error) throw error;
@@ -1433,31 +1449,42 @@ export default function AdminPortal({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Product Name</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Product Name (EN) *</label>
                     <input
                       type="text"
                       required
-                      value={newProduct.name}
-                      onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-") })}
+                      value={newProduct.nameEn}
+                      onChange={(e) => setNewProduct({ ...newProduct, nameEn: e.target.value, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-") })}
                       className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
                       placeholder="e.g. Ginseng Miracle Vitality"
                     />
                   </div>
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Slug Spec (auto-rendered)</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Nom du Produit (FR)</label>
                     <input
                       type="text"
-                      required
-                      value={newProduct.slug}
-                      onChange={(e) => setNewProduct({ ...newProduct, slug: e.target.value })}
-                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 font-mono"
+                      value={newProduct.nameFr}
+                      onChange={(e) => setNewProduct({ ...newProduct, nameFr: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
+                      placeholder="e.g. Vitalité Miracle Ginseng"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Slug (auto-generated)</label>
+                  <input
+                    type="text"
+                    required
+                    value={newProduct.slug}
+                    onChange={(e) => setNewProduct({ ...newProduct, slug: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Price (XAF)</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Price (XAF) *</label>
                     <input
                       type="number"
                       required
@@ -1467,7 +1494,17 @@ export default function AdminPortal({
                     />
                   </div>
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">MLM Points (PV)</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Strike Price (XAF)</label>
+                    <input
+                      type="number"
+                      value={newProduct.strikePriceXaf ?? ""}
+                      onChange={(e) => setNewProduct({ ...newProduct, strikePriceXaf: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
+                      placeholder="Optional promo"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">PV Points *</label>
                     <input
                       type="number"
                       required
@@ -1477,7 +1514,7 @@ export default function AdminPortal({
                     />
                   </div>
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Primary Category</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Category</label>
                     <select
                       value={newProduct.category}
                       onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
@@ -1501,15 +1538,26 @@ export default function AdminPortal({
                   />
                 </div>
 
-                <div>
-                  <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Overview Description</label>
-                  <textarea
-                    required
-                    rows={3}
-                    value={newProduct.description}
-                    onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                    className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 resize-none"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Description (EN) *</label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={newProduct.descriptionEn}
+                      onChange={(e) => setNewProduct({ ...newProduct, descriptionEn: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Description (FR)</label>
+                    <textarea
+                      rows={3}
+                      value={newProduct.descriptionFr}
+                      onChange={(e) => setNewProduct({ ...newProduct, descriptionFr: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 resize-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
@@ -1540,28 +1588,38 @@ export default function AdminPortal({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Product Name</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Product Name (EN) *</label>
                     <input
                       type="text"
                       required
-                      value={editingProduct.name}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                      value={editingProduct.nameEn}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, nameEn: e.target.value })}
                       className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
                     />
                   </div>
                   <div>
-                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Primary Category</label>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Nom du Produit (FR)</label>
                     <input
                       type="text"
-                      required
-                      value={editingProduct.category}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                      value={editingProduct.nameFr}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, nameFr: e.target.value })}
                       className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Primary Category</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingProduct.category}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                    className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div>
                     <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Price (XAF)</label>
                     <input
@@ -1570,6 +1628,16 @@ export default function AdminPortal({
                       value={editingProduct.priceXaf}
                       onChange={(e) => setEditingProduct({ ...editingProduct, priceXaf: Number(e.target.value) })}
                       className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Strike Price (XAF)</label>
+                    <input
+                      type="number"
+                      value={editingProduct.strikePriceXaf ?? ""}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, strikePriceXaf: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
+                      placeholder="Optional promo"
                     />
                   </div>
                   <div>
@@ -1590,6 +1658,27 @@ export default function AdminPortal({
                       value={editingProduct.stock}
                       onChange={(e) => setEditingProduct({ ...editingProduct, stock: Number(e.target.value) })}
                       className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Description (EN)</label>
+                    <textarea
+                      rows={3}
+                      value={editingProduct.descriptionEn}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, descriptionEn: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-stone-400 text-[10px] uppercase font-bold block mb-1">Description (FR)</label>
+                    <textarea
+                      rows={3}
+                      value={editingProduct.descriptionFr}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, descriptionFr: e.target.value })}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-850 rounded-lg outline-none text-xs text-stone-100 resize-none"
                     />
                   </div>
                 </div>
@@ -1619,13 +1708,13 @@ export default function AdminPortal({
                   <div className="p-5 flex gap-4">
                     <img 
                       src={p.image} 
-                      alt={p.name}
+                      alt={p.nameEn}
                       referrerPolicy="no-referrer"
                       className="w-16 h-16 rounded-xl object-cover bg-stone-950 border border-stone-800 flex-shrink-0" 
                     />
                     <div className="text-left overflow-hidden">
                       <span className="text-[#C9A227] font-bold text-[9px] uppercase tracking-widest block">{p.category}</span>
-                      <h4 className="font-extrabold text-sm text-stone-100 mt-1 truncate" title={p.name}>{p.name}</h4>
+                      <h4 className="font-extrabold text-sm text-stone-100 mt-1 truncate" title={p.nameEn}>{p.nameEn}</h4>
                       <div className="flex gap-3.5 mt-2 text-xs text-stone-400 font-mono font-semibold">
                         <span>{p.priceXaf?.toLocaleString()} XAF</span>
                         <span className="text-emerald-400 font-bold">+{p.pvPoints} PV</span>
@@ -1642,7 +1731,7 @@ export default function AdminPortal({
                       <Edit className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDeleteProduct(p.id, p.name)}
+                      onClick={() => handleDeleteProduct(p.id, p.nameEn)}
                       className="p-2 bg-stone-950 hover:bg-red-950/20 border border-stone-850 hover:border-red-900/40 text-red-400 rounded-lg transition-all cursor-pointer"
                       title="Remove product spec"
                     >

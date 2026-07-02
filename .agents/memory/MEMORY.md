@@ -1,1 +1,3 @@
 - [Firebase-to-Supabase migration](firebase-supabase-migration.md) — full MLM platform migration; key decisions on auth, realtime, RLS, and server security patterns.
+- [Rate-limit pattern for login](rate-limit-pattern.md) — call check_rate_limit() only on failed sign-in, never before; otherwise successful logins consume slots.
+- [Bootstrap endpoint security pattern](bootstrap-endpoint-pattern.md) — one-time admin setup route needs: key check + "no superadmin exists" DB guard + IP rate limit.

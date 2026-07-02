@@ -1,0 +1,141 @@
+Continuing the Songtai Life build on Supabase (React + TypeScript + Vite + Tailwind + Framer Motion, existing schema with profiles/distributors/wallets/products/orders/etc. and the is_admin() RLS helper already in place). This pass fixes auth reliability, builds out the real admin panel, adds RBAC + rate limiting, redefines the homepage nav, adds SEO, adds homepage animation/carousel, makes products fully admin-manageable with pricing/promotions, and adds full EN/FR bilingual support site-wide.
+
+═══════════════════════════
+1. SUPABASE AUTH — MAKE IT RELIABLE
+═══════════════════════════
+- Single `supabase` client instance (lib/supabase.ts), never re-instantiated per component.
+- Wrap the app in an `AuthProvider` (React Context) that:
+  - Calls `supabase.auth.getSession()` once on mount, then subscribes via `supabase.auth.onAuthStateChange` for the life of the app — never re-fetch session on every render.
+  - Loads the matching `profiles` row (role, locale) alongside the session and exposes `{ user, profile, role, loading }` from the context.
+  - Exposes `loading` explicitly so protected routes can show a loading state instead of a flash of the wrong UI or a premature redirect before the session resolves.
+- `ProtectedRoute` component: checks `loading` first (render nothing/spinner), then checks `user` + `role` against an allowed-roles prop, redirects only once state is settled — this directly avoids the redirect-loop class of bug from the Eatalyft/Firebase migration lessons already baked into this project.
+- Session persistence: confirm `persistSession: true` and `autoRefreshToken: true` are set in the Supabase client config (default, but verify explicitly) so refresh doesn't silently log users out.
+
+DEFAULT ADMIN ACCOUNT — seed script (`scripts/seed-admin.ts` or a one-off SQL block), NOT hardcoded credentials in the app:
+```sql
+-- Run once after auth.users row exists (create the user via Supabase Dashboard > Authentication,
+-- or via supabase.auth.admin.createUser() in a server-side seed script using the service role key)
+insert into profiles (id, email, role, locale, must_change_password)
+values ('<the-created-auth-user-uuid>', 'admin@songtailife.cm', 'superadmin', 'en', true)
+on conflict (id) do update set role = 'superadmin';
+```
+Add a `must_change_password boolean default false` column to `profiles` if not already present. On login, if `must_change_password = true`, redirect to a forced password-change screen before allowing access to any admin route — same pattern already used on Eatalyft's superadmin seeding.
+
+Never commit the admin password anywhere. Generate it once, display it in the terminal/seed script output only, and require the change on first login.
+
+═══════════════════════════
+2. RBAC — ENFORCE EVERYWHERE, NOT JUST IN THE UI
+═══════════════════════════
+- Roles: `customer | distributor | content_editor | admin | superadmin` (already defined in `profiles.role`).
+- Frontend: `ProtectedRoute` (above) takes an `allowedRoles` array; wrap every `/admin/*` and `/distributor/*` route.
+- Backend (the real boundary — client-side checks are UX only): every table that needs role-gated writes already has `is_admin()`-based policies from the last migration. Extend this pattern for `content_editor`:
+```sql
+create or replace function is_content_editor_or_above()
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from profiles
+    where id = auth.uid() and role in ('content_editor','admin','superadmin')
+  );
+$$;
+
+drop policy if exists "editor_blog_posts_write" on blog_posts;
+create policy "editor_blog_posts_write" on blog_posts
+  for all using (is_content_editor_or_above()) with check (is_content_editor_or_above());
+```
+- Also pin `set search_path = public` on the existing `is_admin()` function if not already done (security hardening flagged previously).
+- Nav/menu items conditionally render based on `role` from `AuthProvider`, but this is purely cosmetic — the real enforcement is the RLS policies above.
+
+═══════════════════════════
+3. RATE LIMITING
+═══════════════════════════
+Add a lightweight Postgres-backed rate limiter usable from both client actions and Edge Functions:
+```sql
+create table rate_limit_events (
+  id uuid primary key default uuid_generate_v4(),
+  bucket text not null,        -- e.g. 'login', 'contact_form', 'newsletter'
+  identifier text not null,    -- IP or email
+  created_at timestamptz default now()
+);
+create index on rate_limit_events (bucket, identifier, created_at);
+
+create or replace function check_rate_limit(p_bucket text, p_identifier text, p_max_attempts int, p_window_seconds int)
+returns boolean language plpgsql security definer as $$
+declare v_count int;
+begin
+  select count(*) into v_count from rate_limit_events
+  where bucket = p_bucket and identifier = p_identifier
+    and created_at > now() - (p_window_seconds || ' seconds')::interval;
+  if v_count >= p_max_attempts then
+    return false;
+  end if;
+  insert into rate_limit_events (bucket, identifier) values (p_bucket, p_identifier);
+  return true;
+end;
+$$;
+```
+Apply it:
+- **Login**: before calling `supabase.auth.signInWithPassword`, call `check_rate_limit('login', email, 5, 300)` (5 attempts per 5 min) via RPC; block and show a cooldown message if it returns false.
+- **Contact form / newsletter**: same pattern keyed by email or a client-derived identifier, 3 submissions per 10 minutes.
+- **Withdrawal requests**: keyed by `distributor_id`, prevents spam-clicking the payout button.
+- Enable RLS on `rate_limit_events` with `insert` allowed via the function only (`security definer`), no direct client read/write.
+
+═══════════════════════════
+4. ADMIN PANEL — REBUILD/COMPLETE
+═══════════════════════════
+`/admin/login` — clean glass-card centered form, on-brand (not a showcase page), calls the rate-limited login flow above.
+
+`/admin/*` shell — persistent sidebar nav (Dashboard, Products, Orders, Distributors, Blog, Events, Contact Messages, Newsletter, Audit Log, Settings), role-gated per section (`content_editor` sees only Blog/Events, `admin`/`superadmin` see everything).
+
+**Products management (`/admin/products`)** — full CRUD, every write goes straight to Supabase (no local-only state that "looks" saved but isn't):
+- Fields: `name_en`, `name_fr`, `description_en`, `description_fr`, `price_xaf`, `strike_price_xaf` (nullable — when set and greater than `price_xaf`, the storefront shows it struck-through as the "was" price, i.e. an active promotion), `pv_points`, `category_id`, `images[]` (upload to the `media` Storage bucket, store returned public URLs), `is_active`.
+- Migration to add the new columns:
+```sql
+alter table products
+  add column if not exists name_fr text,
+  add column if not exists description_fr text,
+  add column if not exists strike_price_xaf integer;
+alter table products rename column name to name_en;
+alter table products rename column description to description_en;
+```
+- Every save calls `supabase.from('products').upsert(...)` directly — show a saving/saved state tied to the actual Supabase response (success/error), never an optimistic-only UI that doesn't reflect real persistence.
+- Product list view shows a live read from Supabase (`useEffect` + `supabase.from('products').select()`, or better, `supabase.channel()` realtime subscription so the list updates instantly after a save without a manual refresh).
+
+**Every other admin section** (Blog, Events, Contact Messages, Newsletter subscriber list, Distributor/KYC review) follows the same rule: **no mock data, no local-only edits** — every create/update/delete is a real Supabase call, and list views subscribe to Supabase Realtime so changes reflect immediately across any open admin session.
+
+**Audit log**: every admin mutation (product edit, KYC approval, order status change) inserts a row into `audit_logs` (`admin_id`, `action`, `table_name`, `record_id`, `created_at`) — wrap this in a small `logAdminAction()` helper called after every successful admin write, rather than repeating the insert everywhere.
+
+═══════════════════════════
+5. HOMEPAGE NAVBAR — REDEFINE
+═══════════════════════════
+Rebuild as a single `<Navbar />` component:
+- Sticky, glass background (`backdrop-blur-lg`, low-opacity fill), condenses in height + increases blur on scroll (`scroll > 50px` state toggle via a scroll listener, animated with Framer Motion, not an abrupt class swap).
+- Left: logo. Center/right: primary nav links + **Products mega menu** (hover/click reveals a panel with category previews pulling live category names + a representative image from Supabase, not hardcoded).
+- Right-aligned utility cluster: **language toggle (EN/FR)**, **dark/light mode toggle** (glass pill switch), primary CTA button ("Become a Distributor," gold).
+- Mobile: collapses to a hamburger triggering a full-screen glass overlay menu with staggered link reveal animation.
+- Active route indicator (animated underline, not a static border).
+
+═══════════════════════════
+6. SEO
+═══════════════════════════
+- Install `react-helmet-async`; wrap the app in `HelmetProvider`.
+- Every page sets its own `<title>`, `<meta name="description">`, Open Graph tags (`og:title`, `og:description`, `og:image`), and Twitter Card tags — product and blog pages pull these dynamically from the Supabase row's translated fields (title/description in the active locale).
+- Add `<html lang="en">` / `<html lang="fr">` toggling dynamically based on the active locale (accessibility + SEO signal).
+- Generate `sitemap.xml` dynamically: a small script/Edge Function that queries published products, blog posts, and events from Supabase and outputs valid sitemap XML, run on a schedule or on-demand rather than hand-maintained.
+- Add basic JSON-LD `Organization` schema site-wide (name, logo, social profile URLs) and `Product` schema on product detail pages.
+
+═══════════════════════════
+7. HOMEPAGE ANIMATIONS + IMAGE CAROUSEL
+═══════════════════════════
+- Hero: reconfirm the layered parallax (gradient → particles → product imagery → headline) from the earlier spec is actually wired up with Framer Motion `useScroll`/`useTransform`, not just static.
+- **New: image carousel component** for the hero or an "As Seen In / Our World" section — auto-advancing (5–6s interval), pausable on hover/touch, swipeable on mobile (Framer Motion drag), animated slide transition using the established easing curves (`cubic-bezier(0.16, 1, 0.3, 1)`), dot/progress indicators, images sourced from a Supabase-managed `gallery_images` or a dedicated `hero_carousel` table so admins can update carousel images without a redeploy.
+- All scroll-triggered sections use `whileInView` with staggered children (60–100ms per item), respecting `prefers-reduced-motion` as already specified.
+
+═══════════════════════════
+8. FULL BILINGUAL SITE (EN/FR)
+═══════════════════════════
+- `react-i18next` fully wired: static UI strings (nav, buttons, form labels, footer) live in `locales/en.json` / `locales/fr.json`.
+- **Dynamic content** (products, blog posts) reads from the `_en`/`_fr` column pairs added in Section 4 — build a small `useLocalizedField(row, 'name')` helper that returns `row[\`name_\${locale}\`]` with an English fallback if the French field is empty, so nothing renders blank if a translation is missing.
+- Language toggle in the navbar updates i18next's active language AND a `locale` value in context, persisted to `localStorage` and, for logged-in users, synced to `profiles.locale` in Supabase (so their preference follows them across devices/sessions).
+- Every page — not just the homepage — reads through this same system: About, Products, Opportunity, Events, Blog, Gallery, Media Center, FAQ, Contact, Become a Distributor, and the entire distributor/admin portal UI chrome (labels, buttons, table headers). Blog post *body* content can stay English-only for now if French long-form copy isn't ready yet — flag this with a visible "EN only" badge on such posts rather than silently showing English under a French toggle with no explanation.
+
+DELIVERABLE: Reliable Supabase-backed auth with a proper default admin bootstrap, real RBAC enforced at the database level, basic rate limiting on sensitive actions, a fully functional admin panel where every write actually persists to and syncs from Supabase in real time, a redefined glass navbar with mega menu and language/theme toggles, working SEO metadata and sitemap, an animated hero with a live image carousel, admin-manageable products with promotional strike pricing, and a complete English/French toggle that changes every page — not just the homepage.
