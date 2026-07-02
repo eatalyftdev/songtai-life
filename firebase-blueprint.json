@@ -1,0 +1,64 @@
+{
+  "collections": {
+    "users": {
+      "fields": {
+        "email": "string",
+        "phone": "string",
+        "role": "string",
+        "locale": "string",
+        "createdAt": "timestamp"
+      }
+    },
+    "distributors": {
+      "fields": {
+        "distributorCode": "string",
+        "sponsorId": "string",
+        "placementId": "string",
+        "rank": "string",
+        "kycStatus": "string",
+        "joinedAt": "timestamp"
+      }
+    },
+    "wallets": {
+      "fields": {
+        "balanceXaf": "number",
+        "updatedAt": "timestamp"
+      }
+    },
+    "walletTransactions": {
+      "fields": {
+        "walletId": "string",
+        "type": "string",
+        "amountXaf": "number",
+        "referenceId": "string",
+        "createdAt": "timestamp"
+      }
+    },
+    "commissions": {
+      "fields": {
+        "distributorId": "string",
+        "orderId": "string",
+        "type": "string",
+        "level": "number",
+        "amountXaf": "number",
+        "status": "string"
+      }
+    },
+    "withdrawals": {
+      "fields": {
+        "distributorId": "string",
+        "amountXaf": "number",
+        "method": "string",
+        "status": "string"
+      }
+    },
+    "kycDocuments": {
+      "fields": {
+        "distributorId": "string",
+        "documentType": "string",
+        "fileUrl": "string",
+        "status": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is accessing their own resource
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Helper function to fetch the user's role
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper function to check if the user is admin or superadmin
+    function isAdmin() {
+      return isAuthenticated() && 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (getUserData().role == 'admin' || getUserData().role == 'superadmin'));
+    }
+
+    // Users rules
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == uid;
+      allow update: if isOwner(uid) && request.resource.data.role == resource.data.role || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Distributors rules
+    match /distributors/{uid} {
+      allow read: if isAuthenticated(); // To validate referral codes or view genealogy, other distributors can read profiles
+      allow create: if isAuthenticated() && request.auth.uid == uid;
+      allow update: if isOwner(uid) && request.resource.data.kycStatus == resource.data.kycStatus || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Wallets rules
+    match /wallets/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == uid;
+      // Allow updates for client-side wallet transactions (for now, as per user's instructions)
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Wallet Transactions rules
+    match /walletTransactions/{id} {
+      allow read: if isAuthenticated() && (resource.data.walletId == request.auth.uid || isAdmin());
+      // TODO: In Phase 3, write-restricted to backend logic (Cloud Functions). Client writes allowed for now.
+      allow create: if isAuthenticated() && (request.resource.data.walletId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Commissions rules
+    match /commissions/{id} {
+      allow read: if isAuthenticated() && (resource.data.distributorId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Withdrawals rules
+    match /withdrawals/{id} {
+      allow read: if isAuthenticated() && (resource.data.distributorId == request.auth.uid || isAdmin());
+      // TODO: In Phase 3, write-restricted to backend logic. For now, client writes allowed.
+      allow create: if isAuthenticated() && (request.resource.data.distributorId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // KYC Documents rules
+    match /kycDocuments/{id} {
+      allow read: if isAuthenticated() && (resource.data.distributorId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.distributorId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

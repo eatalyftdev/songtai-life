@@ -1,0 +1,6 @@
+{
+  "name": "Songtai Life",
+  "description": "Technical Specification, Brand Showcase, and Interactive Distributor Portal for the Songtai Life MLM Ecosystem.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

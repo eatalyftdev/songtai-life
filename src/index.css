@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Light Theme Variable Overrides */
+.light-theme {
+  --color-stone-950: #FFFFFF !important;
+  --color-stone-900: #F4F7F4 !important;
+  --color-stone-850: #E4EBE5 !important;
+  --color-stone-800: #D5E0D6 !important;
+  --color-stone-700: #8EAC95 !important;
+  --color-stone-600: #6B8A73 !important;
+  --color-stone-50: #0B120C !important;
+  --color-stone-100: #0B120C !important;
+  --color-stone-200: #1D2E22 !important;
+  --color-stone-300: #2B3D30 !important;
+  --color-stone-400: #3E5243 !important;
+  --color-stone-500: #4F6655 !important;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.32, 1) forwards;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0c0a09;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1c1917;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #292524;
+}
