@@ -2277,7 +2277,7 @@ export default function AdminPortal({
                       <tr key={s.id} className="hover:bg-stone-950/20 transition-all">
                         <td className="px-6 py-4 font-bold text-stone-100 font-mono">{s.email}</td>
                         <td className="px-6 py-4 font-mono text-stone-300">
-                          {s.createdAt?.seconds ? new Date(s.createdAt.seconds * 1000).toISOString().substring(0, 10) : "N/A"}
+                          {s.createdAt ? new Date(s.createdAt).toISOString().substring(0, 10) : "N/A"}
                         </td>
                         <td className="px-6 py-4">
                           <span className="px-2.5 py-0.5 bg-emerald-950/60 border border-emerald-900/50 text-emerald-400 rounded-full font-bold uppercase text-[9px] tracking-wider">
@@ -2317,7 +2317,7 @@ export default function AdminPortal({
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                           <span className="font-black text-xs text-stone-100 uppercase tracking-tight">{log.action}</span>
                           <span className="text-[10px] text-stone-500 font-mono">
-                            {log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleString() : ""}
+                            {log.createdAt ? new Date(log.createdAt).toLocaleString() : ""}
                           </span>
                         </div>
                         <p className="text-stone-300 text-xs mt-1.5 leading-relaxed font-medium">{log.details}</p>

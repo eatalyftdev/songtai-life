@@ -171,31 +171,26 @@ export default function DistributorPortal({ addNotification }: { addNotification
     setPayoutLoading(true);
 
     try {
-      // 1. Log withdrawal document
-      await supabase.from("withdrawals").insert({
-        distributor_id: user.id,
-        amount_xaf: amountNum,
-        method: payoutProvider,
-        status: "pending",
+      // Route through authenticated server endpoint — prevents IDOR and wallet tampering
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("No active session token.");
+
+      const res = await fetch("/api/payment/payout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          amountXaf: amountNum,
+          phone: payoutPhone,
+          provider: payoutProvider,
+        }),
       });
 
-      // 2. Log wallet transaction debit entry
-      await supabase.from("wallet_transactions").insert({
-        wallet_id: user.id,
-        type: "withdrawal",
-        amount_xaf: amountNum,
-        description: `MeSomb Cashout request to ${payoutProvider === "mtn_momo" ? "MTN MoMo" : "Orange Money"} (+237 ${payoutPhone})`,
-        status: "pending",
-      });
-
-      // 3. Deduct from wallet balance
-      await supabase
-        .from("wallets")
-        .update({
-          balance_xaf: wallet.balanceXaf - amountNum,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Payout request failed.");
 
       addNotification(`Cashout Request logged! ${amountNum.toLocaleString()} XAF pending MeSomb handshake.`, "success");
       setPayoutAmount("");
@@ -214,20 +209,27 @@ export default function DistributorPortal({ addNotification }: { addNotification
     if (!user || !distributorProfile || !newMemberName.trim()) return;
 
     try {
-      const generatedCode = `ST-DOWN-${Math.floor(1000 + Math.random() * 9000)}`;
-      // Create a mock UUID for simulated downline (server-side registration in production)
-      const mockId = crypto.randomUUID();
+      // Route through server endpoint — uses admin SDK to create a valid auth user
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("No active session token.");
 
-      await supabase.from("distributors").insert({
-        id: mockId,
-        distributor_code: generatedCode,
-        sponsor_id: distributorProfile.distributorCode,
-        placement_id: distributorProfile.distributorCode,
-        rank: "bronze",
-        kyc_status: "none",
+      const res = await fetch("/api/distributor/add-downline", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          memberName: newMemberName,
+          sponsorCode: distributorProfile.distributorCode,
+        }),
       });
 
-      addNotification(`New member ${newMemberName} added directly to your matrix tree!`, "success");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add downline member.");
+
+      addNotification(`New member ${newMemberName} added directly to your matrix tree! Code: ${data.distributorCode}`, "success");
       setNewMemberName("");
     } catch (err: any) {
       console.error(err);

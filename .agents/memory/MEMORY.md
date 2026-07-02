@@ -1,0 +1,1 @@
+- [Firebase-to-Supabase migration](firebase-supabase-migration.md) — full MLM platform migration; key decisions on auth, realtime, RLS, and server security patterns.

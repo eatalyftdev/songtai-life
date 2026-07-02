@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 import crypto from "crypto";
 
 dotenv.config();
@@ -19,7 +20,9 @@ if (!supabaseUrl || !supabaseServiceKey) {
   process.exit(1);
 }
 
-const db = createClient(supabaseUrl, supabaseServiceKey);
+const db = createClient(supabaseUrl, supabaseServiceKey, {
+  realtime: { transport: ws as any },
+});
 console.log("Supabase Admin client initialized successfully");
 
 // Pre-hydrate collections with seeds on startup if they are empty
@@ -340,12 +343,17 @@ Answer concisely, helpfully, and professionally. Support both English and French
       if (signatureHeader) {
         const computedSignature = crypto.createHmac("sha256", signatureKey).update(rawBody).digest("hex");
         if (signatureHeader !== computedSignature) {
-          console.warn("[Webhook] HMAC-SHA256 signature verification failed. Continuing for sandbox validation.");
-        } else {
-          console.log("[Webhook] HMAC-SHA256 signature verified successfully.");
+          console.warn("[Webhook] HMAC-SHA256 signature verification failed. Rejecting.");
+          return res.status(401).json({ error: "Invalid webhook signature." });
         }
+        console.log("[Webhook] HMAC-SHA256 signature verified successfully.");
       } else {
-        console.log("[Webhook] No signature header detected. Running in sandbox development mode.");
+        // Only allow unsigned webhooks in non-production (sandbox / simulator)
+        if (process.env.NODE_ENV === "production") {
+          console.warn("[Webhook] Missing signature in production — rejecting.");
+          return res.status(401).json({ error: "Webhook signature required in production." });
+        }
+        console.log("[Webhook] No signature header — running in sandbox development mode.");
       }
 
       const { orderId, transactionId } = req.body;
@@ -407,10 +415,23 @@ Answer concisely, helpfully, and professionally. Support both English and French
   // 3. Payout (Withdrawal Request) Endpoint
   app.post("/api/payment/payout", async (req, res) => {
     try {
-      const { userId, amountXaf, phone, provider } = req.body;
+      // Verify caller identity via Supabase JWT — prevents IDOR
+      const authHeader = req.headers["authorization"] || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (!token) {
+        return res.status(401).json({ error: "Authorization token required." });
+      }
+      const { data: { user: callerUser }, error: authError } = await db.auth.getUser(token);
+      if (authError || !callerUser) {
+        return res.status(401).json({ error: "Invalid or expired token." });
+      }
 
-      if (!userId || !amountXaf || !phone || !provider) {
-        return res.status(400).json({ error: "Missing withdrawal details: userId, amountXaf, phone, provider" });
+      const { amountXaf, phone, provider } = req.body;
+      // userId is always taken from the verified token — never from the request body
+      const userId = callerUser.id;
+
+      if (!amountXaf || !phone || !provider) {
+        return res.status(400).json({ error: "Missing withdrawal details: amountXaf, phone, provider" });
       }
 
       const amount = Number(amountXaf);
@@ -461,6 +482,55 @@ Answer concisely, helpfully, and professionally. Support both English and French
       });
     } catch (err: any) {
       console.error("[Payout-API-Error] withdrawal failed:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 4. Add downline member (demo mode — creates a placeholder auth user)
+  app.post("/api/distributor/add-downline", async (req, res) => {
+    try {
+      const authHeader = req.headers["authorization"] || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      if (!token) return res.status(401).json({ error: "Authorization token required." });
+
+      const { data: { user: callerUser }, error: authError } = await db.auth.getUser(token);
+      if (authError || !callerUser) return res.status(401).json({ error: "Invalid or expired token." });
+
+      const { memberName, sponsorCode } = req.body;
+      if (!memberName || !sponsorCode) {
+        return res.status(400).json({ error: "memberName and sponsorCode are required." });
+      }
+
+      // Create a placeholder auth user via admin SDK
+      const placeholderEmail = `downline-${Date.now()}@songtai.demo`;
+      const { data: newAuthUser, error: createError } = await db.auth.admin.createUser({
+        email: placeholderEmail,
+        password: crypto.randomBytes(12).toString("hex"),
+        user_metadata: { displayName: memberName, isDemo: true },
+      });
+      if (createError) throw createError;
+
+      const generatedCode = `ST-DOWN-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      await db.from("distributors").insert({
+        id: newAuthUser.user.id,
+        distributor_code: generatedCode,
+        sponsor_id: sponsorCode,
+        placement_id: sponsorCode,
+        rank: "bronze",
+        kyc_status: "none",
+      });
+
+      await db.from("profiles").upsert({
+        id: newAuthUser.user.id,
+        email: placeholderEmail,
+        display_name: memberName,
+        role: "distributor",
+      }, { onConflict: "id", ignoreDuplicates: true });
+
+      res.json({ success: true, distributorCode: generatedCode, memberId: newAuthUser.user.id });
+    } catch (err: any) {
+      console.error("[AddDownline-Error]", err.message);
       res.status(500).json({ error: err.message });
     }
   });
