@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Product } from "../types";
 import { 
   Home, Info, ShoppingBag, TrendingUp, Calendar, BookOpen, 
@@ -48,6 +49,7 @@ export default function BrandShowcase({
   addNotification, 
   openPrivacyPolicy 
 }: BrandShowcaseProps) {
+  const navigate = useNavigate();
 
   // Smooth scroll to top when brand sub-page transitions
   useEffect(() => {
@@ -151,6 +153,7 @@ export default function BrandShowcase({
               <li><button onClick={() => setBrandPage("media")} className="hover:text-[#C9A227] transition-all">Media Center</button></li>
               <li><button onClick={() => setActiveTab("portal")} className="hover:text-emerald-400 font-bold transition-all text-left flex items-center gap-1">Distributor Portal ↗</button></li>
               <li><button onClick={() => setActiveTab("tech-spec")} className="hover:text-emerald-400 font-bold transition-all text-left flex items-center gap-1">Technical Architecture ↗</button></li>
+              <li><button onClick={() => navigate("/admin/dashboard")} className="hover:text-amber-400 font-bold transition-all text-left flex items-center gap-1">Admin Portal ⚙️</button></li>
               <li><button onClick={openPrivacyPolicy} className="hover:text-emerald-400 font-semibold transition-all">Privacy & Cybersecurity</button></li>
             </ul>
           </div>

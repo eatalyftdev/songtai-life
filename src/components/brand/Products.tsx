@@ -15,8 +15,14 @@ export default function Products({ onAddToCart }: ProductsProps) {
 
   // Filter logic
   const filteredProducts = PRODUCTS_SEED.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = 
+      p.name.toLowerCase().includes(q) || 
+      p.description.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      p.pvPoints.toString().includes(q) ||
+      (q.endsWith("pv") && p.pvPoints.toString().includes(q.replace("pv", "").trim())) ||
+      (q.startsWith("pv") && p.pvPoints.toString().includes(q.replace("pv", "").trim()));
     const matchesCategory = activeCategory === "All" || p.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
