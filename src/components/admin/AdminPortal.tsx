@@ -8,9 +8,14 @@ import {
   Send, FileSpreadsheet, History, Plus, Trash2, Edit, Save, 
   X, GitBranch, ArrowUpRight, BarChart3, ChevronRight, FileText,
   DollarSign, CreditCard, Activity, Bell, Moon, Sun, ChevronDown,
-  Sparkles, ExternalLink
+  Sparkles, ExternalLink, Star, Image as ImageIcon, CalendarCheck, Settings, Library
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import SettingsTab from "./SettingsTab";
+import TestimonialsTab from "./TestimonialsTab";
+import GalleryTab from "./GalleryTab";
+import AppointmentsTab from "./AppointmentsTab";
+import MediaLibraryTab from "./MediaLibraryTab";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -172,7 +177,8 @@ export default function AdminPortal({
   toggleTheme?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<
-    "analytics" | "products" | "orders" | "distributors" | "blog" | "events" | "contacts" | "newsletter" | "audit"
+    "analytics" | "products" | "orders" | "distributors" | "blog" | "events" | "contacts" | "newsletter" | "audit" |
+    "testimonials" | "gallery" | "appointments" | "media" | "settings"
   >("analytics");
 
   const { logout, userProfile, user } = useAuth();
@@ -893,6 +899,59 @@ export default function AdminPortal({
           >
             <History className="w-3.5 h-3.5" />
             <span>Auditing</span>
+          </button>
+
+          <div className="w-px h-5 bg-stone-800 mx-1 flex-shrink-0" />
+
+          <button
+            onClick={() => setActiveTab("testimonials")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === "testimonials" ? "bg-emerald-600 text-white shadow-sm" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Star className="w-3.5 h-3.5" />
+            <span>Testimonials</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("gallery")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === "gallery" ? "bg-emerald-600 text-white shadow-sm" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Gallery</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("appointments")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === "appointments" ? "bg-emerald-600 text-white shadow-sm" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <CalendarCheck className="w-3.5 h-3.5" />
+            <span>Appointments</span>
+            {/* Badge for new requests shown via a separate query in the tab itself */}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("media")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === "media" ? "bg-emerald-600 text-white shadow-sm" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Library className="w-3.5 h-3.5" />
+            <span>Media Lib</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              activeTab === "settings" ? "bg-amber-600 text-white shadow-sm" : "text-stone-400 hover:text-stone-200"
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Settings</span>
           </button>
         </nav>
 
@@ -2418,6 +2477,31 @@ export default function AdminPortal({
               </div>
             </div>
           </div>
+        )}
+
+        {/* 10. TESTIMONIALS TAB */}
+        {activeTab === "testimonials" && (
+          <TestimonialsTab addNotification={addNotification} />
+        )}
+
+        {/* 11. GALLERY TAB */}
+        {activeTab === "gallery" && (
+          <GalleryTab addNotification={addNotification} />
+        )}
+
+        {/* 12. APPOINTMENTS TAB */}
+        {activeTab === "appointments" && (
+          <AppointmentsTab addNotification={addNotification} />
+        )}
+
+        {/* 13. MEDIA LIBRARY TAB */}
+        {activeTab === "media" && (
+          <MediaLibraryTab addNotification={addNotification} />
+        )}
+
+        {/* 14. SETTINGS TAB */}
+        {activeTab === "settings" && (
+          <SettingsTab addNotification={addNotification} />
         )}
 
       </div>

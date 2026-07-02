@@ -12,6 +12,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { DistributorLogin, DistributorSignup, AdminLogin } from "./components/auth/AuthViews";
 import AdminPortal from "./components/admin/AdminPortal";
 import { runCommissionEngine } from "./lib/commissionEngine";
+import WhatsAppWidget from "./components/WhatsAppWidget";
+import Analytics from "./components/Analytics";
 
 import { 
   ShoppingBag, X, Plus, Minus, Trash2, ShieldCheck, 
@@ -555,6 +557,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Analytics />
+        <WhatsAppWidget />
         <AppContent />
       </AuthProvider>
     </BrowserRouter>

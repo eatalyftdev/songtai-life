@@ -41,7 +41,8 @@ type BrandSubPage =
   | "media" 
   | "faq" 
   | "contact" 
-  | "join";
+  | "join"
+  | "appointment";
 
 const PAGE_SEO: Record<string, { titleKey: string; descKey: string }> = {
   home:        { titleKey: "hero.slogan",       descKey: "hero.sub" },
@@ -133,6 +134,10 @@ export default function BrandShowcase({
             onNavigate={(page) => setBrandPage(page as BrandSubPage)} 
           />
         )}
+
+        {brandPage === "appointment" && (
+          <AppointmentBooking addNotification={addNotification} />
+        )}
       </div>
 
       {/* Standard Brand Footer */}
@@ -155,6 +160,7 @@ export default function BrandShowcase({
               <li><button onClick={() => setBrandPage("products")} className="hover:text-[#C9A227] transition-all">Luminous Skincare</button></li>
               <li><button onClick={() => setBrandPage("products")} className="hover:text-[#C9A227] transition-all">Bio-Yield Agriculture</button></li>
               <li><button onClick={() => setBrandPage("join")} className="hover:text-emerald-400 font-bold transition-all">Become Distributor ✦</button></li>
+              <li><button onClick={() => setBrandPage("appointment")} className="hover:text-[#ecc246] font-bold transition-all">Book a Consultation 📅</button></li>
             </ul>
           </div>
 
