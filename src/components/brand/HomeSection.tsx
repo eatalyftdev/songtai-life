@@ -84,9 +84,9 @@ export default function HomeSection({ onNavigate, onAddToCart }: HomeSectionProp
       {/* SECTION 1: HERO */}
       <section className="relative min-h-[95vh] flex items-center justify-center pt-24 px-4 overflow-hidden bg-stone-950">
         {/* Background radial soft gradients */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <div className="absolute top-[10%] left-[20%] w-[600px] h-[600px] rounded-full bg-[#0A7D32]/5 blur-[120px]" />
-          <div className="absolute bottom-[15%] right-[10%] w-[500px] h-[500px] rounded-full bg-[#C9A227]/5 blur-[100px]" />
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-[10%] left-[20%] w-[600px] h-[600px] rounded-full bg-[#0A7D32]/10 blur-[120px] animate-float-1" />
+          <div className="absolute bottom-[15%] right-[10%] w-[500px] h-[500px] rounded-full bg-[#C9A227]/10 blur-[100px] animate-float-2" />
         </div>
 
         {/* Animated background lines */}

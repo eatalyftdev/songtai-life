@@ -1,5 +1,6 @@
 import { Sprout, ShoppingBag, MessageSquareCode, Globe2, Sun, Moon, Home, Info, HelpCircle, Phone, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { motion } from "motion/react";
 
 interface NavbarProps {
   activeTab: "brand" | "portal" | "tech-spec";
@@ -82,20 +83,28 @@ export default function Navbar({
             {/* Theme Toggle Glass Pill Switch */}
             <button
               onClick={toggleTheme}
-              className="relative flex items-center justify-between w-14 h-8 bg-stone-800/80 hover:bg-stone-750 border border-stone-700/50 rounded-full p-1 cursor-pointer transition-all shadow-inner"
+              className="relative flex items-center justify-between w-14 h-8 bg-stone-800/80 hover:bg-stone-700 border border-stone-700/50 rounded-full p-1 cursor-pointer transition-colors duration-300 shadow-inner overflow-hidden"
               title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
             >
-              <div 
-                className={`absolute w-6 h-6 rounded-full bg-emerald-500 shadow-md transform transition-transform duration-300 flex items-center justify-center ${
-                  theme === "light" ? "translate-x-6" : "translate-x-0"
-                }`}
+              {/* Inner sliding circle containing current icon with spring motion and rotation */}
+              <motion.div 
+                className="absolute w-6 h-6 rounded-full bg-emerald-500 shadow-md flex items-center justify-center z-10"
+                animate={{
+                  x: theme === "light" ? 22 : 0,
+                  rotate: theme === "light" ? 360 : 0
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 24
+                }}
               >
                 {theme === "light" ? (
                   <Sun className="w-3.5 h-3.5 text-stone-950 stroke-[3]" />
                 ) : (
                   <Moon className="w-3.5 h-3.5 text-stone-950 stroke-[3]" />
                 )}
-              </div>
+              </motion.div>
               <Moon className="w-3.5 h-3.5 text-stone-500 ml-1.5 pointer-events-none" />
               <Sun className="w-3.5 h-3.5 text-stone-500 mr-1.5 pointer-events-none" />
             </button>

@@ -23,6 +23,79 @@
   --color-stone-500: #4F6655 !important;
 }
 
+/* Auto-adapt hardcoded text styles for perfect light theme readability */
+.light-theme .text-white {
+  color: #0B120C !important;
+}
+
+.light-theme .text-emerald-400 {
+  color: #0A7D32 !important;
+}
+
+.light-theme .text-emerald-500 {
+  color: #086327 !important;
+}
+
+.light-theme .text-[#C9A227] {
+  color: #A17B14 !important;
+}
+
+/* Exceptions: Elements with solid colored backgrounds keep white text */
+.light-theme .bg-\[\#0A7D32\],
+.light-theme .bg-\[\#0A7D32\] *,
+.light-theme .bg-\[\#086327\],
+.light-theme .bg-\[\#086327\] *,
+.light-theme .bg-emerald-600,
+.light-theme .bg-emerald-600 *,
+.light-theme .bg-emerald-700,
+.light-theme .bg-emerald-700 *,
+.light-theme .bg-emerald-800,
+.light-theme .bg-emerald-800 *,
+.light-theme .bg-emerald-950,
+.light-theme .bg-emerald-950 *,
+.light-theme .bg-red-600,
+.light-theme .bg-red-600 *,
+.light-theme .bg-red-700,
+.light-theme .bg-red-700 *,
+.light-theme .bg-amber-500,
+.light-theme .bg-amber-500 *,
+.light-theme .bg-stone-950\/60,
+.light-theme .bg-stone-950\/60 *,
+.light-theme .keep-white,
+.light-theme .keep-white * {
+  color: #FFFFFF !important;
+}
+
+/* Floating Gradient Keyframes for Hero Background Animation */
+@keyframes float-grad-1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(60px, -80px) scale(1.15);
+  }
+  66% {
+    transform: translate(-40px, 30px) scale(0.9);
+  }
+}
+
+@keyframes float-grad-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-70px, 50px) scale(1.2);
+  }
+}
+
+.animate-float-1 {
+  animation: float-grad-1 20s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: float-grad-2 25s ease-in-out infinite;
+}
+
 @keyframes slide-in {
   from {
     transform: translateX(100%);

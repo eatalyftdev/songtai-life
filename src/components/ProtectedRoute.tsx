@@ -33,9 +33,8 @@ export default function ProtectedRoute({
   }
 
   // 3. User is authenticated, check role authorization
-  if (allowedRoles && userProfile) {
-    const isAuthorized = allowedRoles.includes(userProfile.role);
-    if (!isAuthorized) {
+  if (allowedRoles) {
+    if (!userProfile || !allowedRoles.includes(userProfile.role)) {
       // Redirect to unauthorized display or login
       return <Navigate to={fallbackPath} replace />;
     }

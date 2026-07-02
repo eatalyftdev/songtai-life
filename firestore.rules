@@ -81,5 +81,50 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
+
+    // Products rules
+    match /products/{id} {
+      allow read: if true;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // Blogs rules
+    match /blogs/{id} {
+      allow read: if true;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // Events rules
+    match /events/{id} {
+      allow read: if true;
+      allow write, update, delete: if isAdmin();
+    }
+
+    // Contact Messages rules
+    match /contactMessages/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Subscribers rules
+    match /subscribers/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Orders rules
+    match /orders/{id} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.distributorId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || request.resource.data.distributorId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Audit Logs rules
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
   }
 }

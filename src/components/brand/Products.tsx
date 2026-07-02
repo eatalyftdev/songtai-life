@@ -184,7 +184,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
               <div 
                 key={p.id}
                 onClick={() => setSelectedProduct(p)}
-                className="bg-stone-900/20 border border-stone-850/60 rounded-[28px] p-5 flex flex-col justify-between group transition-all duration-300 hover:bg-stone-900/45 cursor-pointer hover:border-emerald-950/60"
+                className="bg-stone-900/20 border border-stone-850/60 rounded-[28px] p-5 flex flex-col justify-between group transition-all duration-500 hover:bg-stone-900/45 cursor-pointer hover:border-emerald-500/20 hover:-translate-y-1.5 hover:scale-[1.015] hover:shadow-xl hover:shadow-emerald-950/20"
               >
                 <div className="space-y-4">
                   <div className="relative aspect-square rounded-2xl overflow-hidden bg-stone-950">

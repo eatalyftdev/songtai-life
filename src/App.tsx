@@ -257,7 +257,7 @@ function AppContent() {
           {/* Protected Admin Auditing Area */}
           <Route path="/admin/dashboard" element={
             <ProtectedRoute allowedRoles={["admin", "superadmin"]} fallbackPath="/admin/login">
-              <AdminPortal addNotification={addNotification} />
+              <AdminPortal addNotification={addNotification} theme={theme} toggleTheme={toggleTheme} />
             </ProtectedRoute>
           } />
 
