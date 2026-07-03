@@ -14,7 +14,7 @@
     "fix:lockfile": "sed -i 's|http://package-firewall.replit.local/npm|https://registry.npmjs.org|g' package-lock.json && echo 'Lock file patched for public registry.'"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
+    "@google/genai": "^2.10.0",
     "@supabase/supabase-js": "^2.109.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/connect-pg-simple": "^7.0.3",
@@ -28,6 +28,7 @@
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
     "express": "^4.21.2",
     "express-session": "^1.19.0",
     "firebase": "^12.15.0",
@@ -37,6 +38,8 @@
     "memoizee": "^0.4.17",
     "motion": "^12.23.24",
     "openid-client": "^6.8.4",
+    "p-limit": "^7.3.0",
+    "p-retry": "^7.1.1",
     "passport": "^0.7.0",
     "pg": "^8.22.0",
     "qrcode.react": "^4.2.0",
@@ -47,7 +50,9 @@
     "react-router-dom": "^7.18.1",
     "recharts": "^3.9.1",
     "vite": "^6.2.3",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^4.4.3",
+    "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
