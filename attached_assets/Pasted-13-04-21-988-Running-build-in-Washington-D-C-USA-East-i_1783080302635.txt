@@ -1,0 +1,75 @@
+13:04:21.988 Running build in Washington, D.C., USA (East) – iad1
+13:04:21.989 Build machine configuration: 2 cores, 8 GB
+13:04:22.133 Cloning github.com/eatalyftdev/songtai-life (Branch: main, Commit: 62cf205)
+13:04:22.596 Cloning completed: 462.000ms
+13:04:23.079 Restored build cache from previous deployment (FBmVjd3ZG93HneFUmRoDvKSHs98q)
+13:04:23.273 Running "vercel build"
+13:04:23.295 Vercel CLI 54.19.0
+13:04:23.937 Installing dependencies...
+13:04:28.471 
+13:04:28.471 added 14 packages in 4s
+13:04:28.472 
+13:04:28.472 68 packages are looking for funding
+13:04:28.472   run `npm fund` for details
+13:04:28.517 Running "npm run build"
+13:04:28.622 
+13:04:28.623 > react-example@0.0.0 build
+13:04:28.623 > vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs
+13:04:28.623 
+13:04:28.976 vite v6.4.3 building for production...
+13:04:29.064 transforming...
+13:04:29.424 Found 2 warnings while optimizing generated CSS:
+13:04:29.425 
+13:04:29.425 Issue #1:
+13:04:29.425 │   }
+13:04:29.425 │ }
+13:04:29.425 │ @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+13:04:29.425 ┆        ^-- @import rules must precede all rules aside from @charset and @layer statements
+13:04:29.426 ┆
+13:04:29.426 │ .light-theme {
+13:04:29.426 │   --color-stone-950: #FFFFFF !important;
+13:04:29.426 
+13:04:29.426 Issue #2:
+13:04:29.426 │   color: #086327 !important;
+13:04:29.426 │ }
+13:04:29.427 │ .light-theme .text-[#C9A227] {
+13:04:29.427 ┆                     ^-- No qualified name in attribute selector: IDHash("C9A227").
+13:04:29.434 ┆
+13:04:29.435 │   color: #A17B14 !important;
+13:04:29.435 │ }
+13:04:29.435 
+13:04:31.101 ✓ 1703 modules transformed.
+13:04:31.103 ✗ Build failed in 2.09s
+13:04:31.103 error during build:
+13:04:31.103 [vite:esbuild] Transform failed with 2 errors:
+13:04:31.104 /vercel/path0/src/components/SEO.tsx:36:68: ERROR: Cannot use "||" with "??" without parentheses
+13:04:31.104 /vercel/path0/src/components/SEO.tsx:37:68: ERROR: Cannot use "||" with "??" without parentheses
+13:04:31.104 file: /vercel/path0/src/components/SEO.tsx:36:68
+13:04:31.104 
+13:04:31.104 Cannot use "||" with "??" without parentheses
+13:04:31.105 34 |  
+13:04:31.105 35 |    const lang = i18n.language?.startsWith("fr") ? "fr" : "en";
+13:04:31.105 36 |    const resolvedDesc  = description ?? seoDefaults.meta_description || DEFAULT_DESC;
+13:04:31.105    |                                                                      ^
+13:04:31.105 37 |    const resolvedImage = image       ?? seoDefaults.og_image_url     || DEFAULT_IMAGE;
+13:04:31.105 38 |    const pageTitle     = title ? `${title} | ${seoDefaults.site_title || "Songtai Life"}` : DEFAULT_TITLE;
+13:04:31.105 
+13:04:31.106 Cannot use "||" with "??" without parentheses
+13:04:31.106 35 |    const lang = i18n.language?.startsWith("fr") ? "fr" : "en";
+13:04:31.106 36 |    const resolvedDesc  = description ?? seoDefaults.meta_description || DEFAULT_DESC;
+13:04:31.106 37 |    const resolvedImage = image       ?? seoDefaults.og_image_url     || DEFAULT_IMAGE;
+13:04:31.106    |                                                                      ^
+13:04:31.106 38 |    const pageTitle     = title ? `${title} | ${seoDefaults.site_title || "Songtai Life"}` : DEFAULT_TITLE;
+13:04:31.107 39 |    const canonical     = url ? `${SITE_URL}${url}` : SITE_URL;
+13:04:31.107 
+13:04:31.107     at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1467:15)
+13:04:31.107     at /vercel/path0/node_modules/esbuild/lib/main.js:736:50
+13:04:31.107     at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:603:9)
+13:04:31.107     at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:658:12)
+13:04:31.107     at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:581:7)
+13:04:31.108     at Socket.emit (node:events:509:28)
+13:04:31.108     at addChunk (node:internal/streams/readable:563:12)
+13:04:31.108     at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+13:04:31.114     at Readable.push (node:internal/streams/readable:394:5)
+13:04:31.114     at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+13:04:31.163 Error: Command "npm run build" exited with 1

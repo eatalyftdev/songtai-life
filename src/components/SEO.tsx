@@ -33,8 +33,8 @@ export default function SEO({
   const { seoDefaults, socials } = useSiteSettings();
 
   const lang = i18n.language?.startsWith("fr") ? "fr" : "en";
-  const resolvedDesc  = description ?? seoDefaults.meta_description || DEFAULT_DESC;
-  const resolvedImage = image       ?? seoDefaults.og_image_url     || DEFAULT_IMAGE;
+  const resolvedDesc  = (description ?? seoDefaults.meta_description) || DEFAULT_DESC;
+  const resolvedImage = (image       ?? seoDefaults.og_image_url)     || DEFAULT_IMAGE;
   const pageTitle     = title ? `${title} | ${seoDefaults.site_title || "Songtai Life"}` : DEFAULT_TITLE;
   const canonical     = url ? `${SITE_URL}${url}` : SITE_URL;
 
