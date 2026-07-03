@@ -135,6 +135,20 @@ async function hydrateSeeds() {
         },
       ], { onConflict: "slug" });
     }
+
+    // Seed site_settings defaults (contact + branding) — safe to run on every boot
+    try {
+      await db.from("site_settings").upsert([
+        {
+          key: "contact",
+          value: { phone: "", email: "", address_en: "", address_fr: "", map_url: "" },
+        },
+        {
+          key: "branding",
+          value: { logo_url: "", logo_dark_url: "", favicon_url: "" },
+        },
+      ], { onConflict: "key", ignoreDuplicates: true });
+    } catch { /* site_settings table may not exist yet — silently skip */ }
   } catch (err: any) {
     console.error("Hydration error:", err.message);
   }

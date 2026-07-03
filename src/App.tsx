@@ -52,7 +52,12 @@ interface Notification {
 // =========================================================================
 function AppContent() {
   const [brandPage, setBrandPage] = useState<string>("home");
-  const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("songtai_theme") as "dark" | "light") || "dark");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const stored = localStorage.getItem("songtai_theme");
+    if (stored === "dark" || stored === "light") return stored;
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+    return "light";
+  });
 
   const toggleTheme = () => {
     setTheme(prev => {
@@ -255,6 +260,7 @@ function AppContent() {
               setActiveTab={handleTabChange} 
               addNotification={addNotification} 
               openPrivacyPolicy={() => setPrivacyOpen(true)}
+              theme={theme}
             />
           } />
 

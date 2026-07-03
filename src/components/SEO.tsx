@@ -75,10 +75,10 @@ export default function SEO({
       <meta name="description" content={resolvedDesc} />
       <link rel="canonical" href={canonical} />
 
-      {/* hreflang — helps search engines understand bilingual structure */}
-      <link rel="alternate" hreflang="en" href={`${SITE_URL}?lang=en`} />
-      <link rel="alternate" hreflang="fr" href={`${SITE_URL}?lang=fr`} />
-      <link rel="alternate" hreflang="x-default" href={SITE_URL} />
+      {/* hrefLang — helps search engines understand bilingual structure */}
+      <link rel="alternate" hrefLang="en" href={`${SITE_URL}?lang=en`} />
+      <link rel="alternate" hrefLang="fr" href={`${SITE_URL}?lang=fr`} />
+      <link rel="alternate" hrefLang="x-default" href={SITE_URL} />
 
       {/* Open Graph */}
       <meta property="og:type"        content={type} />

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
-// ─── Typed setting shapes ───────────────────────────────────────────────────
+// ─── Typed setting shapes ────────────────────────────────────────────────────
 export interface WhatsAppSettings {
   number: string;
   default_message: string;
@@ -25,16 +25,30 @@ export interface SeoDefaults {
   meta_description: string;
   og_image_url: string;
 }
+export interface ContactSettings {
+  phone: string;
+  email: string;
+  address_en: string;
+  address_fr: string;
+  map_url: string;
+}
+export interface BrandingSettings {
+  logo_url: string;
+  logo_dark_url: string;
+  favicon_url: string;
+}
 
 export interface SiteSettings {
   whatsapp: WhatsAppSettings;
   analytics: AnalyticsSettings;
   socials: SocialSettings;
   seoDefaults: SeoDefaults;
+  contact: ContactSettings;
+  branding: BrandingSettings;
 }
 
 const DEFAULTS: SiteSettings = {
-  whatsapp: { number: "", default_message: "Hi Songtai Life, I would like to know more!", enabled: false },
+  whatsapp: { number: "", default_message: "", enabled: false },
   analytics: { gtm_id: "", ga4_id: "", enabled: false },
   socials: { facebook: "", instagram: "", tiktok: "", whatsapp: "", youtube: "", linkedin: "" },
   seoDefaults: {
@@ -42,6 +56,8 @@ const DEFAULTS: SiteSettings = {
     meta_description: "Health. Opportunity. Prosperity. Premium natural products from West African botanical heritage.",
     og_image_url: "",
   },
+  contact: { phone: "", email: "", address_en: "", address_fr: "", map_url: "" },
+  branding: { logo_url: "", logo_dark_url: "", favicon_url: "" },
 };
 
 function parseSettings(rows: { key: string; value: any }[]): SiteSettings {
@@ -52,6 +68,8 @@ function parseSettings(rows: { key: string; value: any }[]): SiteSettings {
     analytics:   { ...DEFAULTS.analytics,   ...(map.analytics   ?? {}) },
     socials:     { ...DEFAULTS.socials,     ...(map.socials     ?? {}) },
     seoDefaults: { ...DEFAULTS.seoDefaults, ...(map.seo_defaults ?? {}) },
+    contact:     { ...DEFAULTS.contact,     ...(map.contact     ?? {}) },
+    branding:    { ...DEFAULTS.branding,    ...(map.branding    ?? {}) },
   };
 }
 

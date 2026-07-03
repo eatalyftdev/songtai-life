@@ -1,1 +1,5 @@
-- [Songtai Life migration](songtai-migration.md) — Supabase auth replaced with Replit Auth (OIDC/passport); Supabase DB client kept for MLM/payments but is now optional (graceful 503 if missing).
+- [Firebase-to-Supabase migration](firebase-supabase-migration.md) — full MLM platform migration; key decisions on auth, realtime, RLS, and server security patterns.
+- [Rate-limit pattern for login](rate-limit-pattern.md) — call check_rate_limit() only on failed sign-in, never before; otherwise successful logins consume slots.
+- [Bootstrap endpoint security pattern](bootstrap-endpoint-pattern.md) — one-time admin setup route needs: key check + "no superadmin exists" DB guard + IP rate limit.
+- [Admin dashboard architecture](admin-dashboard-architecture.md) — new routed admin layout replacing old AdminPortal monolith; key patterns and gotchas.
+- [Homepage & global chrome patterns](homepage-chrome-patterns.md) — theme/i18n/logo/footer/CSS import decisions from the major homepage improvement pass.
