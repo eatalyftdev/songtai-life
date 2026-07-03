@@ -6,36 +6,50 @@ import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
 import crypto from "crypto";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./server/replit_integrations/auth/index";
 
 dotenv.config();
 
-// Initialize Supabase Admin client (service role — bypasses RLS)
+// Initialize Supabase Admin client only if credentials are present
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error(
-    "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set. Server cannot start without database access."
+let db: any = null;
+
+if (supabaseUrl && supabaseServiceKey) {
+  db = createClient(supabaseUrl, supabaseServiceKey, {
+    realtime: { transport: ws as any },
+  });
+  console.log("Supabase Admin client initialized successfully");
+} else {
+  console.warn(
+    "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — Supabase-backed routes (payments, MLM) will return 503 until configured."
   );
-  process.exit(1);
 }
 
-const db = createClient(supabaseUrl, supabaseServiceKey, {
-  realtime: { transport: ws as any },
-});
-console.log("Supabase Admin client initialized successfully");
+// Helper: require Supabase for a route handler
+function requireDb(handler: (db: any, req: any, res: any) => Promise<any>) {
+  return async (req: any, res: any) => {
+    if (!db) {
+      return res
+        .status(503)
+        .json({ error: "Database not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." });
+    }
+    return handler(db, req, res);
+  };
+}
 
 // Pre-hydrate collections with seeds on startup if they are empty
 async function hydrateSeeds() {
+  if (!db) return;
   try {
     const { data: existingProducts } = await db.from("products").select("id").limit(1);
     if (!existingProducts || existingProducts.length === 0) {
       console.log("Hydrating initial products seed into Supabase...");
 
-      // Fetch category IDs
       const { data: cats } = await db.from("product_categories").select("id, slug");
       const catMap: Record<string, string> = {};
-      if (cats) cats.forEach((c) => { catMap[c.slug] = c.id; });
+      if (cats) cats.forEach((c: any) => { catMap[c.slug] = c.id; });
 
       await db.from("products").upsert([
         {
@@ -94,7 +108,7 @@ async function hydrateSeeds() {
       console.log("Hydrating initial blog posts seed into Supabase...");
       const { data: blogCats } = await db.from("blog_categories").select("id, name");
       const blogCatMap: Record<string, string> = {};
-      if (blogCats) blogCats.forEach((c) => { blogCatMap[c.name.toLowerCase()] = c.id; });
+      if (blogCats) blogCats.forEach((c: any) => { blogCatMap[c.name.toLowerCase()] = c.id; });
 
       await db.from("blog_posts").upsert([
         {
@@ -133,6 +147,7 @@ async function calculateUnilevelCommissions(
   amountXaf: number,
   pvPoints: number
 ) {
+  if (!db) return;
   try {
     console.log(`[MLM-Engine] Computing commissions for Order ${orderId}, Purchaser ${purchaserUid}, PV ${pvPoints}`);
 
@@ -147,7 +162,6 @@ async function calculateUnilevelCommissions(
       return;
     }
 
-    // Update PV and rank
     const currentPv = purchaserData.pv || 0;
     const newPv = currentPv + pvPoints;
     let nextRank = purchaserData.rank || "bronze";
@@ -159,7 +173,6 @@ async function calculateUnilevelCommissions(
     await db.from("distributors").update({ pv: newPv, rank: nextRank }).eq("id", purchaserUid);
     console.log(`[MLM-Engine] Updated purchaser ${purchaserUid} PV to ${newPv}. Rank: ${nextRank}`);
 
-    // Commission rates per level
     const rates = [0.10, 0.05, 0.03, 0.02, 0.01];
     let currentUid = purchaserUid;
 
@@ -194,7 +207,6 @@ async function calculateUnilevelCommissions(
   }
 }
 
-// Atomic wallet credit + commission + transaction log
 async function awardCommission(
   uid: string,
   orderId: string,
@@ -203,12 +215,10 @@ async function awardCommission(
   amountXaf: number,
   description: string
 ) {
-  if (amountXaf <= 0) return;
+  if (!db || amountXaf <= 0) return;
 
-  // Atomic wallet increment via RPC
   await db.rpc("increment_wallet_balance", { p_user_id: uid, p_amount: amountXaf });
 
-  // Log commission entry
   await db.from("commissions").insert({
     distributor_id: uid,
     order_id: orderId,
@@ -218,7 +228,6 @@ async function awardCommission(
     status: "completed",
   });
 
-  // Log wallet transaction
   await db.from("wallet_transactions").insert({
     wallet_id: uid,
     type: "commission",
@@ -237,6 +246,10 @@ async function startServer() {
   const PORT = Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 5000;
 
   app.use(express.json());
+
+  // Setup Replit Auth (session + OIDC) BEFORE other routes
+  await setupAuth(app);
+  registerAuthRoutes(app);
 
   await hydrateSeeds();
 
@@ -301,268 +314,218 @@ Answer concisely, helpfully, and professionally. Support both English and French
   // MESOMB PAYMENTS WORKFLOW API
   // =========================================================================
 
-  // 1. Checkout Endpoint
-  app.post("/api/payment/checkout", async (req, res) => {
-    try {
-      const { amountXaf, pvPoints, phone, provider, cart, userId } = req.body;
+  app.post("/api/payment/checkout", requireDb(async (db, req, res) => {
+    const { amountXaf, pvPoints, phone, provider, cart, userId } = req.body;
 
-      if (!amountXaf || !phone || !provider) {
-        return res.status(400).json({ error: "Missing required checkout parameters: amountXaf, phone, provider" });
-      }
-
-      const orderId = `ord-${crypto.randomBytes(4).toString("hex")}`;
-
-      const { error } = await db.from("orders").insert({
-        order_id: orderId,
-        user_id: userId || "guest",
-        amount_xaf: Number(amountXaf),
-        pv_points: Number(pvPoints || 0),
-        phone,
-        provider,
-        cart: cart || [],
-        status: "pending",
-      });
-
-      if (error) throw new Error(error.message);
-      console.log(`[Payments] Order ${orderId} created in pending state.`);
-
-      const mesombApiKey = process.env.MESOMB_API_KEY;
-      if (mesombApiKey && mesombApiKey !== "your_mesomb_api_key") {
-        console.log("[Payments] Proceeding with live MeSomb Payment request...");
-      }
-
-      res.json({
-        success: true,
-        orderId,
-        status: "pending",
-        message: "Payment handshake initiated. Confirm carrier verification on your handset.",
-      });
-    } catch (err: any) {
-      console.error("[Checkout-API-Error] Payment checkout failed:", err.message);
-      res.status(500).json({ error: err.message });
+    if (!amountXaf || !phone || !provider) {
+      return res.status(400).json({ error: "Missing required checkout parameters: amountXaf, phone, provider" });
     }
-  });
 
-  // 2. Webhook verification + MLM distributor payout trigger
-  app.post("/api/payment/webhook", async (req, res) => {
-    try {
-      const signatureHeader = req.headers["x-mesomb-signature"] || req.headers["X-MeSomb-Signature"];
-      const rawBody = JSON.stringify(req.body);
-      const signatureKey = process.env.MESOMB_SIGNATURE_KEY;
-      if (!signatureKey && process.env.NODE_ENV === "production") {
-        console.error("[Webhook] MESOMB_SIGNATURE_KEY is not set — cannot verify signatures in production.");
+    const orderId = `ord-${crypto.randomBytes(4).toString("hex")}`;
+
+    const { error } = await db.from("orders").insert({
+      order_id: orderId,
+      user_id: userId || "guest",
+      amount_xaf: Number(amountXaf),
+      pv_points: Number(pvPoints || 0),
+      phone,
+      provider,
+      cart: cart || [],
+      status: "pending",
+    });
+
+    if (error) throw new Error(error.message);
+    console.log(`[Payments] Order ${orderId} created in pending state.`);
+
+    res.json({
+      success: true,
+      orderId,
+      status: "pending",
+      message: "Payment handshake initiated. Confirm carrier verification on your handset.",
+    });
+  }));
+
+  app.post("/api/payment/webhook", requireDb(async (db, req, res) => {
+    const signatureHeader = req.headers["x-mesomb-signature"] || req.headers["X-MeSomb-Signature"];
+    const rawBody = JSON.stringify(req.body);
+    const signatureKey = process.env.MESOMB_SIGNATURE_KEY;
+    if (!signatureKey && process.env.NODE_ENV === "production") {
+      console.error("[Webhook] MESOMB_SIGNATURE_KEY is not set — cannot verify signatures in production.");
+      return res.status(500).json({ error: "Webhook signature key not configured." });
+    }
+
+    if (signatureHeader) {
+      if (!signatureKey) {
+        console.warn("[Webhook] Received signed webhook but MESOMB_SIGNATURE_KEY is not set — rejecting.");
         return res.status(500).json({ error: "Webhook signature key not configured." });
       }
-
-      if (signatureHeader) {
-        if (!signatureKey) {
-          console.warn("[Webhook] Received signed webhook but MESOMB_SIGNATURE_KEY is not set — rejecting.");
-          return res.status(500).json({ error: "Webhook signature key not configured." });
-        }
-        const computedSignature = crypto.createHmac("sha256", signatureKey).update(rawBody).digest("hex");
-        if (signatureHeader !== computedSignature) {
-          console.warn("[Webhook] HMAC-SHA256 signature verification failed. Rejecting.");
-          return res.status(401).json({ error: "Invalid webhook signature." });
-        }
-        console.log("[Webhook] HMAC-SHA256 signature verified successfully.");
-      } else {
-        // Only allow unsigned webhooks in non-production (sandbox / simulator)
-        if (process.env.NODE_ENV === "production") {
-          console.warn("[Webhook] Missing signature in production — rejecting.");
-          return res.status(401).json({ error: "Webhook signature required in production." });
-        }
-        console.log("[Webhook] No signature header — running in sandbox development mode.");
+      const computedSignature = crypto.createHmac("sha256", signatureKey).update(rawBody).digest("hex");
+      if (signatureHeader !== computedSignature) {
+        console.warn("[Webhook] HMAC-SHA256 signature verification failed. Rejecting.");
+        return res.status(401).json({ error: "Invalid webhook signature." });
       }
-
-      const { orderId, transactionId } = req.body;
-      if (!orderId) return res.status(400).json({ error: "Missing orderId in webhook body." });
-
-      // Idempotency check
-      const { data: alreadyProcessed } = await db
-        .from("processed_payments")
-        .select("order_id")
-        .eq("order_id", orderId)
-        .maybeSingle();
-
-      if (alreadyProcessed) {
-        console.log(`[Webhook] Duplicate callback skipped for Order ${orderId}.`);
-        return res.json({ success: true, message: "Duplicate callback skipped." });
+      console.log("[Webhook] HMAC-SHA256 signature verified successfully.");
+    } else {
+      if (process.env.NODE_ENV === "production") {
+        console.warn("[Webhook] Missing signature in production — rejecting.");
+        return res.status(401).json({ error: "Webhook signature required in production." });
       }
-
-      // Fetch the order
-      const { data: orderData } = await db
-        .from("orders")
-        .select("*")
-        .eq("order_id", orderId)
-        .maybeSingle();
-
-      if (!orderData) return res.status(404).json({ error: `Order ${orderId} not found.` });
-      if (orderData.status === "paid") {
-        console.log(`[Webhook] Order ${orderId} is already marked as paid.`);
-        return res.json({ success: true });
-      }
-
-      const finalTxId = transactionId || `tx-${crypto.randomBytes(6).toString("hex")}`;
-
-      // Mark order as paid
-      await db.from("orders").update({
-        status: "paid",
-        transaction_id: finalTxId,
-        paid_at: new Date().toISOString(),
-      }).eq("order_id", orderId);
-
-      // Mark as processed for idempotency
-      await db.from("processed_payments").insert({
-        order_id: orderId,
-        transaction_id: finalTxId,
-      });
-
-      console.log(`[Webhook] Order ${orderId} marked as PAID. Initializing commission calculations.`);
-
-      if (orderData.user_id && orderData.user_id !== "guest") {
-        await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
-      }
-
-      res.json({ success: true, message: "Order processed successfully." });
-    } catch (err: any) {
-      console.error("[Webhook-API-Error] processing webhook failed:", err.message);
-      res.status(500).json({ error: err.message });
+      console.log("[Webhook] No signature header — running in sandbox development mode.");
     }
-  });
 
-  // 3. Payout (Withdrawal Request) Endpoint
-  app.post("/api/payment/payout", async (req, res) => {
-    try {
-      // Verify caller identity via Supabase JWT — prevents IDOR
-      const authHeader = req.headers["authorization"] || "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-      if (!token) {
-        return res.status(401).json({ error: "Authorization token required." });
-      }
-      const { data: { user: callerUser }, error: authError } = await db.auth.getUser(token);
-      if (authError || !callerUser) {
-        return res.status(401).json({ error: "Invalid or expired token." });
-      }
+    const { orderId, transactionId } = req.body;
+    if (!orderId) return res.status(400).json({ error: "Missing orderId in webhook body." });
 
-      const { amountXaf, phone, provider } = req.body;
-      // userId is always taken from the verified token — never from the request body
-      const userId = callerUser.id;
+    const { data: alreadyProcessed } = await db
+      .from("processed_payments")
+      .select("order_id")
+      .eq("order_id", orderId)
+      .maybeSingle();
 
-      if (!amountXaf || !phone || !provider) {
-        return res.status(400).json({ error: "Missing withdrawal details: amountXaf, phone, provider" });
-      }
-
-      const amount = Number(amountXaf);
-
-      const { data: walletData } = await db.from("wallets").select("*").eq("id", userId).maybeSingle();
-      if (!walletData) return res.status(400).json({ error: "User has no wallet ledger configured." });
-
-      const currentBalance = Number(walletData.balance_xaf || 0);
-      if (currentBalance < amount) {
-        return res.status(400).json({ error: "Insufficient wallet balance to request this payout." });
-      }
-
-      // Deduct from wallet
-      await db.from("wallets").update({
-        balance_xaf: currentBalance - amount,
-        updated_at: new Date().toISOString(),
-      }).eq("id", userId);
-
-      const txId = `wd-${crypto.randomBytes(5).toString("hex")}`;
-      await db.from("wallet_transactions").insert({
-        id: txId,
-        wallet_id: userId,
-        type: "withdrawal",
-        amount_xaf: amount,
-        description: `MeSomb Payout withdrawal initiated to ${phone} (${provider.toUpperCase()})`,
-        status: "pending",
-      });
-
-      console.log(`[Payout] Withdrawal request logged for User ${userId}, amount ${amount} XAF. Status: Pending.`);
-
-      // Simulate completion after 5s
-      setTimeout(async () => {
-        try {
-          await db.from("wallet_transactions").update({
-            status: "completed",
-          }).eq("id", txId);
-          console.log(`[Payout-Cron] Withdrawal transaction ${txId} successfully completed.`);
-        } catch (subErr: any) {
-          console.error("[Payout-Cron-Error]", subErr.message);
-        }
-      }, 5000);
-
-      res.json({
-        success: true,
-        transactionId: txId,
-        status: "pending",
-        message: "Sovereign Payout initiated securely. Funds will clear within minutes.",
-      });
-    } catch (err: any) {
-      console.error("[Payout-API-Error] withdrawal failed:", err.message);
-      res.status(500).json({ error: err.message });
+    if (alreadyProcessed) {
+      console.log(`[Webhook] Duplicate callback skipped for Order ${orderId}.`);
+      return res.json({ success: true, message: "Duplicate callback skipped." });
     }
-  });
 
-  // 4. Add downline member (demo mode — creates a placeholder auth user)
-  app.post("/api/distributor/add-downline", async (req, res) => {
-    try {
-      const authHeader = req.headers["authorization"] || "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-      if (!token) return res.status(401).json({ error: "Authorization token required." });
+    const { data: orderData } = await db
+      .from("orders")
+      .select("*")
+      .eq("order_id", orderId)
+      .maybeSingle();
 
-      const { data: { user: callerUser }, error: authError } = await db.auth.getUser(token);
-      if (authError || !callerUser) return res.status(401).json({ error: "Invalid or expired token." });
-
-      const { memberName, sponsorCode } = req.body;
-      if (!memberName || !sponsorCode) {
-        return res.status(400).json({ error: "memberName and sponsorCode are required." });
-      }
-
-      // Create a placeholder auth user via admin SDK
-      const placeholderEmail = `downline-${Date.now()}@songtai.demo`;
-      const { data: newAuthUser, error: createError } = await db.auth.admin.createUser({
-        email: placeholderEmail,
-        password: crypto.randomBytes(12).toString("hex"),
-        user_metadata: { displayName: memberName, isDemo: true },
-      });
-      if (createError) throw createError;
-
-      const generatedCode = `ST-DOWN-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      await db.from("distributors").insert({
-        id: newAuthUser.user.id,
-        distributor_code: generatedCode,
-        sponsor_id: sponsorCode,
-        placement_id: sponsorCode,
-        rank: "bronze",
-        kyc_status: "none",
-      });
-
-      await db.from("profiles").upsert({
-        id: newAuthUser.user.id,
-        email: placeholderEmail,
-        display_name: memberName,
-        role: "distributor",
-      }, { onConflict: "id", ignoreDuplicates: true });
-
-      res.json({ success: true, distributorCode: generatedCode, memberId: newAuthUser.user.id });
-    } catch (err: any) {
-      console.error("[AddDownline-Error]", err.message);
-      res.status(500).json({ error: err.message });
+    if (!orderData) return res.status(404).json({ error: `Order ${orderId} not found.` });
+    if (orderData.status === "paid") {
+      console.log(`[Webhook] Order ${orderId} is already marked as paid.`);
+      return res.json({ success: true });
     }
-  });
 
-  // Simple in-memory rate limiter for bootstrap endpoint (max 3 attempts per 15 min per IP)
+    const finalTxId = transactionId || `tx-${crypto.randomBytes(6).toString("hex")}`;
+
+    await db.from("orders").update({
+      status: "paid",
+      transaction_id: finalTxId,
+      paid_at: new Date().toISOString(),
+    }).eq("order_id", orderId);
+
+    await db.from("processed_payments").insert({
+      order_id: orderId,
+      transaction_id: finalTxId,
+    });
+
+    console.log(`[Webhook] Order ${orderId} marked as PAID. Initializing commission calculations.`);
+
+    if (orderData.user_id && orderData.user_id !== "guest") {
+      await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
+    }
+
+    res.json({ success: true, message: "Order processed successfully." });
+  }));
+
+  app.post("/api/payment/payout", requireDb(async (db, req, res) => {
+    // Verify caller via Replit Auth session
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) {
+      return res.status(401).json({ error: "Authorization required." });
+    }
+    const userId = sessionUser.claims.sub;
+
+    const { amountXaf, phone, provider } = req.body;
+    if (!amountXaf || !phone || !provider) {
+      return res.status(400).json({ error: "Missing withdrawal details: amountXaf, phone, provider" });
+    }
+
+    const amount = Number(amountXaf);
+
+    const { data: walletData } = await db.from("wallets").select("*").eq("id", userId).maybeSingle();
+    if (!walletData) return res.status(400).json({ error: "User has no wallet ledger configured." });
+
+    const currentBalance = Number(walletData.balance_xaf || 0);
+    if (currentBalance < amount) {
+      return res.status(400).json({ error: "Insufficient wallet balance to request this payout." });
+    }
+
+    await db.from("wallets").update({
+      balance_xaf: currentBalance - amount,
+      updated_at: new Date().toISOString(),
+    }).eq("id", userId);
+
+    const txId = `wd-${crypto.randomBytes(5).toString("hex")}`;
+    await db.from("wallet_transactions").insert({
+      id: txId,
+      wallet_id: userId,
+      type: "withdrawal",
+      amount_xaf: amount,
+      description: `MeSomb Payout withdrawal initiated to ${phone} (${provider.toUpperCase()})`,
+      status: "pending",
+    });
+
+    console.log(`[Payout] Withdrawal request logged for User ${userId}, amount ${amount} XAF. Status: Pending.`);
+
+    setTimeout(async () => {
+      try {
+        await db.from("wallet_transactions").update({
+          status: "completed",
+        }).eq("id", txId);
+        console.log(`[Payout-Cron] Withdrawal transaction ${txId} successfully completed.`);
+      } catch (subErr: any) {
+        console.error("[Payout-Cron-Error]", subErr.message);
+      }
+    }, 5000);
+
+    res.json({
+      success: true,
+      transactionId: txId,
+      status: "pending",
+      message: "Sovereign Payout initiated securely. Funds will clear within minutes.",
+    });
+  }));
+
+  app.post("/api/distributor/add-downline", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) {
+      return res.status(401).json({ error: "Authorization required." });
+    }
+
+    const { memberName, sponsorCode } = req.body;
+    if (!memberName || !sponsorCode) {
+      return res.status(400).json({ error: "memberName and sponsorCode are required." });
+    }
+
+    const placeholderEmail = `downline-${Date.now()}@songtai.demo`;
+    const { data: newAuthUser, error: createError } = await db.auth.admin.createUser({
+      email: placeholderEmail,
+      password: crypto.randomBytes(12).toString("hex"),
+      user_metadata: { displayName: memberName, isDemo: true },
+    });
+    if (createError) throw createError;
+
+    const generatedCode = `ST-DOWN-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    await db.from("distributors").insert({
+      id: newAuthUser.user.id,
+      distributor_code: generatedCode,
+      sponsor_id: sponsorCode,
+      placement_id: sponsorCode,
+      rank: "bronze",
+      kyc_status: "none",
+    });
+
+    await db.from("profiles").upsert({
+      id: newAuthUser.user.id,
+      email: placeholderEmail,
+      display_name: memberName,
+      role: "distributor",
+    }, { onConflict: "id", ignoreDuplicates: true });
+
+    res.json({ success: true, distributorCode: generatedCode, memberId: newAuthUser.user.id });
+  }));
+
+  // Simple in-memory rate limiter for bootstrap endpoint
   const bootstrapAttempts = new Map<string, { count: number; resetAt: number }>();
 
-  // Admin bootstrap endpoint — creates the initial superadmin account server-side.
-  // Uses the service role key to bypass Supabase email validation.
-  // Guarded by: ADMIN_BOOTSTRAP_KEY env, "no superadmin exists" DB check, and IP rate limiting.
-  app.post("/api/admin/bootstrap", async (req, res) => {
+  app.post("/api/admin/bootstrap", requireDb(async (db, req, res) => {
     const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "unknown";
 
-    // IP rate limit
     const now = Date.now();
     const existing = bootstrapAttempts.get(clientIp);
     if (existing) {
@@ -577,65 +540,56 @@ Answer concisely, helpfully, and professionally. Support both English and French
     entry.count++;
     bootstrapAttempts.set(clientIp, entry);
 
-    try {
-      const bootstrapKey = process.env.ADMIN_BOOTSTRAP_KEY;
-      if (!bootstrapKey) {
-        return res.status(503).json({ error: "Admin bootstrap is not configured on this server. Set ADMIN_BOOTSTRAP_KEY." });
-      }
-      const { bootstrapKey: provided, email, password } = req.body;
-      if (!provided || provided !== bootstrapKey) {
-        return res.status(401).json({ error: "Invalid bootstrap key." });
-      }
-      if (!email || !password || password.length < 8) {
-        return res.status(400).json({ error: "email and password (min 8 chars) are required." });
-      }
-
-      // Guard: only allow bootstrap when no superadmin exists yet
-      const { data: existing, error: existErr } = await db
-        .from("profiles")
-        .select("id")
-        .eq("role", "superadmin")
-        .limit(1);
-      if (existErr) throw existErr;
-      if (existing && existing.length > 0) {
-        return res.status(409).json({ error: "A superadmin already exists. Bootstrap is disabled." });
-      }
-
-      // Create the auth user (bypasses email validation)
-      const { data: authData, error: authErr } = await db.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-      if (authErr) throw authErr;
-
-      const uid = authData.user.id;
-
-      // Upsert the profile with superadmin role
-      const { error: profileErr } = await db.from("profiles").upsert({
-        id: uid,
-        email,
-        phone: "+237699999999",
-        role: "superadmin",
-        locale: "en",
-        must_change_password: true,
-      });
-      if (profileErr) throw profileErr;
-
-      // Clear IP rate limit counter on success
-      bootstrapAttempts.delete(clientIp);
-
-      console.log(`[Bootstrap] Superadmin created: ${email} (${uid})`);
-      return res.json({ success: true, uid, message: "Superadmin account created. Log in and change your password immediately." });
-    } catch (err: any) {
-      console.error("[Bootstrap] Error:", err.message);
-      return res.status(500).json({ error: err.message });
+    const bootstrapKey = process.env.ADMIN_BOOTSTRAP_KEY;
+    if (!bootstrapKey) {
+      return res.status(503).json({ error: "Admin bootstrap is not configured on this server. Set ADMIN_BOOTSTRAP_KEY." });
     }
-  });
+    const { bootstrapKey: provided, email, password } = req.body;
+    if (!provided || provided !== bootstrapKey) {
+      return res.status(401).json({ error: "Invalid bootstrap key." });
+    }
+    if (!email || !password || password.length < 8) {
+      return res.status(400).json({ error: "email and password (min 8 chars) are required." });
+    }
+
+    const { data: existingAdmins, error: existErr } = await db
+      .from("profiles")
+      .select("id")
+      .eq("role", "superadmin")
+      .limit(1);
+    if (existErr) throw existErr;
+    if (existingAdmins && existingAdmins.length > 0) {
+      return res.status(409).json({ error: "A superadmin already exists. Bootstrap is disabled." });
+    }
+
+    const { data: authData, error: authErr } = await db.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (authErr) throw authErr;
+
+    const uid = authData.user.id;
+
+    const { error: profileErr } = await db.from("profiles").upsert({
+      id: uid,
+      email,
+      phone: "+237699999999",
+      role: "superadmin",
+      locale: "en",
+      must_change_password: true,
+    });
+    if (profileErr) throw profileErr;
+
+    bootstrapAttempts.delete(clientIp);
+
+    console.log(`[Bootstrap] Superadmin created: ${email} (${uid})`);
+    return res.json({ success: true, uid, message: "Superadmin account created. Log in and change your password immediately." });
+  }));
 
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "Songtai Life Backend — Supabase Edition" });
+    res.json({ status: "ok", service: "Songtai Life Backend — Replit Edition" });
   });
 
   // Vite dev middleware / production static files
