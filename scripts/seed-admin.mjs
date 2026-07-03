@@ -17,6 +17,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 
 // ── 0. Config ────────────────────────────────────────────────────────────────
 const SUPABASE_URL             = process.env.SUPABASE_URL;
@@ -40,6 +41,7 @@ if (ADMIN_PASSWORD.length < 8) {
 
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
+  realtime: { transport: ws },
 });
 
 // ── helpers ──────────────────────────────────────────────────────────────────
