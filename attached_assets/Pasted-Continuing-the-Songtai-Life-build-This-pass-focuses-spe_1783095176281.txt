@@ -1,0 +1,64 @@
+Continuing the Songtai Life build. This pass focuses specifically on the homepage and global chrome (navbar, footer, floating widgets) — improving responsive behavior across mobile/tablet/desktop, locking in light mode as the default theme, confirming full-page EN/FR translation actually works everywhere (not just static UI strings), wiring the WhatsApp floating button and footer contact/social/location info to the existing site_settings admin panel so they stay in sync automatically, cleaning the footer of any admin-only links, and standardizing the Songtai Life logo as a single reused asset across the entire system rather than separate copies per screen.
+
+═══════════════════════════
+1. RESPONSIVE PASS — HOMEPAGE + GLOBAL CHROME
+═══════════════════════════
+Audit and fix every homepage section (Hero, Company Intro, Featured Products, Opportunity Timeline, Distributor Benefits, Success Stories, Upcoming Events, Blog Preview, Gallery Teaser, Newsletter, Footer) against three breakpoints, not just "responsive in general":
+  - Mobile (<640px): single column, generous vertical spacing over cramped horizontal fitting, hero headline scales down proportionally (not just smaller — recompute line-height and letter-spacing so it doesn't feel like a shrunk desktop layout), carousels become swipeable single-card views, the mega menu collapses into the mobile drawer nav already speced.
+  - Tablet (640–1024px): 2-column grids where desktop uses 3–4, hero retains full-viewport treatment but with reduced particle/parallax density (per the performance budget already established), touch targets minimum 44px.
+  - Desktop (1024px+): full multi-column layouts, full parallax/particle density, hover-based interactions active.
+Test the actual breakpoints with real content, not empty placeholders — long product names, French text (which tends to run longer than English) in buttons/nav must not overflow or wrap awkwardly. This is a real risk point given the bilingual requirement below — French labels in the mega menu, nav, and CTA buttons need explicit truncation/wrap handling, not an assumption that English-length strings will always fit.
+Every section that currently has a fixed pixel height for a "cinematic" effect gets a `min-height` + content-driven fallback instead, so nothing clips or creates unwanted scroll on smaller viewports.
+
+═══════════════════════════
+2. THEME — LIGHT MODE DEFAULT, FULL SYSTEM CONSISTENCY
+═══════════════════════════
+- Default theme on first visit (no stored preference yet) is **light mode** — confirm this is the actual initial state, not just "dark mode unless overridden," which is a common accidental default.
+- Theme preference: check `localStorage` first, then system `prefers-color-scheme` only as a secondary signal, then fall back to light — in that priority order.
+- Once toggled, persist to `localStorage` and, for logged-in users, sync to `profiles` (a `theme_preference` column, same pattern as the existing `locale` sync) so the choice follows them across devices.
+- Confirm the *entire* system — homepage, all marketing pages, distributor portal, and admin dashboard — reads from one shared theme context/CSS-variable set, not separate implementations per area. If the admin dashboard's dark mode was built with different tokens than the public site's, reconcile them into the single Songtai Life palette (Green #0A7D32 / Gold #C9A227 / white / near-black #0B0F0C) now.
+
+═══════════════════════════
+3. FULL-PAGE EN/FR TRANSLATION — VERIFY, DON'T ASSUME
+═══════════════════════════
+This was speced earlier; this pass is a verification + completion sweep:
+- Every static string on the homepage and global chrome (nav labels, mega menu categories, hero headline/subhead/CTAs, section headers, footer links, WhatsApp widget default message, form placeholders, toast/confirmation messages) must resolve through `react-i18next` — grep the homepage and layout components for any hardcoded English string that isn't wrapped in a translation call, and fix it.
+- Dynamic content (products, blog previews, testimonials, events shown on the homepage) must use the existing `useLocalizedField(row, 'field')` helper consistently — confirm the homepage's Featured Products, Blog Preview, and Success Stories sections are actually calling this and not accidentally reading the raw `_en` column regardless of active language.
+- Language toggle switching triggers an immediate re-render of the full page (no partial-translation flash where half the page is still in the old language for a moment) — this should feel instant, not like a reload.
+- `<html lang="en">` / `lang="fr"` updates live with the toggle (already speced for SEO — confirm it's actually wired here too, not just on isolated pages).
+
+═══════════════════════════
+4. FLOATING WHATSAPP BUTTON — CONFIRM ADMIN SYNC
+═══════════════════════════
+Confirm/complete the `<WhatsAppWidget />` (already speced against `site_settings.whatsapp`) is actually rendered globally on the homepage and every public page, reads `number`, `default_message`, and `enabled` live via the `useSiteSettings()` Realtime subscription, and updates on-screen within the same session if an admin changes the number while the visitor has the tab open — no refresh required. Confirm it renders nothing (not a broken/empty button) when `enabled` is false.
+
+═══════════════════════════
+5. FOOTER — REBUILD, ADMIN-SYNCED, NO ADMIN LINKS
+═══════════════════════════
+Rebuild the footer as a clearly separated, admin-panel-driven component:
+
+**Column 1 — Company / Logo:** Songtai Life logo (the single shared logo asset — see Section 6), a short tagline, copyright line with the current year computed dynamically (never hardcoded), EN/FR toggle repeated here for convenience.
+
+**Column 2 — Quick Links (public pages only):** Home, About, Products, Opportunity, Events, Blog, Gallery, Media Center, FAQ, Contact, Become a Distributor. **Explicitly exclude** any `/admin` or `/distributor` route from this list — those are never linked from public-facing chrome; distributor/admin login is reached only via a direct URL or a small "Distributor Login" link kept separate and clearly labeled, not mixed into the general Quick Links column where it could look like a public feature.
+
+**Column 3 — Contact & Location (from site_settings, not hardcoded):** phone number, email, and physical address/location — read from `site_settings` (extend the existing settings schema if a `contact` key doesn't already exist):
+```sql
+insert into site_settings (key, value) values
+  ('contact', '{"phone": "", "email": "", "address_en": "", "address_fr": "", "map_url": ""}')
+on conflict (key) do nothing;
+```
+Add a **Contact** tab to the existing `/admin/settings` page (alongside WhatsApp, Analytics, Socials, SEO Defaults already speced) so admins manage phone/email/address from the same place — this must render identically wherever contact info appears (footer, Contact page, LocalBusiness JSON-LD schema already speced) by all reading from this single `site_settings.contact` value, never duplicated/hardcoded in multiple components.
+
+**Column 4 — Socials:** icons reading from `site_settings.socials` (already speced), hover-glow, empty platforms simply don't render — no dead icons.
+
+**Bottom bar:** legal links (Privacy Policy, Terms — can be simple static pages for now if not yet drafted), copyright, language switch repeated for mobile convenience if the top copy is off-screen.
+
+═══════════════════════════
+6. LOGO — SINGLE SHARED ASSET, USED CONSISTENTLY
+═══════════════════════════
+- Upload the official Songtai Life logo (the "S" mark) to the `media` Storage bucket once, and reference its URL from `site_settings` (add a `branding` key: `{"logo_url": "", "logo_dark_mode_url": "", "favicon_url": ""}`) so it's admin-updatable without a code deploy if the brand mark ever changes.
+- Build a single `<Logo />` component that reads this URL and is reused everywhere: navbar (public site), footer, admin dashboard sidebar, distributor portal nav, login/signup screens, loading animation (the branded logo-assembling loader already speced), and the favicon/OG image default. No screen should have its own separately-hardcoded logo image or filename.
+- Support a `logo_dark_mode_url` fallback for a light-on-dark variant if the primary mark doesn't read well on the near-black dark theme background — if only one logo asset exists for now, the component should apply a CSS `filter`/treatment to keep it legible in dark mode rather than looking muddy, until a proper dark-mode variant is uploaded.
+- Add a **Branding** tab to `/admin/settings` where an admin can upload/replace the logo and favicon via the existing `MediaUploader` component — changes propagate everywhere immediately via the same Realtime `useSiteSettings()` pattern already used for WhatsApp/Analytics/Socials.
+
+DELIVERABLE: A homepage and global chrome that behaves correctly across mobile/tablet/desktop with real content (including longer French strings), defaults to light mode with a working, persisted dark-mode toggle applied consistently across public site + portal + admin, fully translates end-to-end on the EN/FR switch with no missed strings, a WhatsApp floating button and footer contact/location/social info that both live-sync from the admin settings panel with zero admin-only links ever exposed in public chrome, and one single logo asset reused everywhere in the system and manageable from the admin panel.

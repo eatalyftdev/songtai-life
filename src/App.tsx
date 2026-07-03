@@ -10,7 +10,23 @@ import TechSpecBrowser from "./components/TechSpecBrowser";
 import AIAssistant from "./components/AIAssistant";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { DistributorLogin, DistributorSignup, AdminLogin } from "./components/auth/AuthViews";
-import AdminPortal from "./components/admin/AdminPortal";
+import AdminLayout from "./components/admin/layout/AdminLayout";
+import DashboardPage from "./components/admin/pages/DashboardPage";
+import ProductsPage from "./components/admin/pages/ProductsPage";
+import OrdersPage from "./components/admin/pages/OrdersPage";
+import DistributorsPage from "./components/admin/pages/DistributorsPage";
+import WalletsPage from "./components/admin/pages/WalletsPage";
+import CommissionsPage from "./components/admin/pages/CommissionsPage";
+import BlogPage from "./components/admin/pages/BlogPage";
+import EventsPage from "./components/admin/pages/EventsPage";
+import TestimonialsPage from "./components/admin/pages/TestimonialsPage";
+import GalleryPage from "./components/admin/pages/GalleryPage";
+import AppointmentsPage from "./components/admin/pages/AppointmentsPage";
+import ContactsPage from "./components/admin/pages/ContactsPage";
+import NewsletterPage from "./components/admin/pages/NewsletterPage";
+import MediaPage from "./components/admin/pages/MediaPage";
+import SettingsPage from "./components/admin/pages/SettingsPage";
+import AuditPage from "./components/admin/pages/AuditPage";
 import { runCommissionEngine } from "./lib/commissionEngine";
 import WhatsAppWidget from "./components/WhatsAppWidget";
 import Analytics from "./components/Analytics";
@@ -254,12 +270,30 @@ function AppContent() {
             </ProtectedRoute>
           } />
 
-          {/* Protected Admin Auditing Area */}
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute allowedRoles={["admin", "superadmin"]} fallbackPath="/admin/login" addNotification={addNotification}>
-              <AdminPortal addNotification={addNotification} theme={theme} toggleTheme={toggleTheme} />
+          {/* Protected Admin Dashboard — nested sub-routes */}
+          <Route path="/admin" element={
+            <ProtectedRoute allowedRoles={["admin", "superadmin", "content_editor"]} fallbackPath="/admin/login" addNotification={addNotification}>
+              <AdminLayout theme={theme} toggleTheme={toggleTheme} />
             </ProtectedRoute>
-          } />
+          }>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard"    element={<DashboardPage />} />
+            <Route path="products"     element={<ProductsPage />} />
+            <Route path="orders"       element={<OrdersPage />} />
+            <Route path="distributors" element={<DistributorsPage />} />
+            <Route path="wallets"      element={<WalletsPage />} />
+            <Route path="commissions"  element={<CommissionsPage />} />
+            <Route path="blog"         element={<BlogPage />} />
+            <Route path="events"       element={<EventsPage />} />
+            <Route path="testimonials" element={<TestimonialsPage />} />
+            <Route path="gallery"      element={<GalleryPage />} />
+            <Route path="appointments" element={<AppointmentsPage />} />
+            <Route path="contacts"     element={<ContactsPage />} />
+            <Route path="newsletter"   element={<NewsletterPage />} />
+            <Route path="media"        element={<MediaPage />} />
+            <Route path="settings"     element={<SettingsPage />} />
+            <Route path="audit"        element={<AuditPage />} />
+          </Route>
 
           {/* Tech Spec Browser */}
           <Route path="/tech-spec" element={<TechSpecBrowser />} />

@@ -1,0 +1,116 @@
+Continuing the Songtai Life build. This pass rebuilds/completes the admin dashboard at /admin/* using the specificity framework: every component below specifies its data source (existing Supabase tables), its functionality (not just "a table" — sortable, filterable, paginated, with real states), and its style (Songtai Life green #0A7D32 / gold #C9A227 theme, light + dark mode, fully responsive down to tablet/mobile since admins will check this on the go).
+
+Do not scaffold new mock data — every component below binds directly to the real Supabase tables already in the schema (profiles, distributors, wallets, wallet_transactions, commissions, withdrawals, products, orders, order_items, blog_posts, events, event_registrations, testimonials, gallery_images, contact_messages, newsletter_subscribers, kyc_documents, appointments, appointment_types, site_settings, audit_logs), using the existing useAdminResource(tableName) hook and Realtime subscriptions already established.
+
+═══════════════════════════
+LAYOUT SHELL
+═══════════════════════════
+Sidebar: collapsible, 240px expanded / 64px collapsed with smooth width-transition animation (transform/width via Framer Motion, not a layout-jank toggle). Sections, each with an icon and role-gated visibility (content_editor sees only Blog/Events/Gallery/Testimonials; admin/superadmin see everything):
+  Dashboard · Products · Orders · Distributors & KYC · Wallet & Withdrawals · Commissions · Blog · Events · Testimonials · Gallery · Appointments · Contact Messages · Newsletter · Media Library · Site Settings · Audit Log
+
+Active section: left border accent in Songtai Green, icon fill in gold. Collapse toggle pinned at sidebar bottom, state persisted to localStorage. Below the nav list: logged-in admin's avatar/initials, name, role badge, and a "Log out" action.
+
+Top bar: breadcrumb trail (Admin / Products / Edit "Ganoderma Coffee"), global search (searches across products/orders/distributors by name/email — debounced, dropdown result preview), dark/light mode toggle, notification bell (unread count from a lightweight admin_notifications view — new orders, new KYC submissions, new appointment requests), admin avatar dropdown (Profile, Change Password, Log out).
+
+Mobile (<768px): sidebar becomes a full-screen slide-in drawer triggered by a hamburger in the top bar; all data tables below switch from table rows to stacked card format (each row's fields become labeled key-value pairs in a card) rather than forcing horizontal scroll.
+
+═══════════════════════════
+DASHBOARD HOME — KPI ROW + CHARTS
+═══════════════════════════
+KPI cards (4-across desktop, 2x2 tablet, stacked mobile), each with icon, label, large value, period-over-period % change with up/down arrow (green for positive, red for negative), and a mini sparkline:
+  - Total Revenue (sum of orders.total_xaf where status='paid', this month vs last month)
+  - New Distributors (count of distributors.joined_at this month vs last)
+  - Pending KYC (count of distributors.kyc_status='pending' — no comparison arrow, just a highlighted count since this needs action)
+  - Pending Withdrawals (count + sum of withdrawals.status='requested')
+
+Below the KPI row:
+  - Large line chart: Revenue over time (last 30/90 days, toggle), sourced from orders grouped by day
+  - Donut chart: Order status distribution (pending/paid/processing/shipped/delivered/cancelled)
+  - Bar chart: Top 5 products by units sold (from order_items)
+  - Recent activity table: latest 10 rows from audit_logs (admin, action, table, timestamp), clickable to jump to the relevant record
+
+Every chart has a defined empty state ("No data yet for this period" with a simple illustration, not a broken blank chart) and a loading skeleton state (shimmer placeholder matching the chart's shape, not a spinner).
+
+═══════════════════════════
+PRODUCTS TABLE
+═══════════════════════════
+Full-featured data table bound to the `products` table. Columns: checkbox (bulk select), thumbnail + name_en/name_fr (sortable, shows both languages stacked), category (filterable dropdown from product_categories), price_xaf formatted as XAF currency (sortable), strike_price_xaf shown struck-through next to price when set (visually flags "on promotion"), pv_points (sortable), is_active (toggle switch inline, writes immediately on click), actions (edit, duplicate, delete with confirmation modal).
+Toolbar: search by name, category filter, active/inactive filter, "Add Product" button (opens a slide-over panel — not a full page navigation — with the MediaUploader component for images, bilingual name/description fields, price + strike price, PV points, category select).
+States: skeleton-row loading state, empty state ("No products yet — add your first product" with the Add Product CTA front and center), error state (toast + retry button, not a blank crash).
+Pagination: 25/50/100 per page selector, page controls, "Showing X–Y of Z" label.
+Bulk actions on multi-select: activate, deactivate, delete (confirmation required for delete).
+
+═══════════════════════════
+ORDERS TABLE
+═══════════════════════════
+Bound to `orders` joined with `profiles` (customer) and `order_items`. Columns: order ID (short, copyable), customer name/email, item count + preview (hover to see line items), total_xaf, status (colored badge: pending=gray, paid=blue, processing=amber, shipped=purple, delivered=green, cancelled=red), distributor attribution (if distributor_id set, show the distributor's code as a badge — this is a commission-earning order), created_at (relative time, sortable).
+Row click opens a detail slide-over: full item breakdown, payment record (from `payments` table — provider, transaction ID, status), status-update dropdown (writes to orders.status, logs to audit_logs).
+Filters: status multi-select, date range picker (Today / Last 7 / 30 / 90 days / Custom), search by customer name/email/order ID.
+
+═══════════════════════════
+DISTRIBUTORS & KYC TABLE
+═══════════════════════════
+Bound to `distributors` joined with `profiles`. Columns: avatar/initials + name, distributor_code (copyable), sponsor (name, clickable to jump to sponsor's row), rank (colored badge: bronze/silver/gold/platinum/diamond), kyc_status (badge: pending=amber pulsing, verified=green, rejected=red), downline count (computed via the existing get_downline RPC), joined_at.
+KYC review action: row click on a pending row opens a slide-over showing uploaded kyc_documents (signed URL preview, since the bucket is private), with Approve/Reject buttons — writes to distributors.kyc_status and kyc_documents.status, logs to audit_logs, and (per the existing rate-limit/security pattern) requires the acting admin's role check server-side, not just a UI-level restriction.
+Filters: kyc_status, rank, search by name/code/sponsor.
+Genealogy quick-view: a small inline "View Tree" action opens the same tree visualization component used in the distributor portal, read-only, for any selected distributor.
+
+═══════════════════════════
+WALLET & WITHDRAWALS TABLE
+═══════════════════════════
+Bound to `withdrawals` joined with `distributors`. Columns: distributor name/code, amount_xaf, method (mtn_momo/orange_money badge), status (requested/processing/completed/failed — colored), requested_at.
+Action: for `requested` rows, an admin action button triggers the process-withdrawal Edge Function (already speced) — shows an in-progress spinner state on the button itself while the function runs, then updates the row status live via Realtime once the webhook confirms.
+Secondary tab on this page: Wallet Transactions ledger (from wallet_transactions), filterable by type (commission/withdrawal/adjustment/refund), useful for reconciliation per the maintenance guide's monthly-audit recommendation.
+
+═══════════════════════════
+COMMISSIONS TABLE
+═══════════════════════════
+Bound to `commissions`. Columns: distributor, order reference (clickable), type (direct/level/rank_bonus/leadership — badge), level (if applicable), amount_xaf, status (pending/approved/paid), created_at. Filters: type, status, date range. Read-mostly view — status changes here should be rare/manual and always logged to audit_logs, since this touches real payout accounting.
+
+═══════════════════════════
+BLOG, EVENTS, TESTIMONIALS, GALLERY
+═══════════════════════════
+Each follows the identical CRUD-with-Realtime pattern already established via useAdminResource — build all four from one shared table+form component config rather than four separate implementations:
+  - Blog: title_en/title_fr, category, status (draft/published/archived) with a publish action, rich text body editor, featured image via MediaUploader, SEO fields (meta title/description) inline in the same form.
+  - Events: title, start/end datetime pickers, location, capacity, live registration count (from event_registrations) shown as a progress bar (e.g., "42 / 100 registered"), attendee list export.
+  - Testimonials: name, rank, region, quote_en/quote_fr, video URL or upload, featured toggle, drag-to-reorder (writes to display_order).
+  - Gallery: bulk multi-image upload via MediaUploader, album grouping, caption_en/caption_fr, drag-to-reorder.
+All four: search, status/category filters where applicable, empty states with a clear "create your first X" CTA, loading skeletons matching each card/row shape.
+
+═══════════════════════════
+APPOINTMENTS TABLE
+═══════════════════════════
+Bound to `appointments` joined with `appointment_types`. Columns: requester name/email/phone, appointment type, preferred date + time, status (requested/confirmed/completed/cancelled — badge), created_at. Row action: status-update dropdown. Filters: status, date range. New requests show a subtle highlight/badge until first viewed by an admin (simple `viewed_at` column addition if not already present).
+
+═══════════════════════════
+CONTACT MESSAGES + NEWSLETTER
+═══════════════════════════
+Contact Messages: inbox-style list (unread bolded), read/responded status toggle, spam_flagged indicator, search by name/email/content.
+Newsletter: subscriber table (email, locale, confirmed status, subscribed date), search, CSV export button, unsubscribe-count stat at the top of the page.
+
+═══════════════════════════
+MEDIA LIBRARY
+═══════════════════════════
+Grid view (not a table) of everything in the `media` and `documents` Storage buckets — thumbnail previews, filename, upload date, uploaded_by, file size, filter by type (image/document/video), search by filename. Click to preview full-size, copy public URL, or delete (with a "used in N places" warning if referenced by products/blog/gallery — best-effort check, not a hard block).
+
+═══════════════════════════
+SITE SETTINGS
+═══════════════════════════
+Tabbed form (not a long single scroll) bound to the `site_settings` table: WhatsApp (number, default message, enable toggle, live button preview), Analytics (GTM/GA4 IDs, enable toggle), Socials (per-platform URL fields), SEO Defaults (site title, meta description, OG image via MediaUploader). Each tab saves independently with a clear "Saved" confirmation state, not one giant form-wide save button that risks losing unrelated changes.
+
+═══════════════════════════
+AUDIT LOG
+═══════════════════════════
+Read-only, bound to `audit_logs`. Columns: admin (name), action, table affected, record ID (clickable jump-to where feasible), timestamp (sortable). Filters: admin, table, date range. This is the accountability trail — no edit/delete actions available on this screen, ever.
+
+═══════════════════════════
+STYLE CONSTRAINTS (apply everywhere above)
+═══════════════════════════
+- Songtai Green #0A7D32 for primary actions/active states, Gold #C9A227 used sparingly for badges/highlights only (never large fills — matches the public-site restraint rule already established)
+- Light mode: white/near-white backgrounds, dark mode: near-black #0B0F0C (not pure black), full palette remap on toggle, persisted preference
+- 12–16px rounded corners on cards/panels (slightly tighter than the public site's 20px+, since this is a data-density-first surface, not a marketing surface)
+- Every interactive element has a defined hover, focus (visible keyboard ring — this is an internal tool but still needs to be usable), loading, and disabled state — no exceptions
+- Every table/list has all three states explicitly built: loading skeleton, empty state with a clear next action, error state with a retry — never a blank or broken-looking screen
+- All animations transform/opacity-based, 150–300ms, consistent with the easing curves already established on the public site
+
+DELIVERABLE: A complete, fully responsive admin dashboard covering every operational area of the Songtai Life platform — dashboard overview with real KPIs and charts, and full CRUD-with-Realtime for products, orders, distributors/KYC, wallet/withdrawals, commissions, blog, events, testimonials, gallery, appointments, contact messages, newsletter, media library, site settings, and audit log — all reading from and writing to the existing Supabase schema, with no mock data and no screen left without loading/empty/error states.
