@@ -350,7 +350,8 @@ async function startServer() {
     // ws: in dev allows Vite HMR websocket connections on the dev server.
     `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in${isDev ? " ws:" : ""} https://www.google-analytics.com https://www.googletagmanager.com`,
     // Allow GTM noscript iframe (injectGTM appends <iframe src="https://www.googletagmanager.com/ns.html?id=...">)
-    "frame-src 'self' https://www.googletagmanager.com",
+    // YouTube-nocookie + Vimeo for testimonial video embed previews in admin
+    "frame-src 'self' https://www.googletagmanager.com https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com",
     // frame-ancestors 'none' + X-Frame-Options covers both modern and legacy browsers
     "frame-ancestors 'none'",
     "base-uri 'self'",
@@ -882,6 +883,134 @@ Answer concisely, helpfully, and professionally. Support both English and French
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "Songtai Life Backend — Replit Edition" });
   });
+
+  // ── Re-host external image via server-side proxy ─────────────────────────
+  // Fetches an external image URL server-side (avoids CORS) and uploads it
+  // to Supabase Storage, returning the new Storage public URL.
+  // Auth: must be authenticated admin or superadmin. Rate-limited.
+  const ALLOWED_IMAGE_MIMES_SERVER = new Set([
+    "image/jpeg","image/png","image/webp","image/avif","image/gif","image/svg+xml",
+  ]);
+  // SSRF block-list: reject requests to private/loopback/link-local ranges
+  function isSsrfSafeUrl(rawUrl: string): boolean {
+    let parsed: URL;
+    try { parsed = new URL(rawUrl); } catch { return false; }
+    if (!["http:","https:"].includes(parsed.protocol)) return false;
+    const h = parsed.hostname.toLowerCase();
+    // Reject localhost and common internal hostnames
+    if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return false;
+    // Reject IP literals in private/loopback/link-local/metadata ranges
+    const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4) {
+      const [, a, b, c] = ipv4.map(Number);
+      if (a === 10) return false;                          // RFC1918
+      if (a === 172 && b >= 16 && b <= 31) return false;  // RFC1918
+      if (a === 192 && b === 168) return false;            // RFC1918
+      if (a === 127) return false;                         // loopback
+      if (a === 169 && b === 254) return false;            // link-local / AWS metadata
+      if (a === 0) return false;                           // 0.x.x.x
+      if (a === 100 && b >= 64 && b <= 127) return false;  // CGNAT
+    }
+    // Reject IPv6 loopback ::1
+    if (h === "::1" || h === "[::1]") return false;
+    return true;
+  }
+  const rehostAttempts = new Map<string, { count: number; resetAt: number }>();
+  app.post("/api/admin/rehost-image", requireDb(async (db, req, res) => {
+    // ── Auth: must be signed in ──────────────────────────────────────
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+    const actorId = sessionUser.claims.sub as string;
+
+    // ── Authz: must be admin or superadmin ───────────────────────────
+    const { data: profile } = await db.from("profiles").select("role").eq("id", actorId).maybeSingle();
+    if (!profile || !["admin","superadmin"].includes(profile.role ?? "")) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+
+    // ── Rate limit: 20 rehost calls per admin per hour ───────────────
+    const now = Date.now();
+    const rb = rehostAttempts.get(actorId) ?? { count: 0, resetAt: now + 60 * 60 * 1000 };
+    if (now >= rb.resetAt) { rb.count = 0; rb.resetAt = now + 60 * 60 * 1000; }
+    if (rb.count >= 20) return res.status(429).json({ error: "Rate limit: 20 re-hosts per hour. Try again later." });
+    rb.count++;
+    rehostAttempts.set(actorId, rb);
+
+    const { sourceUrl, bucket = "media", folder = "migrated" } = req.body ?? {};
+    if (!sourceUrl || typeof sourceUrl !== "string") {
+      return res.status(400).json({ error: "sourceUrl is required" });
+    }
+
+    // ── SSRF guard ───────────────────────────────────────────────────
+    if (!isSsrfSafeUrl(sourceUrl)) {
+      return res.status(400).json({ error: "sourceUrl is not a safe public URL." });
+    }
+
+    // ── Validate bucket ──────────────────────────────────────────────
+    if (!["media","documents","testimonials"].includes(bucket)) {
+      return res.status(400).json({ error: "Invalid bucket." });
+    }
+
+    // ── Fetch image ──────────────────────────────────────────────────
+    let contentType = "image/jpeg";
+    let buffer: ArrayBuffer;
+    try {
+      const response = await fetch(sourceUrl, {
+        headers: { "User-Agent": "SongtaiLife-MediaMigrator/1.0" },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status} fetching source image`);
+      contentType = response.headers.get("content-type")?.split(";")[0].trim() ?? "image/jpeg";
+      if (!ALLOWED_IMAGE_MIMES_SERVER.has(contentType)) {
+        return res.status(400).json({ error: `Content-Type "${contentType}" is not an allowed image type.` });
+      }
+      // Enforce max 10 MB
+      const lengthHeader = response.headers.get("content-length");
+      if (lengthHeader && Number(lengthHeader) > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: "Source image exceeds 10 MB limit." });
+      }
+      buffer = await response.arrayBuffer();
+      if (buffer.byteLength > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: "Downloaded image exceeds 10 MB limit." });
+      }
+    } catch (err: any) {
+      return res.status(502).json({ error: `Failed to fetch source image: ${err.message}` });
+    }
+
+    // ── Upload to Storage ────────────────────────────────────────────
+    const extMap: Record<string, string> = {
+      "image/jpeg":"jpg","image/png":"png","image/webp":"webp",
+      "image/avif":"avif","image/gif":"gif","image/svg+xml":"svg",
+    };
+    const ext = extMap[contentType] ?? "jpg";
+    const safeFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, "").slice(0, 64) || "migrated";
+    const slug = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const storagePath = `${safeFolder}/${slug}`;
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`;
+
+    try {
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          "Content-Type": contentType,
+          "x-upsert": "false",
+        },
+        body: buffer,
+      });
+      if (!uploadRes.ok) {
+        const body = await uploadRes.text();
+        throw new Error(`Storage upload failed: ${body}`);
+      }
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    const newUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}`;
+    res.json({ newUrl });
+  }));
 
   // Vite dev middleware / production static files
   if (process.env.NODE_ENV !== "production") {

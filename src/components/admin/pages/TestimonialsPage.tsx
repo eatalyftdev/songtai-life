@@ -1,6 +1,5 @@
-import React from "react";
-import { useState, useEffect } from "react";
-import { Star, Plus, Edit, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Star, Plus, Edit, Trash2, ToggleLeft, ToggleRight, AlertCircle } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 import PageShell, { Card, TableWrapper, Th, Td, Btn, SearchInput } from "../shared/PageShell";
 import SlideOver from "../shared/SlideOver";
@@ -15,6 +14,67 @@ interface Testimonial {
 }
 
 const BLANK: Partial<Testimonial> = { name: "", rank: "bronze", region: "", quoteEn: "", quoteFr: "", videoUrl: "", isFeatured: false, displayOrder: 0, imageUrl: "" };
+
+// ── YouTube / Vimeo URL input with embed preview ──────────────────────────
+const YOUTUBE_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/;
+const VIMEO_RE   = /vimeo\.com\/(\d+)/;
+
+const ALLOWED_VIDEO_HOSTS = new Set(["youtube.com","www.youtube.com","youtu.be","vimeo.com","www.vimeo.com"]);
+
+function getEmbedUrl(url: string): string | null {
+  const yt = url.match(YOUTUBE_RE);
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}`;
+  const vi = url.match(VIMEO_RE);
+  if (vi) return `https://player.vimeo.com/video/${vi[1]}`;
+  return null;
+}
+
+function isValidVideoUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return ALLOWED_VIDEO_HOSTS.has(hostname.toLowerCase());
+  } catch { return false; }
+}
+
+function VideoUrlInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [dirty, setDirty] = useState(false);
+  const invalid = dirty && value !== "" && !isValidVideoUrl(value);
+  const embedUrl = value && isValidVideoUrl(value) ? getEmbedUrl(value) : null;
+
+  return (
+    <div className="space-y-2">
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setDirty(true); }}
+        onBlur={() => setDirty(true)}
+        placeholder="https://youtube.com/watch?v=… or https://vimeo.com/…"
+        className={`w-full px-3 py-2 bg-stone-800 border rounded-xl text-white text-xs focus:outline-none transition-colors ${
+          invalid ? "border-red-500 focus:border-red-400" : "border-stone-700 focus:border-[#0A7D32]"
+        }`}
+      />
+      {invalid && (
+        <p className="flex items-center gap-1 text-[10px] text-red-400">
+          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+          Must be a YouTube or Vimeo URL (or leave blank)
+        </p>
+      )}
+      {embedUrl && (
+        <div className="aspect-video w-full rounded-xl overflow-hidden border border-stone-700 bg-stone-950">
+          <iframe
+            src={embedUrl}
+            className="w-full h-full"
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+            title="Video preview"
+          />
+        </div>
+      )}
+      {value && isValidVideoUrl(value) && !embedUrl && (
+        <p className="text-[10px] text-stone-500">Could not generate embed preview for this URL.</p>
+      )}
+    </div>
+  );
+}
 
 export default function TestimonialsPage() {
   const [items, setItems] = useState<Testimonial[]>([]);
@@ -45,15 +105,23 @@ export default function TestimonialsPage() {
   const openEdit = (t: Testimonial) => { setEditing(t); setForm(t); setSlideOpen(true); };
 
   const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    // Enforce video URL: must be blank or a trusted YouTube/Vimeo URL
+    if (form.videoUrl && !isValidVideoUrl(form.videoUrl)) {
+      alert("Video URL must be a valid YouTube or Vimeo URL, or leave it blank.");
+      return;
+    }
+    setSaving(true);
     const payload = {
       name: form.name, rank: form.rank, region: form.region,
       quote_en: form.quoteEn, quote_fr: form.quoteFr || null,
       video_url: form.videoUrl || null, is_featured: form.isFeatured,
       display_order: Number(form.displayOrder ?? 0), image_url: form.imageUrl || null,
     };
-    if (editing) await supabase.from("testimonials").update(payload).eq("id", editing.id);
-    else await supabase.from("testimonials").insert(payload);
+    const { error } = editing
+      ? await supabase.from("testimonials").update(payload).eq("id", editing.id)
+      : await supabase.from("testimonials").insert(payload);
+    if (error) { alert(`Error saving testimonial: ${error.message}`); setSaving(false); return; }
     setSaving(false); setSlideOpen(false); load();
   };
 
@@ -151,9 +219,8 @@ export default function TestimonialsPage() {
               className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32] resize-none" />
           </div>
           <div>
-            <label className="text-stone-400 text-xs block mb-1.5">Video URL</label>
-            <input value={form.videoUrl ?? ""} onChange={e => f("videoUrl", e.target.value)} placeholder="https://…"
-              className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]" />
+            <label className="text-stone-400 text-xs block mb-1.5">Video URL <span className="text-stone-600">(YouTube or Vimeo)</span></label>
+            <VideoUrlInput value={form.videoUrl ?? ""} onChange={v => f("videoUrl", v)} />
           </div>
           <div className="flex items-center gap-3">
             <label className="text-stone-400 text-xs">Featured</label>
@@ -163,7 +230,7 @@ export default function TestimonialsPage() {
           </div>
           <div>
             <label className="text-stone-400 text-xs block mb-2">Photo</label>
-            <MediaUploader bucket="testimonials" onUploaded={url => f("imageUrl", url)} /* no currentUrl */ />
+            <MediaUploader bucket="testimonials" folder="testimonials" onUploaded={url => f("imageUrl", url)} currentUrl={form.imageUrl || undefined} onRemoved={() => f("imageUrl", "")} />
           </div>
           <div className="flex gap-3 pt-2">
             <Btn variant="secondary" onClick={() => setSlideOpen(false)} className="flex-1">Cancel</Btn>

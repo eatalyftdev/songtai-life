@@ -285,7 +285,7 @@ export default function GalleryPage() {
             {editingImg && imgForm.url && (
               <img src={imgForm.url} className="w-full h-32 object-cover rounded-xl mb-2" alt="" />
             )}
-            <MediaUploader bucket="media" onUploaded={url => fi("url", url)} label={editingImg ? "Replace image" : "Drop files here or click to browse"} />
+            <MediaUploader bucket="media" folder="gallery" onUploaded={url => fi("url", url)} label={editingImg ? "Replace image" : "Drop files here or click to browse"} />
           </div>
           <div>
             <label className="text-stone-400 text-xs block mb-1.5">Album</label>

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useSiteSettings, saveSiteSetting } from "../../hooks/useSiteSettings";
 import WhatsAppWidget from "../WhatsAppWidget";
+import MediaUploader from "../MediaUploader";
 
 interface SettingsTabProps {
   addNotification: (msg: string, type: "success" | "info" | "gold") => void;
@@ -282,8 +283,16 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
             <textarea rows={2} value={seoDesc} onChange={e => setSeoDesc(e.target.value)} className={`${inputCls} resize-none`} />
           </div>
           <div>
-            <label className={labelCls}>Default OG Image URL</label>
-            <input type="url" value={seoImg} onChange={e => setSeoImg(e.target.value)} placeholder="https://..." className={inputCls} />
+            <label className={labelCls}>Default OG Image (social share preview)</label>
+            <MediaUploader
+              bucket="media"
+              folder="branding"
+              currentUrl={seoImg || undefined}
+              onUploaded={url => setSeoImg(url)}
+              onRemoved={() => setSeoImg("")}
+              maxSizeMb={3}
+              label="Drop OG image here or click to browse (1200×630 recommended)"
+            />
           </div>
           <div className="flex justify-end"><SaveBtn loading={seoLoading} /></div>
         </form>
@@ -342,29 +351,48 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
             <h4 className="font-bold text-sm text-stone-100">Brand Assets</h4>
           </div>
           <p className="text-[11px] text-stone-500">
-            Upload assets to the <strong>Media</strong> section first, then paste the URL here. Changes propagate everywhere instantly.
+            Upload directly — assets are hosted in Supabase Storage and propagate everywhere instantly.
           </p>
 
           <div>
-            <label className={labelCls}>Primary Logo URL (light backgrounds)</label>
-            <input type="url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://your-storage/logo.png" className={inputCls} />
-          </div>
-          {logoUrl && (
-            <div className="p-3 bg-stone-950/60 border border-stone-800 rounded-xl flex items-center gap-4">
-              <span className="text-[10px] text-stone-500">Preview:</span>
-              <img src={logoUrl} alt="Logo preview" className="h-10 object-contain" />
-            </div>
-          )}
-
-          <div>
-            <label className={labelCls}>Dark Mode Logo URL (dark backgrounds)</label>
-            <input type="url" value={logoDarkUrl} onChange={e => setLogoDarkUrl(e.target.value)} placeholder="https://your-storage/logo-dark.png" className={inputCls} />
-            <p className="text-[10px] text-stone-600 mt-1">If blank, a CSS filter is applied to the primary logo instead.</p>
+            <label className={labelCls}>Primary Logo (light backgrounds)</label>
+            <MediaUploader
+              bucket="media"
+              folder="branding"
+              currentUrl={logoUrl || undefined}
+              onUploaded={url => setLogoUrl(url)}
+              onRemoved={() => setLogoUrl("")}
+              maxSizeMb={2}
+              label="Drop primary logo here or click to browse (PNG/SVG recommended)"
+            />
           </div>
 
           <div>
-            <label className={labelCls}>Favicon URL</label>
-            <input type="url" value={faviconUrl} onChange={e => setFaviconUrl(e.target.value)} placeholder="https://your-storage/favicon.ico" className={inputCls} />
+            <label className={labelCls}>Dark Mode Logo (dark backgrounds)</label>
+            <p className="text-[10px] text-stone-600 mb-2">If not uploaded, a CSS filter is applied to the primary logo instead.</p>
+            <MediaUploader
+              bucket="media"
+              folder="branding"
+              currentUrl={logoDarkUrl || undefined}
+              onUploaded={url => setLogoDarkUrl(url)}
+              onRemoved={() => setLogoDarkUrl("")}
+              maxSizeMb={2}
+              label="Drop dark-mode logo here or click to browse"
+            />
+          </div>
+
+          <div>
+            <label className={labelCls}>Favicon</label>
+            <MediaUploader
+              bucket="media"
+              folder="branding"
+              accept="image/png,image/x-icon,image/svg+xml"
+              currentUrl={faviconUrl || undefined}
+              onUploaded={url => setFaviconUrl(url)}
+              onRemoved={() => setFaviconUrl("")}
+              maxSizeMb={1}
+              label="Drop favicon here (PNG 32×32, ICO, or SVG)"
+            />
           </div>
 
           <div className="flex justify-end"><SaveBtn loading={brandLoading} /></div>

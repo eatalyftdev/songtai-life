@@ -153,7 +153,7 @@ export default function EventsPage() {
           </div>
           <div>
             <label className="text-stone-400 text-xs block mb-2">Event Image</label>
-            <MediaUploader bucket="media" onUploaded={url => f("image", url)} /* no currentUrl */ />
+            <MediaUploader bucket="media" folder="events" onUploaded={url => f("image", url)} />
           </div>
           <div className="flex gap-3 pt-2">
             <Btn variant="secondary" onClick={() => setSlideOpen(false)} className="flex-1">Cancel</Btn>

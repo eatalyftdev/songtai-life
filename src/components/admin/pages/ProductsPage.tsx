@@ -286,8 +286,10 @@ export default function ProductsPage() {
             <label className="text-stone-400 text-xs block mb-2">Product Image</label>
             <MediaUploader
               bucket="media"
+              folder="products"
               onUploaded={url => f("images", [url])}
-              // no currentUrl
+              currentUrl={form.images?.[0] || undefined}
+              onRemoved={() => f("images", [])}
             />
           </div>
           <div className="flex gap-3 pt-2">

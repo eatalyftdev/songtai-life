@@ -228,7 +228,7 @@ export default function ProductCategoriesPage() {
             {form.imageUrl && (
               <img src={form.imageUrl} className="w-full h-32 object-cover rounded-xl mb-2" alt="" />
             )}
-            <MediaUploader bucket="media" onUploaded={url => f("imageUrl", url)} />
+            <MediaUploader bucket="media" folder="categories" onUploaded={url => f("imageUrl", url)} currentUrl={form.imageUrl || undefined} onRemoved={() => f("imageUrl", "")} />
           </div>
           <div className="flex gap-3 pt-2">
             <Btn variant="secondary" onClick={() => setSlideOpen(false)} className="flex-1">Cancel</Btn>

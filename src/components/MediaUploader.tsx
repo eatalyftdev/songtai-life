@@ -1,13 +1,24 @@
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
-import { Upload, X, CheckCircle2, AlertCircle, Image as ImageIcon, FileText } from "lucide-react";
+import { Upload, X, CheckCircle2, AlertCircle, Image as ImageIcon, FileText, RefreshCw } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 interface MediaUploaderProps {
   bucket: "media" | "documents" | "testimonials";
-  /** Called with the public URL of each successfully uploaded file */
+  /**
+   * Subfolder within the bucket, e.g. "branding", "blog", "gallery/uncategorized".
+   * If omitted files land in the bucket root.
+   */
+  folder?: string;
+  /** Called with the public URL and storage path of each successfully uploaded file */
   onUploaded: (url: string, path: string) => void;
-  accept?: string;           // default: "image/*"
-  maxSizeMb?: number;        // default: 10
+  /** Current value — shows a thumbnail with a Replace / Remove option */
+  currentUrl?: string;
+  /** Called when the user clicks the ✕ on the currentUrl thumbnail */
+  onRemoved?: () => void;
+  /** Comma-separated MIME types accepted. Defaults to "image/*". */
+  accept?: string;
+  /** Max file size in MB (default 10) */
+  maxSizeMb?: number;
   multiple?: boolean;
   label?: string;
 }
@@ -21,9 +32,23 @@ interface FileState {
   url?: string;
 }
 
+/** MIME types always accepted for images regardless of `accept` string */
+const IMAGE_MIMES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/avif",
+  "image/gif", "image/svg+xml", "image/x-icon",
+]);
+
+function mimeAllowed(file: File, accept: string): boolean {
+  if (accept === "image/*") return file.type.startsWith("image/");
+  return accept.split(",").some(a => file.type === a.trim() || file.type.startsWith(a.trim().replace("*", "")));
+}
+
 export default function MediaUploader({
   bucket,
+  folder,
   onUploaded,
+  currentUrl,
+  onRemoved,
   accept = "image/*",
   maxSizeMb = 10,
   multiple = false,
@@ -33,10 +58,17 @@ export default function MediaUploader({
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // True when a new file has been successfully uploaded — hides the currentUrl thumbnail
+  const hasNewUpload = files.some(f => f.status === "done");
+
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
     const arr = Array.from(incoming);
     const newStates: FileState[] = arr.map(file => {
+      // Client-side MIME check
+      if (!mimeAllowed(file, accept)) {
+        return { file, preview: null, progress: 0, status: "error", error: "File type not allowed" };
+      }
       if (file.size > maxSizeMb * 1024 * 1024) {
         return { file, preview: null, progress: 0, status: "error", error: `File exceeds ${maxSizeMb} MB` };
       }
@@ -45,7 +77,6 @@ export default function MediaUploader({
       return { file, preview, progress: 0, status: "pending" };
     });
     setFiles(prev => (multiple ? [...prev, ...newStates] : newStates));
-    // Kick off uploads
     newStates.forEach((fs, i) => {
       if (fs.status === "error") return;
       uploadFile(fs.file, multiple ? files.length + i : i);
@@ -53,8 +84,9 @@ export default function MediaUploader({
   };
 
   const uploadFile = async (file: File, idx: number) => {
-    const ext = file.name.split(".").pop();
-    const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const ext = file.name.split(".").pop() ?? "bin";
+    const slug = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const path = folder ? `${folder}/${slug}` : slug;
 
     setFiles(prev => prev.map((f, i) => i === idx ? { ...f, status: "uploading", progress: 10 } : f));
 
@@ -84,32 +116,82 @@ export default function MediaUploader({
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => addFiles(e.target.files);
   const removeFile = (idx: number) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
+  const handleRemoveCurrent = () => {
+    setFiles([]);
+    onRemoved?.();
+  };
+
   return (
     <div className="space-y-3">
-      {/* Drop zone */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={() => inputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all select-none ${
-          dragging
-            ? "border-[#ecc246] bg-[#ecc246]/5"
-            : "border-stone-700 hover:border-stone-500 bg-stone-950/30"
-        }`}
-      >
-        <Upload className="w-6 h-6 text-stone-500 mx-auto mb-2" />
-        <p className="text-stone-400 text-xs">{label}</p>
-        <p className="text-stone-600 text-[10px] mt-1">Max {maxSizeMb} MB per file</p>
-        <input
-          ref={inputRef}
-          type="file"
-          className="hidden"
-          accept={accept}
-          multiple={multiple}
-          onChange={handleChange}
-        />
-      </div>
+      {/* Current image thumbnail (shown when no new upload yet) */}
+      {currentUrl && !hasNewUpload && (
+        <div className="flex items-center gap-3 p-2 bg-stone-900 border border-stone-800 rounded-xl">
+          <img
+            src={currentUrl}
+            alt="Current"
+            className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-stone-700"
+            onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-stone-400">Current image</p>
+            <p className="text-[9px] text-stone-600 truncate">{currentUrl.split("/").pop()}</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="flex items-center gap-1 px-2 py-1 bg-stone-800 hover:bg-stone-700 rounded-lg text-[10px] text-stone-300 cursor-pointer transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" /> Replace
+            </button>
+            {onRemoved && (
+              <button
+                type="button"
+                onClick={handleRemoveCurrent}
+                className="p-1 text-stone-600 hover:text-red-400 cursor-pointer transition-colors"
+                title="Remove image"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            className="hidden"
+            accept={accept}
+            multiple={multiple}
+            onChange={handleChange}
+          />
+        </div>
+      )}
+
+      {/* Drop zone — hidden when current image is shown (use Replace button instead) */}
+      {(!currentUrl || hasNewUpload) && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onClick={() => inputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all select-none ${
+            dragging
+              ? "border-[#ecc246] bg-[#ecc246]/5"
+              : "border-stone-700 hover:border-stone-500 bg-stone-950/30"
+          }`}
+        >
+          <Upload className="w-6 h-6 text-stone-500 mx-auto mb-2" />
+          <p className="text-stone-400 text-xs">{label}</p>
+          <p className="text-stone-600 text-[10px] mt-1">Max {maxSizeMb} MB per file</p>
+          <input
+            ref={inputRef}
+            type="file"
+            className="hidden"
+            accept={accept}
+            multiple={multiple}
+            onChange={handleChange}
+          />
+        </div>
+      )}
 
       {/* File list */}
       {files.length > 0 && (
