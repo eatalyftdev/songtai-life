@@ -1,0 +1,56 @@
+09:49:30.462 Running build in Washington, D.C., USA (East) – iad1
+09:49:30.462 Build machine configuration: 2 cores, 8 GB
+09:49:30.583 Cloning github.com/eatalyftdev/songtai-life (Branch: main, Commit: a79fb3d)
+09:49:31.024 Cloning completed: 441.000ms
+09:49:31.320 Restored build cache from previous deployment (3UyM4h8NNrAEgksxFhmma4U535ps)
+09:49:31.531 Running "vercel build"
+09:49:31.658 Vercel CLI 54.19.0
+09:49:32.856 Installing dependencies...
+09:49:34.843 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+09:49:34.935 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+09:49:36.618 
+09:49:36.619 added 90 packages, removed 12 packages, and changed 20 packages in 4s
+09:49:36.619 
+09:49:36.620 79 packages are looking for funding
+09:49:36.620   run `npm fund` for details
+09:49:36.666 Running "npm run build"
+09:49:36.767 
+09:49:36.768 > react-example@0.0.0 build
+09:49:36.768 > vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs
+09:49:36.768 
+09:49:37.102 vite v6.4.3 building for production...
+09:49:37.183 transforming...
+09:49:37.499 Found 1 warning while optimizing generated CSS:
+09:49:37.500 
+09:49:37.500 │   color: #086327 !important;
+09:49:37.501 │ }
+09:49:37.501 │ .light-theme .text-[#C9A227] {
+09:49:37.501 ┆                     ^-- No qualified name in attribute selector: IDHash("C9A227").
+09:49:37.502 ┆
+09:49:37.502 │   color: #A17B14 !important;
+09:49:37.502 │ }
+09:49:37.502 
+09:49:43.600 ✓ 2799 modules transformed.
+09:49:44.528 rendering chunks...
+09:49:44.554 computing gzip size...
+09:49:44.596 dist/index.html                     0.71 kB │ gzip:   0.40 kB
+09:49:44.597 dist/assets/index-CEgO23Is.css     99.75 kB │ gzip:  15.19 kB
+09:49:44.597 dist/assets/index-BQW3-FZa.js   1,509.29 kB │ gzip: 421.83 kB
+09:49:44.598 
+09:49:44.598 (!) Some chunks are larger than 500 kB after minification. Consider:
+09:49:44.598 - Using dynamic import() to code-split the application
+09:49:44.598 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+09:49:44.598 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+09:49:44.599 ✓ built in 7.47s
+09:49:44.671 
+09:49:44.671   dist/server.cjs      37.5kb
+09:49:44.671   dist/server.cjs.map  64.1kb
+09:49:44.672 
+09:49:44.672 ⚡ Done in 8ms
+09:49:44.770 Build Completed in /vercel/output [12s]
+09:49:44.855 Deploying outputs...
+09:49:45.906 Deployment completed
+09:49:46.027 Creating build cache...
+09:50:06.256 Created build cache: 20s
+09:50:06.256 Uploading build cache [95.34 MB]
+09:50:08.062 Build cache uploaded: 1.809s
