@@ -29,6 +29,7 @@ import NewsletterPage from "./components/admin/pages/NewsletterPage";
 import MediaPage from "./components/admin/pages/MediaPage";
 import SettingsPage from "./components/admin/pages/SettingsPage";
 import AuditPage from "./components/admin/pages/AuditPage";
+import HeroCarouselPage from "./components/admin/pages/HeroCarouselPage";
 import { runCommissionEngine } from "./lib/commissionEngine";
 import WhatsAppWidget from "./components/WhatsAppWidget";
 import Analytics from "./components/Analytics";
@@ -303,6 +304,7 @@ function AppContent() {
             <Route path="blog"         element={<BlogPage />} />
             <Route path="events"       element={<EventsPage />} />
             <Route path="testimonials" element={<TestimonialsPage />} />
+            <Route path="hero-carousel"        element={<HeroCarouselPage />} />
             <Route path="gallery"              element={<GalleryPage />} />
             <Route path="faq"                 element={<FAQPage />} />
             <Route path="products/categories" element={<ProductCategoriesPage />} />
