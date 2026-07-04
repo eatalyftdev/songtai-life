@@ -1,0 +1,98 @@
+Continuing the Songtai Life build (Next.js on Vercel). A security header scan came back with a D grade — this pass adds all missing security headers via next.config.js, tuned to actually work with the stack already in use (Supabase, GTM/GA4, WhatsApp links, Framer Motion/GSAP, R2/Storage-hosted images) rather than a generic lockdown that breaks the app.
+
+═══════════════════════════
+1. ADD SECURITY HEADERS — next.config.js
+═══════════════════════════
+Add a `headers()` function to next.config.js applying these to all routes:
+
+```js
+// next.config.js
+const isDev = process.env.NODE_ENV !== 'production';
+
+const ContentSecurityPolicy = `
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval'" : ''} https://www.googletagmanager.com https://www.google-analytics.com;
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https:;
+  font-src 'self' data:;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://www.googletagmanager.com;
+  frame-src 'self';
+  frame-ancestors 'none';
+  base-uri 'self';
+  form-action 'self';
+  object-src 'none';
+`.replace(/\s{2,}/g, ' ').trim();
+
+const securityHeaders = [
+  { key: 'Content-Security-Policy', value: ContentSecurityPolicy },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(self), interest-cohort=()',
+  },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
+  // Strict-Transport-Security already present via Vercel — do not duplicate/override it
+];
+
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: securityHeaders,
+      },
+    ];
+  },
+  poweredByHeader: false, // removes the X-Powered-By header, minor info-disclosure cleanup
+};
+```
+
+Notes baked into the config above — don't strip these out when implementing:
+- `script-src`/`connect-src` explicitly allow Google Tag Manager and Google Analytics domains since GTM/GA4 is already wired into the admin-configurable Analytics settings — a strict CSP without these entries will silently break analytics tracking, which is easy to miss since it fails silent, not loud.
+- `connect-src` includes `wss://*.supabase.co` specifically because Supabase Realtime subscriptions (used throughout the admin panel and site_settings sync) use WebSockets — a CSP that only allows `https://*.supabase.co` will break every live-sync feature already built.
+- `img-src` allows `https:` broadly (in addition to the specific Supabase domains) because product/gallery images may come from Supabase Storage public URLs with varying subdomains, or external placeholder sources during content entry — tighten this to the exact Supabase project domain once the app is fully on real uploaded assets, rather than a broad `https:` wildcard, for a stricter CSP later.
+- `frame-ancestors 'none'` combined with `X-Frame-Options: SAMEORIGIN` covers both older and newer browsers for clickjacking protection — some scanners still check for `X-Frame-Options` explicitly even though `frame-ancestors` is the modern equivalent, which is why both are set.
+- Left `Cross-Origin-Embedder-Policy` OUT deliberately — COEP is strict enough that it commonly breaks third-party embeds (YouTube embeds for event/media content, WhatsApp share widgets) unless every single cross-origin resource also sends matching CORP headers, which you don't control for third-party embeds. Add it later only if nothing embedded breaks after testing.
+
+═══════════════════════════
+2. FIX THE OVERLY-PERMISSIVE CORS HEADER
+═══════════════════════════
+The scan flagged `access-control-allow-origin: *` on the HTML response itself — this is almost certainly a Vercel/framework default rather than something explicitly set, but confirm no `vercel.json` or route handler is manually setting `Access-Control-Allow-Origin: *` on anything beyond genuinely public static assets (fonts, public images). If there's a custom `vercel.json` headers block, scope any CORS header to specific asset paths only:
+
+```json
+{
+  "headers": [
+    {
+      "source": "/fonts/(.*)",
+      "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }]
+    }
+  ]
+}
+```
+Never apply a wildcard CORS header to HTML pages or API/Edge Function routes — those should either omit CORS headers entirely (same-origin only) or explicitly allow only `https://songtai-life.vercel.app` (and the custom domain once live) as the origin.
+
+═══════════════════════════
+3. SUPABASE EDGE FUNCTION CORS (separate from the Next.js headers above)
+═══════════════════════════
+Any existing Edge Functions (mesomb-webhook, initiate-payment, process-withdrawal, etc.) should set explicit CORS headers scoped to your actual domain, not `*`:
+```ts
+const corsHeaders = {
+  'Access-Control-Allow-Origin': 'https://songtai-life.vercel.app',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+```
+The MeSomb webhook endpoint specifically should not need CORS headers at all if it's only ever called server-to-server by MeSomb — CORS only matters for browser-initiated requests.
+
+═══════════════════════════
+4. VERIFY AFTER DEPLOYING
+═══════════════════════════
+After this ships, re-run the same header scan (or check manually via `curl -I https://songtai-life.vercel.app/`) and confirm:
+- [ ] All five previously-missing headers now present
+- [ ] CSP doesn't break: GTM/GA4 tracking, Supabase Realtime (site_settings sync, admin live tables), Supabase Storage images, any embedded videos on Events/Blog/Gallery
+- [ ] WhatsApp floating button and external social links still work (these are plain `<a href>` navigations, not affected by CSP `connect-src`, but confirm `frame-ancestors`/`X-Frame-Options` didn't accidentally block any legitimate embed you're relying on)
+- [ ] Admin login and distributor portal still function end-to-end — a misconfigured CSP most commonly breaks inline scripts/styles or a forgotten third-party domain, so a full click-through test matters more than just checking the headers exist
+
+DELIVERABLE: All missing security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, COOP, CORP) added via next.config.js, tuned specifically to not break Supabase Realtime, GTM/GA4, or Storage-hosted images; CORS scoped down from the wildcard flagged in the scan to same-origin/explicit-domain only across both the Next.js app and Supabase Edge Functions.
