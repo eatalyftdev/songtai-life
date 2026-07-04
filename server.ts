@@ -326,6 +326,60 @@ async function startServer() {
   const parsedPort = parseInt(process.env.PORT ?? "");
   const PORT = Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 5000;
 
+  // ── Security headers ────────────────────────────────────────────────────────
+  // Mirrors the next.config.js headers() block, adapted for Express.
+  // Tuned specifically to not break: Supabase Realtime (wss), GTM/GA4, and
+  // Supabase Storage-hosted images. See attached security-headers design doc.
+  const isDev = process.env.NODE_ENV !== "production";
+
+  const ContentSecurityPolicy = [
+    "default-src 'self'",
+    // unsafe-eval only in dev (Vite HMR requires it)
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com https://www.google-analytics.com`,
+    // unsafe-inline required for Tailwind/Framer Motion runtime styles
+    "style-src 'self' 'unsafe-inline'",
+    // broad https: allows Supabase Storage images with varying subdomains;
+    // tighten to the exact project subdomain once fully on real uploaded assets
+    "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https:",
+    "font-src 'self' data:",
+    // wss: is required for Supabase Realtime subscriptions (site_settings sync,
+    // admin live tables); omitting it silently breaks all live-data features.
+    // *.supabase.in covers Supabase projects on the .in TLD (matches img-src).
+    // ws: in dev allows Vite HMR websocket connections on the dev server.
+    `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in${isDev ? " ws:" : ""} https://www.google-analytics.com https://www.googletagmanager.com`,
+    // Allow GTM noscript iframe (injectGTM appends <iframe src="https://www.googletagmanager.com/ns.html?id=...">)
+    "frame-src 'self' https://www.googletagmanager.com",
+    // frame-ancestors 'none' + X-Frame-Options covers both modern and legacy browsers
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join("; ");
+
+  app.disable("x-powered-by"); // suppress X-Powered-By: Express (minor info-disclosure)
+
+  app.use((_req, res, next) => {
+    res.setHeader("Content-Security-Policy", ContentSecurityPolicy);
+    // Clickjacking — legacy browsers honour X-Frame-Options; modern ones use frame-ancestors
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    // Prevent MIME-type sniffing
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    // Send full origin only to same-origin; only origin (no path) to cross-origin HTTPS
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    // Disable sensitive device APIs; allow geolocation only for self (used in distributor map)
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
+    );
+    // Isolate browsing context from cross-origin opener attacks
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    // Restrict cross-origin resource embedding to same-site only
+    res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+    // HSTS is managed by Replit's proxy in production — do not set it here to avoid conflicts
+    next();
+  });
+  // ── End security headers ────────────────────────────────────────────────────
+
   app.use(express.json());
 
   // Setup Replit Auth (session + OIDC) BEFORE other routes
