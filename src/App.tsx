@@ -21,6 +21,8 @@ import BlogPage from "./components/admin/pages/BlogPage";
 import EventsPage from "./components/admin/pages/EventsPage";
 import TestimonialsPage from "./components/admin/pages/TestimonialsPage";
 import GalleryPage from "./components/admin/pages/GalleryPage";
+import FAQPage from "./components/admin/pages/FAQPage";
+import ProductCategoriesPage from "./components/admin/pages/ProductCategoriesPage";
 import AppointmentsPage from "./components/admin/pages/AppointmentsPage";
 import ContactsPage from "./components/admin/pages/ContactsPage";
 import NewsletterPage from "./components/admin/pages/NewsletterPage";
@@ -301,8 +303,10 @@ function AppContent() {
             <Route path="blog"         element={<BlogPage />} />
             <Route path="events"       element={<EventsPage />} />
             <Route path="testimonials" element={<TestimonialsPage />} />
-            <Route path="gallery"      element={<GalleryPage />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
+            <Route path="gallery"              element={<GalleryPage />} />
+            <Route path="faq"                 element={<FAQPage />} />
+            <Route path="products/categories" element={<ProductCategoriesPage />} />
+            <Route path="appointments"        element={<AppointmentsPage />} />
             <Route path="contacts"     element={<ContactsPage />} />
             <Route path="newsletter"   element={<NewsletterPage />} />
             <Route path="media"        element={<MediaPage />} />

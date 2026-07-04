@@ -5,3 +5,4 @@
 - [Homepage & global chrome patterns](homepage-chrome-patterns.md) — theme/i18n/logo/footer/CSS import decisions from the major homepage improvement pass.
 - [Twilio WhatsApp order notifications](twilio-whatsapp-order-notifications.md) — fire-and-forget webhook pattern, resend endpoint auth requirements, env secrets needed.
 - [Supabase Realtime live-data pattern](realtime-live-data-pattern.md) — seed fallback → live fetch → Realtime channel per table; DB field mapping for products join.
+- [FAQ/Categories/Gallery admin patterns](faq-categories-gallery-patterns.md) — FAQ, ProductCategories, GalleryAlbums all follow same bilingual lookup-table shape; delete guards check dependent row counts.

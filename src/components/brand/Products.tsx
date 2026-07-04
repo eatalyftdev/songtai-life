@@ -64,6 +64,24 @@ export default function Products({ onAddToCart }: ProductsProps) {
   const [selectedProduct, setSelectedProduct] = useState<LiveProduct | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
+
+  // Fetch category list from product_categories table (ordered by display_order)
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const { data } = await supabase
+        .from("product_categories")
+        .select("name, name_fr, display_order")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+      if (data && data.length > 0) {
+        setDbCategories(data.map((c: any) =>
+          locale === "fr" ? (c.name_fr || c.name || "") : (c.name || "")
+        ));
+      }
+    };
+    fetchCategories();
+  }, [locale]);
 
   // Fetch products from Supabase + subscribe to Realtime
   useEffect(() => {
@@ -89,7 +107,10 @@ export default function Products({ onAddToCart }: ProductsProps) {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const categories = ["All", ...Array.from(new Set(products.map(p => p.category)))];
+  // Use DB-driven category list; fall back to deriving from product data
+  const categories = dbCategories.length > 0
+    ? ["All", ...dbCategories]
+    : ["All", ...Array.from(new Set(products.map(p => p.category)))];
 
   const getName = (p: LiveProduct) => locale === "fr" && p.nameFr ? p.nameFr : p.name;
   const getDesc = (p: LiveProduct) => locale === "fr" && p.descriptionFr ? p.descriptionFr : p.description;

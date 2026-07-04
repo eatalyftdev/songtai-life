@@ -336,12 +336,14 @@ async function startServer() {
     "default-src 'self'",
     // unsafe-eval only in dev (Vite HMR requires it)
     `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://www.googletagmanager.com https://www.google-analytics.com`,
-    // unsafe-inline required for Tailwind/Framer Motion runtime styles
-    "style-src 'self' 'unsafe-inline'",
+    // unsafe-inline required for Tailwind/Framer Motion runtime styles;
+    // fonts.googleapis.com serves the Google Fonts CSS stylesheet loaded in index.html
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     // broad https: allows Supabase Storage images with varying subdomains;
     // tighten to the exact project subdomain once fully on real uploaded assets
     "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https:",
-    "font-src 'self' data:",
+    // fonts.gstatic.com serves the actual font files referenced by the Google Fonts CSS
+    "font-src 'self' data: https://fonts.gstatic.com",
     // wss: is required for Supabase Realtime subscriptions (site_settings sync,
     // admin live tables); omitting it silently breaks all live-data features.
     // *.supabase.in covers Supabase projects on the .in TLD (matches img-src).

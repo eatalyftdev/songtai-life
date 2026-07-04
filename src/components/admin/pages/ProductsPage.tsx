@@ -12,12 +12,14 @@ interface Product {
   id: string; slug: string; nameEn: string; nameFr: string;
   descriptionEn: string; descriptionFr: string; priceXaf: number;
   strikePriceXaf: number | null; pvPoints: number; isActive: boolean;
+  isFeatured: boolean; featuredOrder: number;
   images: string[]; categoryId: string | null; stock: number;
 }
 
 const BLANK: Partial<Product> = {
   nameEn: "", nameFr: "", slug: "", descriptionEn: "", descriptionFr: "",
-  priceXaf: 0, strikePriceXaf: null, pvPoints: 0, isActive: true, images: [], stock: 100,
+  priceXaf: 0, strikePriceXaf: null, pvPoints: 0, isActive: true,
+  isFeatured: false, featuredOrder: 0, images: [], stock: 100,
 };
 
 export default function ProductsPage() {
@@ -39,6 +41,7 @@ export default function ProductsPage() {
       descriptionEn: p.description_en ?? "", descriptionFr: p.description_fr ?? "",
       priceXaf: p.price_xaf ?? 0, strikePriceXaf: p.strike_price_xaf ?? null,
       pvPoints: p.pv_points ?? 0, isActive: p.is_active ?? true,
+      isFeatured: p.is_featured ?? false, featuredOrder: p.featured_order ?? 0,
       images: p.images ?? [], categoryId: p.category_id ?? null, stock: p.stock ?? 0,
     })));
     setLoading(false);
@@ -50,6 +53,7 @@ export default function ProductsPage() {
     const q = search.toLowerCase();
     if (filter === "active" && !p.isActive) return false;
     if (filter === "inactive" && p.isActive) return false;
+    if (filter === "featured" && !p.isFeatured) return false;
     return !q || p.nameEn.toLowerCase().includes(q) || p.nameFr.toLowerCase().includes(q);
   });
 
@@ -71,6 +75,7 @@ export default function ProductsPage() {
       strike_price_xaf: form.strikePriceXaf ? Number(form.strikePriceXaf) : null,
       pv_points: Number(form.pvPoints || 0), stock: Number(form.stock || 0),
       images: form.images ?? [], is_active: form.isActive ?? true,
+      is_featured: form.isFeatured ?? false, featured_order: Number(form.featuredOrder ?? 0),
     };
     if (editing) {
       await supabase.from("products").update(payload).eq("id", editing.id);
@@ -129,6 +134,7 @@ export default function ProductsPage() {
             <option value="all">All</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
+            <option value="featured">Featured on Homepage</option>
           </Select>
         </div>
 
@@ -141,6 +147,7 @@ export default function ProductsPage() {
               <Th>PV</Th>
               <Th>Stock</Th>
               <Th>Active</Th>
+              <Th>Featured</Th>
               <Th>Actions</Th>
             </tr>
           </thead>
@@ -171,6 +178,18 @@ export default function ProductsPage() {
                   <Td>
                     <button onClick={() => handleToggleActive(p)} className="cursor-pointer text-stone-400 hover:text-white transition-colors">
                       {p.isActive ? <ToggleRight className="w-5 h-5 text-[#0A7D32]" /> : <ToggleLeft className="w-5 h-5" />}
+                    </button>
+                  </Td>
+                  <Td>
+                    <button
+                      onClick={async () => {
+                        await supabase.from("products").update({ is_featured: !p.isFeatured }).eq("id", p.id);
+                        setProducts(prev => prev.map(x => x.id === p.id ? { ...x, isFeatured: !x.isFeatured } : x));
+                      }}
+                      className="cursor-pointer text-stone-400 hover:text-white transition-colors"
+                      title={p.isFeatured ? "Remove from homepage" : "Feature on homepage"}
+                    >
+                      {p.isFeatured ? <ToggleRight className="w-5 h-5 text-[#C9A227]" /> : <ToggleLeft className="w-5 h-5" />}
                     </button>
                   </Td>
                   <Td>
@@ -242,12 +261,27 @@ export default function ProductsPage() {
                 className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]" />
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-stone-400 text-xs">Active</label>
-            <button type="button" onClick={() => f("isActive", !form.isActive)} className="cursor-pointer">
-              {form.isActive ? <ToggleRight className="w-6 h-6 text-[#0A7D32]" /> : <ToggleLeft className="w-6 h-6 text-stone-500" />}
-            </button>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <label className="text-stone-400 text-xs">Active</label>
+              <button type="button" onClick={() => f("isActive", !form.isActive)} className="cursor-pointer">
+                {form.isActive ? <ToggleRight className="w-6 h-6 text-[#0A7D32]" /> : <ToggleLeft className="w-6 h-6 text-stone-500" />}
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-stone-400 text-xs">Featured on Homepage</label>
+              <button type="button" onClick={() => f("isFeatured", !form.isFeatured)} className="cursor-pointer">
+                {form.isFeatured ? <ToggleRight className="w-6 h-6 text-[#C9A227]" /> : <ToggleLeft className="w-6 h-6 text-stone-500" />}
+              </button>
+            </div>
           </div>
+          {form.isFeatured && (
+            <div>
+              <label className="text-stone-400 text-xs block mb-1.5">Featured Order</label>
+              <input type="number" value={form.featuredOrder ?? 0} onChange={e => f("featuredOrder", Number(e.target.value))}
+                className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]" />
+            </div>
+          )}
           <div>
             <label className="text-stone-400 text-xs block mb-2">Product Image</label>
             <MediaUploader

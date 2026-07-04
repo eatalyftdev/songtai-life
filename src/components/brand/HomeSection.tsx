@@ -24,18 +24,38 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSubmitted, setNewsletterSubmitted] = useState(false);
 
-  // ── Live data: products ─────────────────────────────────────────
+  // ── Live data: products (featured first, fallback to recent) ────
   const [liveProducts, setLiveProducts] = useState<typeof PRODUCTS_SEED>(PRODUCTS_SEED);
   useEffect(() => {
     const fetch = async () => {
-      const { data, error } = await supabase
+      // Fetch featured products ordered by featured_order
+      const { data: featured } = await supabase
         .from("products")
         .select("*, product_categories(name)")
         .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(12);
-      if (!error && data && data.length > 0) {
-        setLiveProducts(data.map((row: any) => ({
+        .eq("is_featured", true)
+        .order("featured_order", { ascending: true })
+        .limit(8);
+
+      let rows = featured ?? [];
+
+      // If fewer than 4 featured, pad with most recent active products (post-filter in JS to avoid fragile SQL IN string)
+      if (rows.length < 4) {
+        const featuredIds = new Set(rows.map((r: any) => r.id));
+        const { data: recent } = await supabase
+          .from("products")
+          .select("*, product_categories(name)")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(16); // fetch extra so we have enough after filtering
+        const padding = (recent ?? [])
+          .filter((r: any) => !featuredIds.has(r.id))
+          .slice(0, 8 - rows.length);
+        rows = [...rows, ...padding];
+      }
+
+      if (rows.length > 0) {
+        setLiveProducts(rows.map((row: any) => ({
           id: row.id,
           slug: row.slug ?? "",
           name: locale === "fr" ? (row.name_fr || row.name_en || "") : (row.name_en || ""),
