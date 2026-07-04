@@ -1,7 +1,7 @@
 import { useState, FormEvent, ReactElement } from "react";
 import {
   MessageCircle, BarChart3, Share2, Globe, Save, Eye, EyeOff,
-  ExternalLink, Phone, Mail, MapPin, Image as ImageIcon
+  ExternalLink, Phone, Mail, MapPin, Image as ImageIcon, Bell
 } from "lucide-react";
 import { useSiteSettings, saveSiteSetting } from "../../hooks/useSiteSettings";
 import WhatsAppWidget from "../WhatsAppWidget";
@@ -10,15 +10,16 @@ interface SettingsTabProps {
   addNotification: (msg: string, type: "success" | "info" | "gold") => void;
 }
 
-type Tab = "whatsapp" | "analytics" | "socials" | "seo" | "contact" | "branding";
+type Tab = "whatsapp" | "order_alerts" | "analytics" | "socials" | "seo" | "contact" | "branding";
 
 const TABS: { id: Tab; label: string; icon: ReactElement }[] = [
-  { id: "whatsapp",  label: "WhatsApp",  icon: <MessageCircle className="w-3.5 h-3.5" /> },
-  { id: "analytics", label: "Analytics", icon: <BarChart3 className="w-3.5 h-3.5" /> },
-  { id: "socials",   label: "Socials",   icon: <Share2 className="w-3.5 h-3.5" /> },
-  { id: "seo",       label: "SEO",       icon: <Globe className="w-3.5 h-3.5" /> },
-  { id: "contact",   label: "Contact",   icon: <Phone className="w-3.5 h-3.5" /> },
-  { id: "branding",  label: "Branding",  icon: <ImageIcon className="w-3.5 h-3.5" /> },
+  { id: "whatsapp",     label: "WhatsApp",     icon: <MessageCircle className="w-3.5 h-3.5" /> },
+  { id: "order_alerts", label: "Order Alerts", icon: <Bell className="w-3.5 h-3.5" /> },
+  { id: "analytics",   label: "Analytics",    icon: <BarChart3 className="w-3.5 h-3.5" /> },
+  { id: "socials",     label: "Socials",      icon: <Share2 className="w-3.5 h-3.5" /> },
+  { id: "seo",         label: "SEO",          icon: <Globe className="w-3.5 h-3.5" /> },
+  { id: "contact",     label: "Contact",      icon: <Phone className="w-3.5 h-3.5" /> },
+  { id: "branding",    label: "Branding",     icon: <ImageIcon className="w-3.5 h-3.5" /> },
 ];
 
 export default function SettingsTab({ addNotification }: SettingsTabProps) {
@@ -31,6 +32,11 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
   const [waMessage, setWaMessage]   = useState(settings.whatsapp.default_message);
   const [waLoading, setWaLoading]   = useState(false);
   const [showWaPreview, setShowWaPreview] = useState(false);
+
+  // ── Order Alerts state ──────────────────────────────────────────
+  const [oaEnabled, setOaEnabled]   = useState(settings.orderNotifications.enabled);
+  const [oaNumber, setOaNumber]     = useState(settings.orderNotifications.whatsapp_number);
+  const [oaLoading, setOaLoading]   = useState(false);
 
   // ── Analytics state ─────────────────────────────────────────────
   const [gaEnabled, setGaEnabled]   = useState(settings.analytics.enabled);
@@ -125,6 +131,7 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
             <MessageCircle className="w-4 h-4 text-green-400" />
             <h4 className="font-bold text-sm text-stone-100">WhatsApp Floating Button</h4>
           </div>
+          <p className="text-[11px] text-stone-500">Customer support widget shown to visitors on the public site. Configure a separate number for order alerts in the <strong>Order Alerts</strong> tab.</p>
           <label className="flex items-center gap-3 cursor-pointer">
             <div className={`w-10 h-5 rounded-full relative transition-colors ${waEnabled ? "bg-green-500" : "bg-stone-700"}`}
               onClick={() => setWaEnabled(v => !v)}>
@@ -157,6 +164,49 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
             )}
           </div>
           <div className="flex justify-end"><SaveBtn loading={waLoading} /></div>
+        </form>
+      )}
+
+      {/* ── Order Alerts ───────────────────────────────────────────── */}
+      {activeTab === "order_alerts" && (
+        <form onSubmit={e => { e.preventDefault(); saveSection("order_notifications", { enabled: oaEnabled, whatsapp_number: oaNumber }, setOaLoading); }} className={card}>
+          <div className="flex items-center gap-2 pb-3 border-b border-stone-800">
+            <Bell className="w-4 h-4 text-[#ecc246]" />
+            <h4 className="font-bold text-sm text-stone-100">Order Alerts — WhatsApp Notifications</h4>
+          </div>
+          <p className="text-[11px] text-stone-500">
+            When enabled, the admin receives an instant WhatsApp message the moment a customer completes payment. This uses the Twilio Business API — configure <code className="text-[#ecc246]">TWILIO_ACCOUNT_SID</code>, <code className="text-[#ecc246]">TWILIO_AUTH_TOKEN</code>, and <code className="text-[#ecc246]">TWILIO_WHATSAPP_FROM</code> as environment secrets on the server.
+          </p>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div className={`w-10 h-5 rounded-full relative transition-colors ${oaEnabled ? "bg-[#ecc246]" : "bg-stone-700"}`}
+              onClick={() => setOaEnabled(v => !v)}>
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${oaEnabled ? "left-5" : "left-0.5"}`} />
+            </div>
+            <span className="text-sm text-stone-300">{oaEnabled ? "Order alerts enabled" : "Order alerts disabled"}</span>
+          </label>
+          <div>
+            <label className={labelCls}>Admin WhatsApp Number (E.164) *</label>
+            <input
+              type="text"
+              value={oaNumber}
+              onChange={e => setOaNumber(e.target.value)}
+              placeholder="+237655000000"
+              className={inputCls}
+            />
+            <p className="text-[10px] text-stone-600 mt-1">
+              This is separate from the public customer support widget number. Order summaries will be sent here.
+            </p>
+          </div>
+          <div className="p-3 bg-stone-950/60 border border-stone-800/60 rounded-xl text-[11px] text-stone-500 space-y-1">
+            <p className="font-semibold text-stone-400">Message includes:</p>
+            <ul className="list-disc list-inside space-y-0.5 ml-1">
+              <li>Order ID and payment amount</li>
+              <li>Customer name, phone, and delivery address</li>
+              <li>Delivery notes (if provided)</li>
+              <li>Ordered products list</li>
+            </ul>
+          </div>
+          <div className="flex justify-end"><SaveBtn loading={oaLoading} /></div>
         </form>
       )}
 

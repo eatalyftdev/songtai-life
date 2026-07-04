@@ -254,6 +254,73 @@ async function awardCommission(
   console.log(`[MLM-Engine] Credited ${amountXaf} XAF to ${uid} (Level ${level} ${type})`);
 }
 
+// ─── Twilio WhatsApp Order Notification ─────────────────────────────────────
+async function sendOrderWhatsApp(
+  toNumber: string,
+  orderData: {
+    orderId: string;
+    amountXaf: number;
+    customerName?: string;
+    customerPhone?: string;
+    deliveryAddress?: string;
+    deliveryNotes?: string;
+    cart: any[];
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886"
+
+  if (!accountSid || !authToken || !fromNumber) {
+    return { success: false, error: "Twilio credentials (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM) not configured." };
+  }
+
+  const to = toNumber.startsWith("whatsapp:") ? toNumber : `whatsapp:${toNumber}`;
+
+  const items = orderData.cart.map((i: any) => `  • ${i.name ?? i.id} ×${i.qty ?? 1}`).join("\n");
+
+  const body = [
+    `🛒 *New Songtai Life Order*`,
+    ``,
+    `*Order ID:* ${orderData.orderId}`,
+    `*Amount:* ${orderData.amountXaf.toLocaleString()} XAF`,
+    ``,
+    `*Customer:* ${orderData.customerName || "—"}`,
+    `*Phone:* ${orderData.customerPhone || "—"}`,
+    ``,
+    `*Delivery Address:*`,
+    orderData.deliveryAddress || "Not provided",
+    ...(orderData.deliveryNotes ? [``, `*Notes:* ${orderData.deliveryNotes}`] : []),
+    ``,
+    `*Items:*`,
+    items || "  (no items)",
+  ].join("\n");
+
+  try {
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+    const response = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${credentials}`,
+          "Content-Type":  "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ From: fromNumber, To: to, Body: body }).toString(),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      return { success: false, error: `Twilio error ${response.status}: ${text.slice(0, 200)}` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 async function startServer() {
   const app = express();
   const parsedPort = parseInt(process.env.PORT ?? "");
@@ -329,7 +396,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
   // =========================================================================
 
   app.post("/api/payment/checkout", requireDb(async (db, req, res) => {
-    const { amountXaf, pvPoints, phone, provider, cart, userId } = req.body;
+    const { amountXaf, pvPoints, phone, provider, cart, userId,
+            customerName, customerPhone, deliveryAddress, deliveryNotes } = req.body;
 
     if (!amountXaf || !phone || !provider) {
       return res.status(400).json({ error: "Missing required checkout parameters: amountXaf, phone, provider" });
@@ -346,6 +414,10 @@ Answer concisely, helpfully, and professionally. Support both English and French
       provider,
       cart: cart || [],
       status: "pending",
+      customer_name: customerName || null,
+      customer_phone: customerPhone || null,
+      delivery_address: deliveryAddress || null,
+      delivery_notes: deliveryNotes || null,
     });
 
     if (error) throw new Error(error.message);
@@ -432,7 +504,156 @@ Answer concisely, helpfully, and professionally. Support both English and French
       await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
     }
 
+    // Send WhatsApp notification to admin — non-blocking, must never fail the order
+    (async () => {
+      try {
+        const { data: setting } = await db
+          .from("site_settings")
+          .select("value")
+          .eq("key", "order_notifications")
+          .maybeSingle();
+
+        const notifConfig = setting?.value ?? {};
+        const adminNumber  = notifConfig?.whatsapp_number ?? "";
+        const notifEnabled = notifConfig?.enabled ?? false;
+
+        if (!notifEnabled || !adminNumber) {
+          console.log(`[WhatsApp] Order notifications disabled or no number configured — skipping.`);
+          return;
+        }
+
+        const result = await sendOrderWhatsApp(adminNumber, {
+          orderId,
+          amountXaf: orderData.amount_xaf,
+          customerName:    orderData.customer_name    ?? undefined,
+          customerPhone:   orderData.customer_phone   ?? undefined,
+          deliveryAddress: orderData.delivery_address ?? undefined,
+          deliveryNotes:   orderData.delivery_notes   ?? undefined,
+          cart: orderData.cart ?? [],
+        });
+
+        if (result.success) {
+          await db.from("orders").update({
+            whatsapp_notified:    true,
+            whatsapp_notified_at: new Date().toISOString(),
+            whatsapp_notification_error: null,
+          }).eq("order_id", orderId);
+          console.log(`[WhatsApp] Admin notification sent for Order ${orderId}.`);
+        } else {
+          await db.from("orders").update({
+            whatsapp_notified: false,
+            whatsapp_notification_error: result.error ?? "Unknown error",
+          }).eq("order_id", orderId);
+          console.error(`[WhatsApp] Notification failed for Order ${orderId}: ${result.error}`);
+        }
+      } catch (err: any) {
+        console.error(`[WhatsApp] Unexpected error sending notification for Order ${orderId}:`, err.message);
+        try {
+          await db.from("orders").update({
+            whatsapp_notification_error: err.message,
+          }).eq("order_id", orderId);
+        } catch { /* ignore secondary failure */ }
+      }
+    })();
+
     res.json({ success: true, message: "Order processed successfully." });
+  }));
+
+  // In-memory rate limiter for resend-notification (per user, not IP)
+  const resendAttempts = new Map<string, { count: number; resetAt: number }>();
+
+  // Resend WhatsApp notification for a paid order (admin-only)
+  app.post("/api/payment/resend-notification", requireDb(async (db, req, res) => {
+    // ── Auth: must be signed in ───────────────────────────────────
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) {
+      return res.status(401).json({ error: "Authentication required." });
+    }
+    const actorId = sessionUser.claims.sub as string;
+
+    // ── Authz: must be admin or superadmin ────────────────────────
+    const { data: profile } = await db
+      .from("profiles")
+      .select("role")
+      .eq("id", actorId)
+      .maybeSingle();
+    if (!profile || !["admin", "superadmin"].includes(profile.role ?? "")) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+
+    // ── Rate limit: max 10 resends per user per 15 min ────────────
+    const now = Date.now();
+    const rateBucket = resendAttempts.get(actorId);
+    if (rateBucket) {
+      if (now < rateBucket.resetAt && rateBucket.count >= 10) {
+        return res.status(429).json({ error: "Too many notification resend requests. Try again later." });
+      }
+      if (now >= rateBucket.resetAt) resendAttempts.delete(actorId);
+    }
+    const bucket = resendAttempts.get(actorId) ?? { count: 0, resetAt: now + 15 * 60 * 1000 };
+    bucket.count++;
+    resendAttempts.set(actorId, bucket);
+
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ error: "orderId is required." });
+
+    const { data: orderData } = await db
+      .from("orders")
+      .select("*")
+      .eq("order_id", orderId)
+      .maybeSingle();
+
+    if (!orderData) return res.status(404).json({ error: `Order ${orderId} not found.` });
+    if (orderData.status !== "paid") return res.status(400).json({ error: "Can only send notifications for paid orders." });
+
+    const { data: setting } = await db
+      .from("site_settings")
+      .select("value")
+      .eq("key", "order_notifications")
+      .maybeSingle();
+
+    const notifConfig  = setting?.value ?? {};
+    const adminNumber  = notifConfig?.whatsapp_number ?? "";
+
+    if (!adminNumber) {
+      return res.status(400).json({ error: "No admin WhatsApp number configured. Set it in Admin → Settings → Order Alerts." });
+    }
+
+    const result = await sendOrderWhatsApp(adminNumber, {
+      orderId: orderData.order_id,
+      amountXaf: orderData.amount_xaf,
+      customerName:    orderData.customer_name    ?? undefined,
+      customerPhone:   orderData.customer_phone   ?? undefined,
+      deliveryAddress: orderData.delivery_address ?? undefined,
+      deliveryNotes:   orderData.delivery_notes   ?? undefined,
+      cart: orderData.cart ?? [],
+    });
+
+    if (result.success) {
+      await db.from("orders").update({
+        whatsapp_notified:    true,
+        whatsapp_notified_at: new Date().toISOString(),
+        whatsapp_notification_error: null,
+      }).eq("order_id", orderId);
+
+      // Audit log
+      try {
+        await db.from("audit_logs").insert({
+          action: "WhatsApp Notification Resent",
+          details: `Order ${orderId} — resent by ${actorId}`,
+        });
+      } catch { /* audit log failure must never block the response */ }
+
+      console.log(`[WhatsApp-Resend] Notification sent for Order ${orderId} by admin ${actorId}.`);
+      return res.json({ success: true, message: "WhatsApp notification sent." });
+    } else {
+      await db.from("orders").update({
+        whatsapp_notified: false,
+        whatsapp_notification_error: result.error ?? "Unknown error",
+      }).eq("order_id", orderId);
+      console.error(`[WhatsApp-Resend] Failed for Order ${orderId} by admin ${actorId}: ${result.error}`);
+      return res.status(502).json({ success: false, error: result.error });
+    }
   }));
 
   app.post("/api/payment/payout", requireDb(async (db, req, res) => {

@@ -3,3 +3,5 @@
 - [Bootstrap endpoint security pattern](bootstrap-endpoint-pattern.md) — one-time admin setup route needs: key check + "no superadmin exists" DB guard + IP rate limit.
 - [Admin dashboard architecture](admin-dashboard-architecture.md) — new routed admin layout replacing old AdminPortal monolith; key patterns and gotchas.
 - [Homepage & global chrome patterns](homepage-chrome-patterns.md) — theme/i18n/logo/footer/CSS import decisions from the major homepage improvement pass.
+- [Twilio WhatsApp order notifications](twilio-whatsapp-order-notifications.md) — fire-and-forget webhook pattern, resend endpoint auth requirements, env secrets needed.
+- [Supabase Realtime live-data pattern](realtime-live-data-pattern.md) — seed fallback → live fetch → Realtime channel per table; DB field mapping for products join.

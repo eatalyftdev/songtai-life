@@ -7,6 +7,7 @@ import {
   Clock, Calendar, ChevronRight, X
 } from "lucide-react";
 import { PRODUCTS_SEED, BLOG_SEED, EVENTS_SEED, GALLERY_SEED, TESTIMONIALS_SEED } from "../../data/mockData";
+import { supabase } from "../../lib/supabase";
 
 interface HomeSectionProps {
   onNavigate: (page: string) => void;
@@ -15,12 +16,106 @@ interface HomeSectionProps {
 }
 
 export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }: HomeSectionProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith("fr") ? "fr" : "en";
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [currentTestimonialIdx, setCurrentTestimonialIdx] = useState(0);
   const [selectedGalleryImg, setSelectedGalleryImg] = useState<string | null>(null);
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSubmitted, setNewsletterSubmitted] = useState(false);
+
+  // ── Live data: products ─────────────────────────────────────────
+  const [liveProducts, setLiveProducts] = useState<typeof PRODUCTS_SEED>(PRODUCTS_SEED);
+  useEffect(() => {
+    const fetch = async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*, product_categories(name)")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (!error && data && data.length > 0) {
+        setLiveProducts(data.map((row: any) => ({
+          id: row.id,
+          slug: row.slug ?? "",
+          name: locale === "fr" ? (row.name_fr || row.name_en || "") : (row.name_en || ""),
+          description: locale === "fr" ? (row.description_fr || row.description_en || "") : (row.description_en || ""),
+          priceXaf: row.price_xaf ?? 0,
+          pvPoints: row.pv_points ?? 0,
+          category: row.product_categories?.name ?? "Health",
+          images: row.images ?? (row.image ? [row.image] : []),
+          isActive: row.is_active ?? true,
+          benefits: [],
+          usageInstructions: "",
+          strikePrice: row.strike_price_xaf,
+        })));
+      }
+    };
+    fetch();
+    const ch = supabase.channel("home_products_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, fetch)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [locale]);
+
+  // ── Live data: blog posts ───────────────────────────────────────
+  const [liveBlogPosts, setLiveBlogPosts] = useState<typeof BLOG_SEED>(BLOG_SEED);
+  useEffect(() => {
+    const fetchBlogs = async () => {
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .select("*")
+        .eq("status", "published")
+        .order("published_at", { ascending: false })
+        .limit(6);
+      if (!error && data && data.length > 0) {
+        setLiveBlogPosts(data.map((row: any) => ({
+          id: row.id,
+          slug: row.slug ?? "",
+          title: row.title ?? "",
+          excerpt: row.excerpt ?? "",
+          body: row.body ?? "",
+          category: row.category ?? "Wellness",
+          publishedAt: row.published_at ? row.published_at.slice(0, 10) : "",
+          image: row.image ?? "",
+          author: row.author ?? "",
+        })));
+      }
+    };
+    fetchBlogs();
+    const ch = supabase.channel("home_blog_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "blog_posts" }, fetchBlogs)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  // ── Live data: testimonials ─────────────────────────────────────
+  const [liveTestimonials, setLiveTestimonials] = useState<typeof TESTIMONIALS_SEED>(TESTIMONIALS_SEED);
+  useEffect(() => {
+    const fetchTestimonials = async () => {
+      const { data, error } = await supabase
+        .from("testimonials")
+        .select("*")
+        .order("display_order")
+        .limit(10);
+      if (!error && data && data.length > 0) {
+        setLiveTestimonials(data.map((row: any) => ({
+          id: row.id,
+          name: row.name ?? "",
+          rank: row.rank ?? "",
+          region: row.region ?? "",
+          quote: locale === "fr" ? (row.quote_fr || row.quote || "") : (row.quote || ""),
+          image: row.image ?? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+          videoUrl: row.video_url ?? "",
+        })));
+      }
+    };
+    fetchTestimonials();
+    const ch = supabase.channel("home_testimonials_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "testimonials" }, fetchTestimonials)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [locale]);
 
   const [stats, setStats] = useState({ countries: 0, members: 0, products: 0, years: 0, awards: 0 });
   useEffect(() => {
@@ -55,10 +150,10 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
 
   useEffect(() => {
     const iv = setInterval(() => {
-      setCurrentTestimonialIdx(prev => (prev + 1) % TESTIMONIALS_SEED.length);
+      setCurrentTestimonialIdx(prev => (prev + 1) % liveTestimonials.length);
     }, 6000);
     return () => clearInterval(iv);
-  }, []);
+  }, [liveTestimonials.length]);
 
   const CATEGORIES = [
     { key: "all",         label: t("home.cat.all") },
@@ -69,8 +164,8 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
   ];
 
   const filteredProducts = activeCategory === "all"
-    ? PRODUCTS_SEED.slice(0, 4)
-    : PRODUCTS_SEED.filter(p => p.category === activeCategory).slice(0, 4);
+    ? liveProducts.slice(0, 4)
+    : liveProducts.filter(p => p.category === activeCategory).slice(0, 4);
 
   const handleSubscribe = (e: FormEvent) => {
     e.preventDefault();
@@ -358,11 +453,11 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
             <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold ${textPrimary} leading-tight`}>{t("home.stories.heading")}</h2>
             <p className={`${textMuted} text-xs sm:text-sm leading-relaxed`}>{t("home.stories.body")}</p>
             <div className="flex gap-2">
-              {TESTIMONIALS_SEED.map((_, idx) => (
+              {liveTestimonials.map((_, idx) => (
                 <button
                   key={idx}
                   onClick={() => setCurrentTestimonialIdx(idx)}
-                  className={`h-3 rounded-full transition-all min-w-[12px] ${
+                  className={`h-3 rounded-full transition-all min-w-[12px] cursor-pointer ${
                     currentTestimonialIdx === idx ? "bg-[#C9A227] w-6" : `${theme === "light" ? "bg-stone-300" : "bg-stone-800"} w-3`
                   }`}
                 />
@@ -370,36 +465,38 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
             </div>
           </div>
 
-          <div className={`lg:col-span-8 ${theme === "light" ? "bg-white border-stone-200" : "bg-stone-900 border-stone-850"} border p-6 sm:p-8 rounded-[28px] sm:rounded-[32px] shadow-xl relative overflow-hidden`}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-950/20 blur-2xl rounded-full" />
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentTestimonialIdx}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.4 }}
-                className="space-y-6"
-              >
-                <p className={`${theme === "light" ? "text-stone-700" : "text-stone-200"} text-sm sm:text-base italic leading-relaxed`}>
-                  "{TESTIMONIALS_SEED[currentTestimonialIdx].quote}"
-                </p>
-                <div className={`flex items-center gap-4 pt-4 border-t ${theme === "light" ? "border-stone-100" : "border-stone-850"}`}>
-                  <img
-                    src={TESTIMONIALS_SEED[currentTestimonialIdx].image}
-                    alt={TESTIMONIALS_SEED[currentTestimonialIdx].name}
-                    className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border ${theme === "light" ? "border-stone-200" : "border-stone-850"}`}
-                  />
-                  <div>
-                    <h5 className={`font-extrabold ${textPrimary} text-sm`}>{TESTIMONIALS_SEED[currentTestimonialIdx].name}</h5>
-                    <span className={`${textDim} text-[10px] uppercase font-bold tracking-wider`}>
-                      {TESTIMONIALS_SEED[currentTestimonialIdx].rank} · {TESTIMONIALS_SEED[currentTestimonialIdx].region}
-                    </span>
+          {liveTestimonials.length > 0 && (
+            <div className={`lg:col-span-8 ${theme === "light" ? "bg-white border-stone-200" : "bg-stone-900 border-stone-850"} border p-6 sm:p-8 rounded-[28px] sm:rounded-[32px] shadow-xl relative overflow-hidden`}>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-950/20 blur-2xl rounded-full" />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentTestimonialIdx}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-6"
+                >
+                  <p className={`${theme === "light" ? "text-stone-700" : "text-stone-200"} text-sm sm:text-base italic leading-relaxed`}>
+                    "{liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.quote}"
+                  </p>
+                  <div className={`flex items-center gap-4 pt-4 border-t ${theme === "light" ? "border-stone-100" : "border-stone-850"}`}>
+                    <img
+                      src={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.image}
+                      alt={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.name}
+                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border ${theme === "light" ? "border-stone-200" : "border-stone-850"}`}
+                    />
+                    <div>
+                      <h5 className={`font-extrabold ${textPrimary} text-sm`}>{liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.name}</h5>
+                      <span className={`${textDim} text-[10px] uppercase font-bold tracking-wider`}>
+                        {liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.rank} · {liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.region}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </section>
 
@@ -463,34 +560,42 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-          <div
-            className={`lg:col-span-7 ${cardBg} border rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 flex flex-col justify-between group cursor-pointer`}
-            onClick={() => onNavigate("blog")}
-          >
-            <div className="space-y-4">
-              <div className="aspect-[16/9] rounded-2xl overflow-hidden bg-stone-950">
-                <img src={BLOG_SEED[0].image} alt={BLOG_SEED[0].title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+          {liveBlogPosts[0] && (
+            <div
+              className={`lg:col-span-7 ${cardBg} border rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 flex flex-col justify-between group cursor-pointer`}
+              onClick={() => onNavigate("blog")}
+            >
+              <div className="space-y-4">
+                <div className="aspect-[16/9] rounded-2xl overflow-hidden bg-stone-950">
+                  {liveBlogPosts[0].image ? (
+                    <img src={liveBlogPosts[0].image} alt={liveBlogPosts[0].title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full bg-stone-900" />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <span className="text-[#C9A227] font-bold text-[10px] uppercase tracking-wider">{liveBlogPosts[0].category}</span>
+                  <h4 className={`font-extrabold ${textPrimary} text-lg sm:text-xl lg:text-2xl leading-snug group-hover:text-emerald-400 transition-colors`}>{liveBlogPosts[0].title}</h4>
+                  <p className={`${textMuted} text-xs sm:text-sm leading-relaxed`}>{liveBlogPosts[0].excerpt}</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <span className="text-[#C9A227] font-bold text-[10px] uppercase tracking-wider">{BLOG_SEED[0].category}</span>
-                <h4 className={`font-extrabold ${textPrimary} text-lg sm:text-xl lg:text-2xl leading-snug group-hover:text-emerald-400 transition-colors`}>{BLOG_SEED[0].title}</h4>
-                <p className={`${textMuted} text-xs sm:text-sm leading-relaxed`}>{BLOG_SEED[0].excerpt}</p>
+              <div className={`mt-6 sm:mt-8 pt-4 border-t ${borderColor} flex justify-between items-center text-xs ${textDim}`}>
+                <span>{liveBlogPosts[0].author}</span>
+                <span>{liveBlogPosts[0].publishedAt}</span>
               </div>
             </div>
-            <div className={`mt-6 sm:mt-8 pt-4 border-t ${borderColor} flex justify-between items-center text-xs ${textDim}`}>
-              <span>{BLOG_SEED[0].author}</span>
-              <span>{BLOG_SEED[0].publishedAt}</span>
-            </div>
-          </div>
+          )}
 
-          <div className="lg:col-span-5 flex flex-col gap-5 sm:gap-6">
-            {BLOG_SEED.slice(1, 3).map(post => (
+          <div className={`${liveBlogPosts[0] ? "lg:col-span-5" : "lg:col-span-12"} flex flex-col gap-5 sm:gap-6`}>
+            {liveBlogPosts.slice(1, 3).map(post => (
               <div
                 key={post.id}
                 onClick={() => onNavigate("blog")}
                 className={`${cardBg} border p-4 sm:p-5 rounded-2xl flex gap-4 group cursor-pointer hover:bg-stone-900/35 transition-all`}
               >
-                <img src={post.image} alt={post.title} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover bg-stone-950 flex-shrink-0" loading="lazy" />
+                {post.image && (
+                  <img src={post.image} alt={post.title} className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover bg-stone-950 flex-shrink-0" loading="lazy" />
+                )}
                 <div className="space-y-1 min-w-0">
                   <span className="text-[9px] uppercase font-bold text-[#C9A227]">{post.category}</span>
                   <h5 className={`font-extrabold text-sm ${textPrimary} line-clamp-2 leading-snug group-hover:text-emerald-400 transition-colors`}>{post.title}</h5>

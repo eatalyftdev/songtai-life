@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 
@@ -55,16 +55,25 @@ export default function HeroCarousel() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dragX = useMotionValue(0);
 
-  // Fetch slides from Supabase
+  // Fetch slides from Supabase + subscribe to Realtime changes
   useEffect(() => {
-    supabase
-      .from("hero_carousel")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => {
-        if (data && data.length > 0) setSlides(data);
-      });
+    const fetchSlides = async () => {
+      const { data } = await supabase
+        .from("hero_carousel")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order");
+      if (data && data.length > 0) setSlides(data);
+    };
+
+    fetchSlides();
+
+    const channel = supabase
+      .channel("hero_carousel_realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "hero_carousel" }, fetchSlides)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   // Auto-advance

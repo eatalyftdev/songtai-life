@@ -33,7 +33,8 @@ import Analytics from "./components/Analytics";
 
 import { 
   ShoppingBag, X, Plus, Minus, Trash2, ShieldCheck, 
-  Sparkles, CheckCircle2, Smartphone, KeyRound, AlertCircle 
+  Sparkles, CheckCircle2, Smartphone, KeyRound, AlertCircle,
+  MapPin, User, ChevronRight
 } from "lucide-react";
 
 interface CartItem {
@@ -86,11 +87,15 @@ function AppContent() {
   
   // Checkout simulator overlay states
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutStep, setCheckoutStep] = useState<"phone" | "pin" | "processing" | "success">("phone");
+  const [checkoutStep, setCheckoutStep] = useState<"delivery" | "phone" | "pin" | "processing" | "success">("delivery");
   const [checkoutPhone, setCheckoutPhone] = useState("");
   const [checkoutPin, setCheckoutPin] = useState("");
   const [checkoutProvider, setCheckoutProvider] = useState<"mtn" | "orange">("mtn");
   const [currentOrderId, setCurrentOrderId] = useState("");
+  // Delivery fields
+  const [checkoutName, setCheckoutName] = useState("");
+  const [checkoutDeliveryAddress, setCheckoutDeliveryAddress] = useState("");
+  const [checkoutDeliveryNotes, setCheckoutDeliveryNotes] = useState("");
 
   const { user, userProfile } = useAuth();
   const navigate = useNavigate();
@@ -159,7 +164,11 @@ function AppContent() {
           phone: checkoutPhone,
           provider: checkoutProvider,
           userId: user?.id || "guest",
-          cart: cart.map(item => ({ id: item.product.id, name: item.product.name, qty: item.quantity }))
+          cart: cart.map(item => ({ id: item.product.id, name: item.product.name, qty: item.quantity })),
+          customerName: checkoutName || undefined,
+          customerPhone: checkoutPhone,
+          deliveryAddress: checkoutDeliveryAddress || undefined,
+          deliveryNotes: checkoutDeliveryNotes || undefined,
         })
       });
 
@@ -422,7 +431,10 @@ function AppContent() {
                   <button
                     onClick={() => {
                       setCheckoutOpen(true);
-                      setCheckoutStep("phone");
+                      setCheckoutStep("delivery");
+                      setCheckoutName("");
+                      setCheckoutDeliveryAddress("");
+                      setCheckoutDeliveryNotes("");
                     }}
                     className="w-full py-4 bg-[#006224] hover:bg-[#00531d] text-white rounded-2xl font-bold tracking-wide shadow-xl shadow-emerald-950/40 text-xs sm:text-sm cursor-pointer"
                   >
@@ -454,6 +466,61 @@ function AppContent() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* STEP 0: Delivery details */}
+            {checkoutStep === "delivery" && (
+              <form onSubmit={e => { e.preventDefault(); setCheckoutStep("phone"); }} className="space-y-4">
+                <p className="text-stone-400 text-xs leading-relaxed">
+                  Enter your delivery details. These help us process and deliver your order correctly.
+                </p>
+
+                <div>
+                  <label className="text-stone-400 text-xs block mb-1.5 font-bold flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" /> Your Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={checkoutName}
+                    onChange={(e) => setCheckoutName(e.target.value)}
+                    placeholder="e.g. Awa Fonkam"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-stone-400 text-xs block mb-1.5 font-bold flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Delivery Address *
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={checkoutDeliveryAddress}
+                    onChange={(e) => setCheckoutDeliveryAddress(e.target.value)}
+                    placeholder="Street, Neighbourhood, City&#10;e.g. Rue Joseph Mballa Elounden, Bastos, Yaoundé"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-stone-400 text-xs block mb-1.5 font-bold">Delivery Notes (optional)</label>
+                  <input
+                    type="text"
+                    value={checkoutDeliveryNotes}
+                    onChange={(e) => setCheckoutDeliveryNotes(e.target.value)}
+                    placeholder="e.g. Call on arrival, Green gate"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3.5 bg-[#006224] hover:bg-[#00531d] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+                >
+                  Continue to Payment <ChevronRight className="w-4 h-4" />
+                </button>
+              </form>
+            )}
 
             {/* STEP 1: Enter phone */}
             {checkoutStep === "phone" && (

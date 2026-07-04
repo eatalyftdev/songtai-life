@@ -37,6 +37,10 @@ export interface BrandingSettings {
   logo_dark_url: string;
   favicon_url: string;
 }
+export interface OrderNotificationsSettings {
+  whatsapp_number: string;
+  enabled: boolean;
+}
 
 export interface SiteSettings {
   whatsapp: WhatsAppSettings;
@@ -45,6 +49,7 @@ export interface SiteSettings {
   seoDefaults: SeoDefaults;
   contact: ContactSettings;
   branding: BrandingSettings;
+  orderNotifications: OrderNotificationsSettings;
 }
 
 const DEFAULTS: SiteSettings = {
@@ -58,18 +63,20 @@ const DEFAULTS: SiteSettings = {
   },
   contact: { phone: "", email: "", address_en: "", address_fr: "", map_url: "" },
   branding: { logo_url: "", logo_dark_url: "", favicon_url: "" },
+  orderNotifications: { whatsapp_number: "", enabled: false },
 };
 
 function parseSettings(rows: { key: string; value: any }[]): SiteSettings {
   const map: Record<string, any> = {};
   rows.forEach(r => { map[r.key] = r.value; });
   return {
-    whatsapp:    { ...DEFAULTS.whatsapp,    ...(map.whatsapp    ?? {}) },
-    analytics:   { ...DEFAULTS.analytics,   ...(map.analytics   ?? {}) },
-    socials:     { ...DEFAULTS.socials,     ...(map.socials     ?? {}) },
-    seoDefaults: { ...DEFAULTS.seoDefaults, ...(map.seo_defaults ?? {}) },
-    contact:     { ...DEFAULTS.contact,     ...(map.contact     ?? {}) },
-    branding:    { ...DEFAULTS.branding,    ...(map.branding    ?? {}) },
+    whatsapp:           { ...DEFAULTS.whatsapp,           ...(map.whatsapp            ?? {}) },
+    analytics:          { ...DEFAULTS.analytics,          ...(map.analytics           ?? {}) },
+    socials:            { ...DEFAULTS.socials,            ...(map.socials             ?? {}) },
+    seoDefaults:        { ...DEFAULTS.seoDefaults,        ...(map.seo_defaults        ?? {}) },
+    contact:            { ...DEFAULTS.contact,            ...(map.contact             ?? {}) },
+    branding:           { ...DEFAULTS.branding,           ...(map.branding            ?? {}) },
+    orderNotifications: { ...DEFAULTS.orderNotifications, ...(map.order_notifications ?? {}) },
   };
 }
 
