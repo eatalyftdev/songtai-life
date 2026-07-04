@@ -321,10 +321,14 @@ async function sendOrderWhatsApp(
   }
 }
 
+// ── Module-level app + PORT ───────────────────────────────────────────────────
+// Declared here (not inside startServer) so the Express app can be exported as
+// a Vercel serverless handler while still calling app.listen() on Replit/local.
+const app = express();
+const _parsedPort = parseInt(process.env.PORT ?? "");
+const PORT = Number.isInteger(_parsedPort) && _parsedPort > 0 && _parsedPort <= 65535 ? _parsedPort : 5000;
+
 async function startServer() {
-  const app = express();
-  const parsedPort = parseInt(process.env.PORT ?? "");
-  const PORT = Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 5000;
 
   // ── Security headers ────────────────────────────────────────────────────────
   // Mirrors the next.config.js headers() block, adapted for Express.
@@ -1029,11 +1033,30 @@ Answer concisely, helpfully, and professionally. Support both English and French
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening on host 0.0.0.0, port ${PORT}`);
-  });
 }
 
-startServer().catch((err) => {
-  console.error("Critical error starting backend server:", err);
+// ── Initialize middleware & routes (async) ────────────────────────────────────
+const serverReady = startServer().catch((err) => {
+  console.error("Critical error during server initialization:", err);
+  process.exit(1);
 });
+
+// ── Vercel serverless export ──────────────────────────────────────────────────
+// @vercel/node picks up the default export as the HTTP handler.
+// We await serverReady so all middleware and routes are registered before the
+// first request arrives, even though setup is asynchronous.
+export default async function handler(req: any, res: any) {
+  await serverReady;
+  return (app as any)(req, res);
+}
+
+// ── Replit / local: start the TCP listener ───────────────────────────────────
+// process.env.VERCEL is injected automatically by Vercel's runtime.
+// When absent (Replit, Docker, local dev) we start a normal HTTP server.
+if (!process.env.VERCEL) {
+  serverReady.then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server listening on host 0.0.0.0, port ${PORT}`);
+    });
+  });
+}

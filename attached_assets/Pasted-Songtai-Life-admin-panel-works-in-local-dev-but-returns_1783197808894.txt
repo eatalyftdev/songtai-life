@@ -1,0 +1,84 @@
+Songtai Life admin panel works in local dev but returns a 404 in production on Vercel, specifically at /admin/login. The Vercel deployment log shows the 404 originating at the Middleware stage, not a plain "page not found" — meaning something is failing before or during middleware execution in a way that only manifests on Vercel's production build. Diagnose and fix this systematically, in this order, and report which one was the actual cause once found.
+
+═══════════════════════════
+1. CASE-SENSITIVITY (the single most common cause of this exact symptom)
+═══════════════════════════
+Local dev on Windows/Mac uses a case-insensitive filesystem; Vercel's build runs on Linux, which is case-sensitive. A folder/file named with inconsistent casing anywhere in the path to this route will work locally and silently fail in production.
+
+Action: Run this to check for casing inconsistencies in the admin route path:
+```bash
+find . -path ./node_modules -prune -o -type d -iname "admin" -print
+find . -path ./node_modules -prune -o -type f -iname "login*" -print
+find . -path ./node_modules -prune -o -type f -iname "page.tsx" -print | grep -i admin
+```
+Confirm every folder and file in the path (`app/(admin)/admin/login/page.tsx` or wherever it actually lives) is lowercase and matches exactly what's imported/referenced elsewhere (middleware matchers, route configs, any hardcoded path strings). Also check the actual `import`/`require` statements referencing this route or its layout — a mismatched-case import can build fine locally and fail on Vercel.
+
+═══════════════════════════
+2. MIDDLEWARE MATCHER CONFIG
+═══════════════════════════
+View the current middleware.ts/middleware.js matcher config:
+```ts
+export const config = {
+  matcher: [...]
+}
+```
+Check whether the matcher pattern accidentally excludes `/admin/login` while including other `/admin/*` routes, or vice versa — a common bug is a negative-lookahead regex matcher (e.g., excluding `/admin` broadly to avoid an infinite redirect loop) that's slightly too aggressive and excludes the login page itself, which should always be reachable regardless of auth state. If the matcher is something like:
+```ts
+matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
+```
+that's broad and shouldn't be the cause — but if it's been narrowed to something specific to `/admin(?!/login)` or similar, that's a strong candidate.
+
+═══════════════════════════
+3. MIDDLEWARE RUNTIME ERROR SWALLOWED AS 404
+═══════════════════════════
+Check what the middleware actually does when hitting `/admin/login` — specifically, whether it tries to check auth/session state and, if a required environment variable (e.g., `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, or a service-role key used server-side) is missing or misnamed in the Vercel **production** environment (as opposed to your local `.env.local`), the middleware call could throw. Next.js Edge Middleware sometimes surfaces an unhandled throw as a 404 rather than a 500, which matches this symptom exactly.
+
+Action:
+1. In the Vercel dashboard → Project → Settings → Environment Variables, confirm every env var the middleware reads exists for the **Production** environment specifically (not just Preview/Development) — this is the single most common deploy-vs-dev discrepancy.
+2. Add explicit error handling/logging in middleware around any Supabase session check:
+```ts
+export async function middleware(request: NextRequest) {
+  try {
+    // existing session/role check logic
+  } catch (err) {
+    console.error('[middleware error]', err);
+    // fail open to the requested page rather than swallowing into a 404,
+    // OR redirect explicitly to /admin/login with a query param indicating the failure —
+    // never let an unhandled throw silently 404 a real route
+    return NextResponse.next();
+  }
+}
+```
+3. Redeploy and check Vercel's Function/Middleware logs (not just the request log already shared) for any thrown error on this specific request.
+
+═══════════════════════════
+4. ROUTE GROUP / LAYOUT CONFLICT
+═══════════════════════════
+If `/admin/login` lives inside a route group like `app/(admin)/admin/login/page.tsx`, confirm:
+- There isn't a duplicate `page.tsx` for the same URL path defined in a different route group (Next.js will pick one at build time, possibly not the one you expect, or fail the build silently on ambiguous routes).
+- The route group's `layout.tsx` (if any) doesn't itself redirect or gate unauthenticated users in a way that creates a loop — the `/admin/login` page specifically should NOT be wrapped in the same auth-gated layout as `/admin/dashboard`, `/admin/products`, etc. If `ProtectedRoute`/layout-level auth checks are applied at the route-group layout level rather than per-page, `/admin/login` needs its own ungated layout or an explicit bypass.
+
+═══════════════════════════
+5. BUILD OUTPUT VERIFICATION
+═══════════════════════════
+Run a local production build (not dev server) to reproduce the issue before redeploying:
+```bash
+rm -rf .next
+npm run build
+npm run start
+```
+Then hit `http://localhost:3000/admin/login` against this production build locally. If it 404s here too, the bug reproduces outside of Vercel entirely and is a build/routing issue, not a Vercel-specific quirk — narrows the investigation significantly. If it works fine in local `next build && next start` but still fails only on Vercel, the cause is environment-specific (env vars, case-sensitivity on their filesystem, or an edge-runtime-specific incompatibility in middleware).
+
+Also check the build output listing for this route:
+```bash
+npm run build
+# look for /admin/login in the route summary Next.js prints at the end of the build
+```
+If `/admin/login` is missing from that build output list entirely, the page isn't being included in the build — that points back to Section 1 (casing) or Section 4 (route conflict), not middleware at all, despite what the Vercel log implies.
+
+═══════════════════════════
+6. EDGE RUNTIME COMPATIBILITY
+═══════════════════════════
+If middleware specifies `export const runtime = 'edge'` (default for middleware) and imports anything not Edge-compatible (certain Node-only Supabase client configurations, `fs`, or other Node APIs), it can fail only in Vercel's actual Edge runtime while appearing to work in local dev (which may run middleware in a Node-compatible dev server context). Check for any Node-specific imports in middleware.ts and confirm the Supabase client used there is the Edge-safe variant (`@supabase/ssr` or equivalent), not one requiring Node APIs.
+
+DELIVERABLE: Identify which of the above is the actual root cause (report which one explicitly, don't just apply all fixes blindly), fix it, redeploy, and confirm /admin/login (and ideally the full /admin/* and /distributor/* route trees) load correctly in production, not just local dev.
