@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Search, HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useTranslation } from "react-i18next";
+import SEO from "../SEO";
 
 interface FaqCategory {
   id: string; nameEn: string; nameFr: string;
@@ -82,8 +83,22 @@ export default function FAQ() {
     return matchesSearch && matchesCategory;
   });
 
+  const faqPageJsonLd = items.length > 0 ? {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map(item => ({
+      "@type": "Question",
+      name: locale === "fr" && item.questionFr ? item.questionFr : item.questionEn,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: locale === "fr" && item.answerFr ? item.answerFr : item.answerEn,
+      },
+    })),
+  } : undefined;
+
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
+      {faqPageJsonLd && <SEO jsonLd={faqPageJsonLd} />}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
 
         {/* Header & Search */}

@@ -8,6 +8,8 @@ interface SEOProps {
   image?: string;
   url?: string;
   type?: "website" | "article" | "product";
+  /** Render noindex + nofollow — use on all auth-gated pages */
+  noindex?: boolean;
   /** Extra JSON-LD structured data object or array */
   jsonLd?: Record<string, any> | Record<string, any>[];
   /** Breadcrumb items for BreadcrumbList structured data */
@@ -26,6 +28,7 @@ export default function SEO({
   image,
   url,
   type = "website",
+  noindex = false,
   jsonLd,
   breadcrumbs,
 }: SEOProps) {
@@ -73,6 +76,7 @@ export default function SEO({
       <html lang={lang} />
       <title>{pageTitle}</title>
       <meta name="description" content={resolvedDesc} />
+      {noindex && <meta name="robots" content="noindex, nofollow" />}
       <link rel="canonical" href={canonical} />
 
       {/* hrefLang — helps search engines understand bilingual structure */}

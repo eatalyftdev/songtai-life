@@ -1,0 +1,145 @@
+Before making any changes, read the project's context file (ARCHITECTURE.md, CONTEXT.md, or CLAUDE.md — whichever exists at the repo root) in full. If multiple context files exist (e.g., a root-level one plus per-app ones in apps/web, apps/admin), read all of them. Do not propose or write any code until you've done this — the context file documents the existing Supabase schema, RLS policies, route structure, auth flow, and prior architectural decisions (Firebase→Supabase migration history, session-cookie patterns, RBAC design) that this change must be consistent with, not reinvent.
+
+If no such context file exists yet, STOP and first generate one by reading through the actual codebase (routes, middleware, Supabase schema/migrations, existing SEO setup) and writing ARCHITECTURE.md at the repo root summarizing: the route tree and which routes are public vs. auth-gated, the middleware auth/RBAC logic, the Supabase tables and RLS policies currently in place, and the current state of SEO (metadata, sitemap, robots.txt) — then proceed with the task below using that as the reference.
+
+═══════════════════════════
+TASK: Ensure every public-facing page and link is genuinely publicly accessible, and implement complete, correct SEO so Google (and other search engines) can crawl and index the entire public site.
+═══════════════════════════
+
+═══════════════════════════
+1. AUDIT — WHICH ROUTES SHOULD BE PUBLIC VS. GATED
+═══════════════════════════
+Using the context file's route map (or building one if it didn't already exist), classify every route into exactly one of:
+- **Public** — Home, About, Products (list + detail), Opportunity, Events (list + detail), Blog (list + detail), Gallery, Media Center, FAQ, Contact, Become a Distributor, and any static legal pages (Privacy/Terms).
+- **Auth-gated, should NOT be indexed** — /admin/*, /distributor/* (portal), any login/signup screens.
+
+For every route classified Public, verify — don't assume — that:
+- It's reachable with no session/cookie present at all (test in an incognito/private browser session, not just "should be public" in code comments).
+- Middleware does not apply any auth/role check to it. Given the earlier incident where a middleware matcher regex accidentally caught more routes than intended, re-check the current `middleware.ts` matcher config specifically against this list — any public route inadvertently caught by an auth-check matcher gets excluded explicitly.
+- No page-level or layout-level `redirect()` / client-side auth guard wraps it by mistake (a public page nested inside a route group whose layout has an auth check applied to the whole group is a common accidental-gating bug).
+
+For every route classified Auth-gated, verify it explicitly sends `noindex` (Section 3) and is disallowed in `robots.txt` (Section 4) — being unreachable isn't the same as being un-indexable; a URL can still get crawled and appear in search results if it 200s for anyone, even behind a login wall, unless explicitly told not to be indexed.
+
+═══════════════════════════
+2. FIX ANY BROKEN/DEAD LINKS SITE-WIDE
+═══════════════════════════
+Crawl the site's own internal links (navbar, mega menu, footer, in-content links on Blog/Products/Events, breadcrumbs) and confirm every `<a href>` / `<Link>` resolves to a real, working route — no leftover placeholder `href="#"` or a link to a route that was renamed/removed during earlier passes (e.g., the products.name → name_en migration, or any route restructuring from prior fixes). Fix any found. Pay particular attention to:
+- Footer Quick Links (confirmed public-only in an earlier pass — re-verify none regressed to pointing at an admin/distributor route)
+- Mega menu category links (pulling from `product_categories.slug` — confirm slugs are populated and unique after any backfill migrations)
+- Blog/Event/Product detail page "related content" links
+
+═══════════════════════════
+3. PER-PAGE METADATA — CORRECT, NOT JUST PRESENT
+═══════════════════════════
+For every Public route, confirm (via `generateMetadata` in Next.js App Router, or the equivalent) it sets:
+- `<title>` — unique per page, includes the page's specific content (product name, blog title, event name) not just "Songtai Life," pulled from the real localized field (`name_en`/`name_fr` etc.) for the active locale.
+- `<meta name="description">` — unique, specific, under ~160 characters, falling back to `site_settings.seo_defaults.meta_description` only on genuinely generic pages (not products/blog/events, which always have their own content to describe).
+- Open Graph (`og:title`, `og:description`, `og:image`, `og:url`, `og:type`) and Twitter Card tags on every shareable page — `og:image` uses the page's real featured image (product photo, blog featured image) via `MediaUploader`-hosted Supabase Storage URLs, falling back to `site_settings.seo_defaults.og_image_url` only when no page-specific image exists.
+- `<link rel="canonical">` pointing to the correct absolute URL for that exact page (including correct locale prefix).
+- `<link rel="alternate" hreflang="en">` and `hreflang="fr"` cross-linking the EN/FR versions of every page, plus an `hreflang="x-default"` pointing to whichever locale is the default.
+- Auth-gated routes (`/admin/*`, `/distributor/*`) explicitly set `<meta name="robots" content="noindex, nofollow">` — this must be present even though these routes will also be disallowed in robots.txt, since some crawlers respect meta robots even when they somehow reach a disallowed path via an external link.
+
+═══════════════════════════
+4. ROBOTS.TXT
+═══════════════════════════
+Confirm (or implement) a dynamically-served `robots.txt` — via a Next.js route handler or `app/robots.ts`, not a static file that can drift out of sync — reading the same route classification from Section 1:
+```ts
+// app/robots.ts
+import type { MetadataRoute } from 'next';
+
+export default function robots(): MetadataRoute.Robots {
+  return {
+    rules: {
+      userAgent: '*',
+      allow: '/',
+      disallow: ['/admin', '/distributor', '/api'],
+    },
+    sitemap: 'https://songtai-life.vercel.app/sitemap.xml', // update to production custom domain once live
+  };
+}
+```
+Verify this is reachable at `/robots.txt` in production and correctly lists every gated path — cross-check against the actual route tree from Section 1, not a guess.
+
+═══════════════════════════
+5. SITEMAP.XML — DYNAMIC, COMPLETE, ACCURATE
+═══════════════════════════
+Implement (or verify/fix if partially built already) a dynamic sitemap generated from real Supabase content, not a hand-maintained static list:
+```ts
+// app/sitemap.ts
+import type { MetadataRoute } from 'next';
+import { supabase } from '@/lib/supabase';
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = 'https://songtai-life.vercel.app'; // production domain
+
+  const staticPages = [
+    '', '/about', '/products', '/opportunity', '/events',
+    '/blog', '/gallery', '/media-center', '/faq', '/contact', '/become-a-distributor',
+  ].flatMap((path) =>
+    ['en', 'fr'].map((locale) => ({
+      url: `${baseUrl}/${locale}${path}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: path === '' ? 1.0 : 0.8,
+    }))
+  );
+
+  const { data: products } = await supabase.from('products').select('slug, updated_at').eq('is_active', true);
+  const productPages = (products ?? []).flatMap((p) =>
+    ['en', 'fr'].map((locale) => ({
+      url: `${baseUrl}/${locale}/products/${p.slug}`,
+      lastModified: p.updated_at ? new Date(p.updated_at) : new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    }))
+  );
+
+  const { data: posts } = await supabase.from('blog_posts').select('slug, published_at').eq('status', 'published');
+  const blogPages = (posts ?? []).flatMap((post) =>
+    ['en', 'fr'].map((locale) => ({
+      url: `${baseUrl}/${locale}/blog/${post.slug}`,
+      lastModified: post.published_at ? new Date(post.published_at) : new Date(),
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    }))
+  );
+
+  const { data: events } = await supabase.from('events').select('slug, start_at');
+  const eventPages = (events ?? []).flatMap((event) =>
+    ['en', 'fr'].map((locale) => ({
+      url: `${baseUrl}/${locale}/events/${event.slug}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.6,
+    }))
+  );
+
+  return [...staticPages, ...productPages, ...blogPages, ...eventPages];
+}
+```
+Confirm this is reachable at `/sitemap.xml` in production and actually reflects current Supabase content — spot-check a few product/blog slugs against what's live.
+
+═══════════════════════════
+6. STRUCTURED DATA (JSON-LD) — CONFIRM COVERAGE
+═══════════════════════════
+Verify every Public page type includes the correct schema (already speced in an earlier pass — this is a completeness check, not a re-spec):
+- `Organization` — sitewide, in the root layout, pulling logo/socials from `site_settings`.
+- `Product` — every product detail page (name, image, price in XAF, availability based on `is_active`/stock).
+- `Article` — every blog post (headline, image, datePublished, author).
+- `Event` — every event detail page (startDate, location, offers if applicable).
+- `BreadcrumbList` — every non-home page.
+- `LocalBusiness`/`ProfessionalService` — Contact and Become-a-Distributor pages, using `site_settings.contact` (already the single source of truth from an earlier pass).
+- `FAQPage` — the FAQ page, generated from the live `faqs` table (question/answer pairs) — this one may be missing since FAQ was only just made admin-editable; add it now if absent, since `FAQPage` schema is a genuine rich-result opportunity in Google search.
+Validate at least one page of each type against Google's Rich Results Test after implementing, and note any validation errors rather than assuming it's correct because it renders.
+
+═══════════════════════════
+7. FINAL VERIFICATION PASS
+═══════════════════════════
+- [ ] Every route from Section 1's "Public" list loads with zero session/cookies present (incognito test)
+- [ ] Every route from the "Auth-gated" list returns `noindex` and is listed in robots.txt disallow
+- [ ] `/robots.txt` and `/sitemap.xml` both resolve correctly in production (not just localhost)
+- [ ] No internal link on the public site points to a 404, a gated route, or a `#` placeholder
+- [ ] Google Search Console (if not already set up, flag this as a manual step for the site owner — verify domain ownership and submit the sitemap URL) — this itself doesn't get fixed by code, but confirm the sitemap it needs is now correct
+- [ ] Spot-check 5–10 pages (mix of static, product, blog, event) with a "View Page Source" check to confirm title/description/canonical/hreflang/JSON-LD are actually present in the initial HTML response (not only injected client-side after hydration, which some crawlers handle poorly) — Next.js App Router's `generateMetadata` should already guarantee this server-side, but verify rather than assume
+
+DELIVERABLE: Every public page confirmed genuinely reachable with no auth barrier, every admin/distributor route confirmed non-indexable (noindex + robots.txt disallow), a dynamic sitemap.xml reflecting live Supabase content across both locales, a dynamic robots.txt matching the actual route classification, complete and correct per-page metadata (title/description/OG/canonical/hreflang) sourced from real content, and validated structured data across every page type — report which context file was read, and note explicitly if none existed and one had to be generated first.

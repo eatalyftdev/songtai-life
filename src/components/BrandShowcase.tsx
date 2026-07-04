@@ -33,13 +33,18 @@ type BrandSubPage =
   | "blog" | "gallery" | "media" | "faq" | "contact" | "join" | "appointment";
 
 const PAGE_SEO: Record<string, { titleKey: string; descKey: string }> = {
-  home:     { titleKey: "hero.slogan",    descKey: "hero.sub" },
-  about:    { titleKey: "about.title",    descKey: "about.subtitle" },
-  products: { titleKey: "products.title", descKey: "products.subtitle" },
-  faq:      { titleKey: "faq.title",      descKey: "faq.subtitle" },
-  contact:  { titleKey: "contact.title",  descKey: "contact.subtitle" },
-  blog:     { titleKey: "blog.title",     descKey: "blog.subtitle" },
-  events:   { titleKey: "events.title",   descKey: "events.subtitle" },
+  home:        { titleKey: "hero.slogan",         descKey: "hero.sub" },
+  about:       { titleKey: "about.title",         descKey: "about.subtitle" },
+  products:    { titleKey: "products.title",      descKey: "products.subtitle" },
+  faq:         { titleKey: "faq.title",           descKey: "faq.subtitle" },
+  contact:     { titleKey: "contact.title",       descKey: "contact.subtitle" },
+  blog:        { titleKey: "blog.title",          descKey: "blog.subtitle" },
+  events:      { titleKey: "events.title",        descKey: "events.subtitle" },
+  gallery:     { titleKey: "gallery.title",       descKey: "gallery.subtitle" },
+  media:       { titleKey: "media.title",         descKey: "media.subtitle" },
+  opportunity: { titleKey: "opportunity.title",   descKey: "opportunity.subtitle" },
+  join:        { titleKey: "join.title",          descKey: "join.subtitle" },
+  appointment: { titleKey: "appointment.title",   descKey: "appointment.subtitle" },
 };
 
 export default function BrandShowcase({

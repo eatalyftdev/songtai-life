@@ -1016,6 +1016,106 @@ Answer concisely, helpfully, and professionally. Support both English and French
     res.json({ newUrl });
   }));
 
+  // ── robots.txt ──────────────────────────────────────────────────────────────
+  app.get("/robots.txt", (_req, res) => {
+    const base = process.env.SITE_URL ?? "https://songtailife.cm";
+    res.type("text/plain").send(
+      [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin",
+        "Disallow: /distributor",
+        "Disallow: /api",
+        "",
+        `Sitemap: ${base}/sitemap.xml`,
+      ].join("\n")
+    );
+  });
+
+  // ── sitemap.xml — dynamic from Supabase content ──────────────────────────
+  app.get("/sitemap.xml", async (_req, res) => {
+    const base = process.env.SITE_URL ?? "https://songtailife.cm";
+    const now = new Date().toISOString();
+
+    try {
+      const [{ data: products }, { data: posts }, { data: events }] = await Promise.all([
+        db
+          ? db.from("products").select("slug, updated_at").eq("is_active", true)
+          : { data: [] },
+        db
+          ? db.from("blog_posts").select("slug, published_at").eq("status", "published")
+          : { data: [] },
+        db
+          ? db.from("events").select("slug, start_at").eq("is_active", true)
+          : { data: [] },
+      ]);
+
+      const staticUrls = [
+        { loc: base, priority: "1.0", changefreq: "weekly" },
+        { loc: `${base}/?section=about`,       priority: "0.7", changefreq: "monthly" },
+        { loc: `${base}/?section=products`,    priority: "0.9", changefreq: "weekly" },
+        { loc: `${base}/?section=events`,      priority: "0.8", changefreq: "weekly" },
+        { loc: `${base}/?section=blog`,        priority: "0.8", changefreq: "weekly" },
+        { loc: `${base}/?section=gallery`,     priority: "0.6", changefreq: "monthly" },
+        { loc: `${base}/?section=opportunity`, priority: "0.8", changefreq: "monthly" },
+        { loc: `${base}/?section=faq`,         priority: "0.7", changefreq: "monthly" },
+        { loc: `${base}/?section=contact`,     priority: "0.6", changefreq: "yearly" },
+        { loc: `${base}/?section=media`,       priority: "0.6", changefreq: "monthly" },
+      ];
+
+      const productUrls = (products ?? []).map((p: any) => ({
+        loc: `${base}/?section=products&slug=${p.slug}`,
+        lastmod: p.updated_at ? new Date(p.updated_at).toISOString() : now,
+        priority: "0.7",
+        changefreq: "weekly",
+      }));
+
+      const postUrls = (posts ?? []).map((p: any) => ({
+        loc: `${base}/?section=blog&slug=${p.slug}`,
+        lastmod: p.published_at ? new Date(p.published_at).toISOString() : now,
+        priority: "0.6",
+        changefreq: "monthly",
+      }));
+
+      const eventUrls = (events ?? []).map((e: any) => ({
+        loc: `${base}/?section=events&slug=${e.slug}`,
+        lastmod: e.start_at ? new Date(e.start_at).toISOString() : now,
+        priority: "0.6",
+        changefreq: "weekly",
+      }));
+
+      const allUrls = [
+        ...staticUrls.map(u => ({ ...u, lastmod: now })),
+        ...productUrls,
+        ...postUrls,
+        ...eventUrls,
+      ];
+
+      const xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+        '        xmlns:xhtml="http://www.w3.org/1999/xhtml">',
+        ...allUrls.map(u => [
+          "  <url>",
+          `    <loc>${u.loc}</loc>`,
+          `    <lastmod>${u.lastmod}</lastmod>`,
+          `    <changefreq>${u.changefreq}</changefreq>`,
+          `    <priority>${u.priority}</priority>`,
+          "    <!-- EN alternate -->",
+          `    <xhtml:link rel="alternate" hreflang="en" href="${u.loc}${u.loc.includes("?") ? "&amp;" : "?"}lang=en"/>`,
+          "    <!-- FR alternate -->",
+          `    <xhtml:link rel="alternate" hreflang="fr" href="${u.loc}${u.loc.includes("?") ? "&amp;" : "?"}lang=fr"/>`,
+          "  </url>",
+        ].join("\n")),
+        "</urlset>",
+      ].join("\n");
+
+      res.type("application/xml").send(xml);
+    } catch (err: any) {
+      res.status(500).type("text/plain").send(`Sitemap generation error: ${err.message}`);
+    }
+  });
+
   // Vite dev middleware / production static files
   if (process.env.NODE_ENV !== "production") {
     console.log("Starting server in development mode...");

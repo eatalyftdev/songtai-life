@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import AdminSidebar from "./AdminSidebar";
 import AdminTopbar from "./AdminTopbar";
 
@@ -20,6 +21,10 @@ export default function AdminLayout({ theme, toggleTheme }: AdminLayoutProps) {
 
   return (
     <div className="flex h-screen bg-stone-950 text-white overflow-hidden">
+      <Helmet>
+        <meta name="robots" content="noindex, nofollow" />
+        <title>Admin — Songtai Life</title>
+      </Helmet>
       <AdminSidebar
         collapsed={collapsed}
         onCollapse={setCollapsed}

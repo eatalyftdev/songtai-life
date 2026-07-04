@@ -1,5 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "../../context/AuthContext";
 import { 
   Smartphone, Mail, Lock, Sparkles, User, Award, 
@@ -75,7 +76,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
   return (
     <div className="min-h-screen bg-stone-950 flex flex-col justify-center items-center p-4 font-sans select-none antialiased">
       <div className="absolute inset-0 bg-radial-gradient from-emerald-950/20 to-stone-950 pointer-events-none" />
-      
+      <Helmet><meta name="robots" content="noindex, nofollow" /><title>Distributor Login — Songtai Life</title></Helmet>
       <div className="w-full max-w-md bg-stone-900 border border-stone-850 rounded-[32px] p-8 shadow-2xl relative z-10 text-left">
         {/* Brand Header */}
         <div className="text-center mb-8">
@@ -289,7 +290,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
   return (
     <div className="min-h-screen bg-stone-950 flex flex-col justify-center items-center p-4 font-sans select-none antialiased">
       <div className="absolute inset-0 bg-radial-gradient from-emerald-950/20 to-stone-950 pointer-events-none" />
-      
+      <Helmet><meta name="robots" content="noindex, nofollow" /><title>Become a Distributor — Songtai Life</title></Helmet>
       <div className="w-full max-w-md bg-stone-900 border border-stone-850 rounded-[32px] p-8 shadow-2xl relative z-10 text-left">
         <div className="text-center mb-8">
           <span className="text-[10px] uppercase tracking-widest text-[#ecc246] font-bold">Unilevel Matrix Recruitment</span>
@@ -419,6 +420,7 @@ export function AdminLogin({ addNotification }: { addNotification: any }) {
   return (
     <div className="min-h-screen bg-stone-950 flex flex-col justify-center items-center p-4 font-sans select-none antialiased">
       <div className="absolute inset-0 bg-radial-gradient from-yellow-950/25 to-stone-950 pointer-events-none" />
+      <Helmet><meta name="robots" content="noindex, nofollow" /><title>Admin Login — Songtai Life</title></Helmet>
       
       <div className="w-full max-w-md bg-stone-900 border border-yellow-950/20 rounded-[32px] p-8 shadow-2xl relative z-10 text-left">
         <div className="text-center mb-8">
