@@ -24,6 +24,7 @@ const BLANK: Partial<Product> = {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -35,7 +36,11 @@ export default function ProductsPage() {
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+    const [{ data }, { data: cats }] = await Promise.all([
+      supabase.from("products").select("*").order("created_at", { ascending: false }),
+      supabase.from("product_categories").select("id, name, name_en").eq("is_active", true).order("display_order"),
+    ]);
+    setCategories((cats ?? []).map((c: any) => ({ id: c.id, name: c.name ?? c.name_en ?? "" })));
     setProducts((data ?? []).map(p => ({
       id: p.id, slug: p.slug ?? "", nameEn: p.name_en ?? "", nameFr: p.name_fr ?? "",
       descriptionEn: p.description_en ?? "", descriptionFr: p.description_fr ?? "",
@@ -76,6 +81,7 @@ export default function ProductsPage() {
       pv_points: Number(form.pvPoints || 0), stock: Number(form.stock || 0),
       images: form.images ?? [], is_active: form.isActive ?? true,
       is_featured: form.isFeatured ?? false, featured_order: Number(form.featuredOrder ?? 0),
+      category_id: form.categoryId || null,
     };
     if (editing) {
       await supabase.from("products").update(payload).eq("id", editing.id);
@@ -223,11 +229,26 @@ export default function ProductsPage() {
                 className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]" />
             </div>
           </div>
-          <div>
-            <label className="text-stone-400 text-xs block mb-1.5">Slug</label>
-            <input value={form.slug ?? ""} onChange={e => f("slug", e.target.value)}
-              placeholder="auto-generated if empty"
-              className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-stone-400 text-xs block mb-1.5">Slug</label>
+              <input value={form.slug ?? ""} onChange={e => f("slug", e.target.value)}
+                placeholder="auto-generated if empty"
+                className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]" />
+            </div>
+            <div>
+              <label className="text-stone-400 text-xs block mb-1.5">Category</label>
+              <select
+                value={form.categoryId ?? ""}
+                onChange={e => f("categoryId", e.target.value || null)}
+                className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]"
+              >
+                <option value="">— None —</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div>
             <label className="text-stone-400 text-xs block mb-1.5">Description (EN)</label>

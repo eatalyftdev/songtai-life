@@ -41,7 +41,7 @@ function mapDbRow(row: any): LiveProduct {
   };
 }
 
-// Fallback mapping from seed data
+// Fallback mapping from seed data — only used when Supabase is unreachable
 const FALLBACK: LiveProduct[] = PRODUCTS_SEED.map(p => ({
   id: p.id,
   slug: p.slug,
@@ -60,7 +60,9 @@ export default function Products({ onAddToCart }: ProductsProps) {
   const { i18n } = useTranslation();
   const locale = i18n.language?.startsWith("fr") ? "fr" : "en";
 
-  const [products, setProducts] = useState<LiveProduct[]>(FALLBACK);
+  // Start empty — seed is only used if Supabase is unreachable
+  const [products, setProducts] = useState<LiveProduct[]>([]);
+  const [dbLoaded, setDbLoaded] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<LiveProduct | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
@@ -74,7 +76,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
         .select("name, name_fr, display_order")
         .eq("is_active", true)
         .order("display_order", { ascending: true });
-      if (data && data.length > 0) {
+      if (data) {
         setDbCategories(data.map((c: any) =>
           locale === "fr" ? (c.name_fr || c.name || "") : (c.name || "")
         ));
@@ -92,8 +94,13 @@ export default function Products({ onAddToCart }: ProductsProps) {
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        setProducts(data.map(mapDbRow));
+      if (!error) {
+        // Always update from DB — even if empty (handles deletes)
+        setProducts((data ?? []).map(mapDbRow));
+        setDbLoaded(true);
+      } else if (!dbLoaded) {
+        // Only fall back to seeds on first load if Supabase is unreachable
+        setProducts(FALLBACK);
       }
     };
 
@@ -105,7 +112,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Use DB-driven category list; fall back to deriving from product data
   const categories = dbCategories.length > 0

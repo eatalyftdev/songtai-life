@@ -28,11 +28,11 @@ const NAV_ITEMS = [
   { id: "contact",  labelKey: "nav.contact" },
 ];
 
-const PRODUCT_CATEGORIES = [
-  { id: "health",      icon: "🌿", labelKey: "home.cat.health" },
-  { id: "beauty",      icon: "✨", labelKey: "home.cat.beauty" },
-  { id: "agriculture", icon: "🌾", labelKey: "home.cat.agriculture" },
-];
+// Category icons keyed by slug — fallback to 🛍️ for unknown slugs
+const CATEGORY_ICONS: Record<string, string> = {
+  health: "🌿", beauty: "✨", agriculture: "🌾", wellness: "💚",
+  nutrition: "🍃", cosmetics: "💄", farming: "🚜",
+};
 
 export default function Navbar({
   activeTab, setActiveTab, brandPage, setBrandPage,
@@ -44,6 +44,27 @@ export default function Navbar({
   const [megaOpen, setMegaOpen] = useState(false);
   const megaRef = useRef<HTMLDivElement>(null);
   const locale = i18nInstance.language?.startsWith("fr") ? "fr" : "en";
+  const [navCategories, setNavCategories] = useState<{ id: string; slug: string; nameEn: string; nameFr: string }[]>([]);
+
+  // Fetch live categories from Supabase + keep in sync via Realtime
+  useEffect(() => {
+    const fetchCats = async () => {
+      const { data } = await supabase
+        .from("product_categories")
+        .select("id, slug, name, name_fr")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+      if (data) setNavCategories(data.map((c: any) => ({
+        id: c.id, slug: c.slug ?? "",
+        nameEn: c.name ?? "", nameFr: c.name_fr ?? "",
+      })));
+    };
+    fetchCats();
+    const ch = supabase.channel("navbar_cats_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_categories" }, fetchCats)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -148,15 +169,15 @@ export default function Navbar({
                           <p className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-3">
                             {t("nav.categories")}
                           </p>
-                          {PRODUCT_CATEGORIES.map(cat => (
+                          {navCategories.map(cat => (
                             <button
                               key={cat.id}
                               onClick={() => handleMenuClick("products")}
                               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ${megaItem} text-left transition-colors group`}
                             >
-                              <span className="text-lg">{cat.icon}</span>
+                              <span className="text-lg">{CATEGORY_ICONS[cat.slug] ?? "🛍️"}</span>
                               <p className={`text-sm font-semibold ${navText} group-hover:text-[#ecc246] transition-colors truncate`}>
-                                {t(cat.labelKey)}
+                                {locale === "fr" && cat.nameFr ? cat.nameFr : cat.nameEn}
                               </p>
                             </button>
                           ))}
