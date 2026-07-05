@@ -1,25 +1,60 @@
-import { useState, useEffect } from "react";
-import { EventSeed, EVENTS_SEED } from "../../data/mockData";
+import { useState, useEffect, useCallback } from "react";
 import { Clock, MapPin, Users, Calendar, ArrowLeft, CheckCircle } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+import { useTranslation } from "react-i18next";
+
+interface DBEvent {
+  id: string;
+  slug: string;
+  title: string;
+  start_at: string;
+  end_at: string | null;
+  location: string | null;
+  capacity: number | null;
+  description: string | null;
+  image: string | null;
+}
 
 interface EventsProps {
   addNotification: (msg: string, type: "success" | "info" | "gold") => void;
 }
 
 export default function Events({ addNotification }: EventsProps) {
-  const [selectedEvent, setSelectedEvent] = useState<EventSeed | null>(null);
+  const { t } = useTranslation();
+  const [allEvents, setAllEvents] = useState<DBEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEvent, setSelectedEvent] = useState<DBEvent | null>(null);
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
   const [registeredEvents, setRegisteredEvents] = useState<string[]>([]);
-
-  // Real-time countdown calculation
   const [countdowns, setCountdowns] = useState<{ [key: string]: string }>({});
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("events")
+      .select("*")
+      .order("start_at", { ascending: true });
+    setAllEvents(data ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchEvents();
+    const ch = supabase
+      .channel("public_events_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, fetchEvents)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [fetchEvents]);
+
+  // Countdown timer
   useEffect(() => {
     const calc = () => {
       const updated: { [key: string]: string } = {};
-      EVENTS_SEED.forEach(ev => {
-        const diff = new Date(ev.startAt).getTime() - Date.now();
+      allEvents.forEach(ev => {
+        const diff = new Date(ev.start_at).getTime() - Date.now();
         if (diff <= 0) {
-          updated[ev.id] = "Live Now";
+          updated[ev.id] = t("events.live", "Live Now");
         } else {
           const days = Math.floor(diff / (1000 * 60 * 60 * 24));
           const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -33,7 +68,12 @@ export default function Events({ addNotification }: EventsProps) {
     calc();
     const interval = setInterval(calc, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [allEvents, t]);
+
+  const now = Date.now();
+  const upcomingEvents = allEvents.filter(ev => new Date(ev.start_at).getTime() >= now);
+  const pastEvents = allEvents.filter(ev => new Date(ev.start_at).getTime() < now).reverse();
+  const activeList = activeTab === "upcoming" ? upcomingEvents : pastEvents;
 
   const handleRegister = (eventId: string, eventTitle: string) => {
     if (registeredEvents.includes(eventId)) return;
@@ -41,52 +81,32 @@ export default function Events({ addNotification }: EventsProps) {
     addNotification(`Successfully registered for: ${eventTitle}! Entrance passes sent to your email.`, "success");
   };
 
-  // Past events (simulated by setting start date in the past)
-  const PAST_EVENTS: EventSeed[] = [
-    {
-      id: "event-past-1",
-      slug: "yaounde-launch-summit",
-      title: "Sovereign launch & wellness seminar",
-      startAt: "2026-03-12T10:00:00Z",
-      endAt: "2026-03-12T17:00:00Z",
-      location: "Hilton Hotel, Yaoundé",
-      capacity: 300,
-      description: "Official introductory seminar introducing direct-marketing overrides, unilevel compensation models, and raw materials sourcing across northern Cameroon crops.",
-      image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=800"
-    },
-    {
-      id: "event-past-2",
-      slug: "douala-youth-business",
-      title: "Youth Digital Entrepreneurship Forum",
-      startAt: "2026-04-05T14:00:00Z",
-      endAt: "2026-04-05T19:00:00Z",
-      location: "Canal Olympia, Bessengue, Douala",
-      capacity: 800,
-      description: "A digital-first direct selling panel explaining how Cameroon youth can scale unilevel distributor accounts using smartphones and WhatsApp groups.",
-      image: "https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&q=80&w=800"
-    }
-  ];
-
   if (selectedEvent) {
     const ev = selectedEvent;
-    const isPast = activeTab === "past";
+    const isPast = new Date(ev.start_at).getTime() < now;
     const isRegistered = registeredEvents.includes(ev.id);
 
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 relative z-10">
-          
+
           <button
             onClick={() => setSelectedEvent(null)}
-            className="flex items-center gap-2 text-stone-400 hover:text-white font-bold text-xs cursor-pointer group"
+            className="flex items-center gap-2 text-stone-400 hover:text-white font-bold text-xs cursor-pointer group transition-colors duration-150"
           >
-            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+            <ArrowLeft className="w-4 h-4 transition-transform duration-150 group-hover:-translate-x-0.5" />
             <span>Back to Events Hub</span>
           </button>
 
           <div className="bg-stone-900/20 border border-stone-850 p-6 sm:p-8 rounded-[32px] space-y-6">
             <div className="relative h-64 sm:h-80 bg-stone-950 rounded-2xl overflow-hidden border border-stone-850">
-              <img src={ev.image} alt={ev.title} className="w-full h-full object-cover" />
+              {ev.image ? (
+                <img src={ev.image} alt={ev.title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-stone-900 flex items-center justify-center">
+                  <Calendar className="w-12 h-12 text-stone-700" />
+                </div>
+              )}
               {!isPast && (
                 <div className="absolute top-4 left-4 px-4 py-1.5 bg-stone-950/90 backdrop-blur-md border border-[#C9A227] text-[#C9A227] font-mono text-xs font-bold rounded-full flex items-center gap-1.5">
                   <Clock className="w-4 h-4" />
@@ -98,10 +118,12 @@ export default function Events({ addNotification }: EventsProps) {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
                 <Calendar className="w-4 h-4" />
-                <span>{new Date(ev.startAt).toLocaleDateString("en-US", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                <span>{new Date(ev.start_at).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white">{ev.title}</h1>
-              <p className="text-stone-300 text-xs sm:text-sm leading-relaxed">{ev.description}</p>
+              {ev.description && (
+                <p className="text-stone-300 text-xs sm:text-sm leading-relaxed">{ev.description}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-stone-900 text-xs text-stone-400">
@@ -109,7 +131,7 @@ export default function Events({ addNotification }: EventsProps) {
                 <MapPin className="w-5 h-5 text-[#C9A227] flex-shrink-0" />
                 <div>
                   <span className="text-[10px] text-stone-500 block uppercase font-bold">Location</span>
-                  <span className="text-white font-semibold">{ev.location}</span>
+                  <span className="text-white font-semibold">{ev.location || "TBD"}</span>
                 </div>
               </div>
 
@@ -117,7 +139,7 @@ export default function Events({ addNotification }: EventsProps) {
                 <Users className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                 <div>
                   <span className="text-[10px] text-stone-500 block uppercase font-bold">Max Capacity</span>
-                  <span className="text-white font-semibold">{ev.capacity} Seats</span>
+                  <span className="text-white font-semibold">{ev.capacity ?? "—"} Seats</span>
                 </div>
               </div>
 
@@ -125,7 +147,10 @@ export default function Events({ addNotification }: EventsProps) {
                 <Clock className="w-5 h-5 text-[#C9A227] flex-shrink-0" />
                 <div>
                   <span className="text-[10px] text-stone-500 block uppercase font-bold">Event Time</span>
-                  <span className="text-white font-semibold">09:00 - 17:00 (WAT)</span>
+                  <span className="text-white font-semibold">
+                    {new Date(ev.start_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                    {ev.end_at ? ` — ${new Date(ev.end_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                  </span>
                 </div>
               </div>
             </div>
@@ -136,7 +161,7 @@ export default function Events({ addNotification }: EventsProps) {
                   disabled={isRegistered}
                   onClick={() => handleRegister(ev.id, ev.title)}
                   className={`w-full py-4 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
-                    isRegistered 
+                    isRegistered
                       ? "bg-emerald-950/40 border border-emerald-900/30 text-emerald-400"
                       : "bg-[#0A7D32] hover:bg-[#086327] text-white"
                   }`}
@@ -153,18 +178,15 @@ export default function Events({ addNotification }: EventsProps) {
               </div>
             )}
           </div>
-
         </div>
       </div>
     );
   }
 
-  const activeList = activeTab === "upcoming" ? EVENTS_SEED : PAST_EVENTS;
-
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
-        
+
         {/* Title */}
         <div className="border-b border-stone-900 pb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div className="space-y-1.5">
@@ -175,22 +197,16 @@ export default function Events({ addNotification }: EventsProps) {
 
           <div className="flex gap-2 p-1 bg-stone-950 rounded-xl border border-stone-900 w-fit">
             <button
-              onClick={() => {
-                setActiveTab("upcoming");
-                setSelectedEvent(null);
-              }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              onClick={() => { setActiveTab("upcoming"); setSelectedEvent(null); }}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
                 activeTab === "upcoming" ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
               }`}
             >
               Upcoming Summits
             </button>
             <button
-              onClick={() => {
-                setActiveTab("past");
-                setSelectedEvent(null);
-              }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              onClick={() => { setActiveTab("past"); setSelectedEvent(null); }}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
                 activeTab === "past" ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
               }`}
             >
@@ -199,43 +215,71 @@ export default function Events({ addNotification }: EventsProps) {
           </div>
         </div>
 
-        {/* List of cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {activeList.map(ev => (
-            <div 
-              key={ev.id}
-              onClick={() => setSelectedEvent(ev)}
-              className="bg-stone-900/20 border border-stone-850 rounded-[24px] overflow-hidden group flex flex-col justify-between cursor-pointer hover:bg-stone-900/35 transition-all"
-            >
-              <div>
-                <div className="relative h-48 bg-stone-950">
-                  <img src={ev.image} alt={ev.title} className="w-full h-full object-cover opacity-85" />
-                  {activeTab === "upcoming" && (
-                    <div className="absolute top-4 left-4 px-3 py-1 bg-stone-950/90 backdrop-blur-md border border-[#C9A227]/40 text-[#C9A227] font-mono text-[10px] font-bold rounded-full flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span>{countdowns[ev.id] || "Calculating..."}</span>
-                    </div>
-                  )}
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-stone-900/20 border border-stone-850 rounded-[24px] overflow-hidden h-72 animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && activeList.length === 0 && (
+          <div className="text-center py-20 text-stone-500">
+            <Calendar className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p className="font-semibold text-sm">
+              {activeTab === "upcoming" ? "No upcoming events scheduled yet." : "No past events to display."}
+            </p>
+          </div>
+        )}
+
+        {/* Cards */}
+        {!loading && activeList.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {activeList.map(ev => (
+              <div
+                key={ev.id}
+                onClick={() => setSelectedEvent(ev)}
+                className="bg-stone-900/20 border border-stone-850 rounded-[24px] overflow-hidden group flex flex-col justify-between cursor-pointer hover:bg-stone-900/35 hover:border-stone-700 transition-all duration-200"
+              >
+                <div>
+                  <div className="relative h-48 bg-stone-950">
+                    {ev.image ? (
+                      <img src={ev.image} alt={ev.title} className="w-full h-full object-cover opacity-85 transition-transform duration-300 group-hover:scale-[1.03]" />
+                    ) : (
+                      <div className="w-full h-full bg-stone-900 flex items-center justify-center">
+                        <Calendar className="w-10 h-10 text-stone-700" />
+                      </div>
+                    )}
+                    {activeTab === "upcoming" && (
+                      <div className="absolute top-4 left-4 px-3 py-1 bg-stone-950/90 backdrop-blur-md border border-[#C9A227]/40 text-[#C9A227] font-mono text-[10px] font-bold rounded-full flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{countdowns[ev.id] || "Calculating..."}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-6 space-y-3">
+                    <span className="text-[10px] uppercase font-bold text-emerald-400 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {new Date(ev.start_at).toLocaleDateString()}
+                    </span>
+                    <h4 className="font-extrabold text-white text-base leading-snug group-hover:text-emerald-400 transition-colors duration-150 line-clamp-1">{ev.title}</h4>
+                    {ev.description && (
+                      <p className="text-stone-400 text-xs line-clamp-2 leading-relaxed">{ev.description}</p>
+                    )}
+                  </div>
                 </div>
 
-                <div className="p-6 space-y-3">
-                  <span className="text-[10px] uppercase font-bold text-emerald-400 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {new Date(ev.startAt).toLocaleDateString()}
-                  </span>
-                  <h4 className="font-extrabold text-white text-base leading-snug group-hover:text-emerald-400 transition-colors line-clamp-1">{ev.title}</h4>
-                  <p className="text-stone-400 text-xs line-clamp-2 leading-relaxed">{ev.description}</p>
+                <div className="px-6 pb-6 pt-4 border-t border-stone-900 flex items-center justify-between text-xs text-stone-500">
+                  <span>{ev.location || "Location TBD"}</span>
+                  {ev.capacity && <span className="font-bold text-stone-400">Seats: {ev.capacity}</span>}
                 </div>
               </div>
-
-              <div className="px-6 pb-6 pt-4 border-t border-stone-900 flex items-center justify-between text-xs text-stone-500">
-                <span>{ev.location}</span>
-                <span className="font-bold text-stone-400">Seats: {ev.capacity}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

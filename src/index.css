@@ -5,6 +5,30 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ── Themed text color CSS variables ─────────────────────────────────────
+   WCAG AA compliant across both light and dark backgrounds.
+   Use these for accent-colored text instead of raw brand hex values:
+     - text-[color:var(--text-accent-gold)]
+     - text-[color:var(--text-accent-green)]
+   ─────────────────────────────────────────────────────────────────────── */
+:root {
+  --text-primary:       #0B0F0C;    /* near-black for light mode body copy */
+  --text-secondary:     #4B5563;
+  --text-on-solid:      #FFFFFF;    /* text on colored solid button/badge fill */
+  --text-accent-gold:   #92751C;    /* AA on white: #C9A227 fails, this passes */
+  --text-accent-green:  #0A7D32;    /* AA on white */
+}
+
+[data-theme='dark'],
+.dark-mode,
+:root:not(.light-theme) {
+  --text-primary:       #F5F5F0;    /* warm off-white for dark mode body copy */
+  --text-secondary:     #A3A8A0;
+  --text-on-solid:      #FFFFFF;
+  --text-accent-gold:   #E0C158;    /* lighter gold — AA on near-black bg */
+  --text-accent-green:  #4ADE80;    /* lighter green — #0A7D32 fails on dark */
+}
+
 /* Light Theme Variable Overrides */
 .light-theme {
   --color-stone-950: #FFFFFF !important;

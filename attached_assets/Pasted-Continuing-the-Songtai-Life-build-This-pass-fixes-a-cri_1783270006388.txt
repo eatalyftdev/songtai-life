@@ -1,0 +1,137 @@
+Continuing the Songtai Life build. This pass fixes a critical bug — admin deletions (products, testimonials, and others) not reflecting on the public site/homepage — confirms Events and Gallery are genuinely backed by real Supabase tables with working admin sync (not partially mocked), verifies payments end-to-end with real test transactions, fixes theme contrast so text is always legible in both light and dark mode including colored text, adds hero text animation and hover micro-interactions sitewide, and makes every homepage section fully backend-editable. Read the project's ARCHITECTURE.md/context file first, per the standing rule, before touching any code.
+
+═══════════════════════════
+1. ROOT-CAUSE THE "DELETES DON'T REFLECT ON FRONTEND" BUG — DIAGNOSE BEFORE FIXING
+═══════════════════════════
+This symptom (admin panel deletes/updates work, but the public site keeps showing stale data) has a small number of likely causes — check all of them, don't just apply one fix blindly:
+
+**a) Public pages are using ISR/SSG without on-demand revalidation.** If Products/Testimonials/Gallery/Events pages use `revalidate: 60` (or similar) instead of fetching fresh on every request or subscribing to Realtime, a delete in the admin panel won't show up until the next ISR window — which can look like "it's just broken" rather than "it's slow." Fix: either (i) reduce revalidate windows for content that changes often, or (ii) — the correct fix — trigger **on-demand revalidation** from every admin write:
+```ts
+// After any admin insert/update/delete in useAdminResource, call:
+await fetch('/api/revalidate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ path: '/products' }), // or /gallery, /events, /, etc.
+});
+```
+```ts
+// app/api/revalidate/route.ts
+import { revalidatePath } from 'next/cache';
+export async function POST(req: Request) {
+  const { path } = await req.json();
+  revalidatePath(path);
+  return Response.json({ revalidated: true, path });
+}
+```
+Map every admin resource to the specific public path(s) it affects (a product delete should revalidate `/products`, `/products/[slug]`, AND `/` since Featured Products lives on the homepage) — build this mapping explicitly rather than guessing per-case.
+
+**b) The homepage specifically caches independently of the resource's own list page.** Even if `/products` revalidates correctly, the homepage's Featured Products / Testimonials / Gallery Teaser / Upcoming Events sections may be fetched with their own separate cache that isn't included in the revalidation call above. Explicitly include `/` (and `/en`, `/fr` if locale-prefixed routing means these are distinct cache entries) in the revalidation path list for every resource type shown on the homepage.
+
+**c) Deleted records aren't actually being deleted — check for soft-delete vs hard-delete mismatches.** If a table has a `deleted_at` or `is_active`/`is_published` column, confirm the admin "delete" action actually sets this (or hard-deletes the row) AND that every public-facing query filters on it correctly (`.eq('is_active', true)` / `.is('deleted_at', null)`). A common bug: admin UI shows the item as gone because ITS OWN query filters on a flag, while the public query doesn't filter on that same flag and still returns the row.
+
+**d) Client-side data fetched once on mount with no Realtime subscription and no revalidation.** For any component that fetches with a one-time `useEffect` + `supabase.from(...).select()` and never re-fetches, add a Supabase Realtime subscription (same pattern already used in the admin panel) so deletes propagate live to any client with the page open, in addition to the ISR fix in (a)/(b) which handles fresh server-rendered visits.
+
+**e) Browser or CDN caching on the response itself.** Check response headers on the affected public pages for aggressive `cache-control` (e.g., `s-maxage` set very high with no matching revalidation tag) — Vercel's Edge Cache can hold a stale response independently of Next.js's own ISR cache if these aren't configured consistently.
+
+Fix all applicable causes above, then explicitly test: delete a product/testimonial/gallery image/event in the admin panel, and confirm it disappears from the relevant public page(s) and the homepage within a few seconds without a hard refresh, in an incognito session (to rule out any client-side cache masking the real behavior).
+
+═══════════════════════════
+2. VERIFY EVENTS AND GALLERY ARE GENUINELY SUPABASE-BACKED, NOT PARTIALLY MOCKED
+═══════════════════════════
+Confirm both tables exist with the schema already specified in earlier passes:
+```sql
+-- Confirm these exist; create if missing
+select * from information_schema.tables where table_name in ('events', 'gallery_images', 'gallery_albums', 'event_registrations');
+```
+If either table is missing, incomplete, or the frontend is still reading from a hardcoded array/mock JSON file instead of querying Supabase, fix that now:
+- `/admin/events` — full CRUD (create/edit/delete), writes directly to `events`, subscribes via Realtime, triggers the revalidation from Section 1 on every write.
+- `/admin/gallery` — full CRUD (already speced with albums/captions/reorder in an earlier pass) — confirm it's actually wired to `gallery_images`/`gallery_albums`, not still using placeholder data from initial scaffolding.
+- Public Events page and homepage "Upcoming Events" section both query `events` directly (no separate hardcoded list duplicating what admin manages).
+- Public Gallery page and homepage "Gallery Teaser" both query `gallery_images` joined with `gallery_albums` directly.
+Run an explicit smoke test: add a new event and a new gallery image via the admin panel, confirm both appear on their respective public pages AND on the homepage within the expected revalidation window from Section 1.
+
+═══════════════════════════
+3. PAYMENT TESTING — END-TO-END, WITH REAL TEST TRANSACTIONS
+═══════════════════════════
+Don't just review the MeSomb integration code — actually exercise it:
+- Confirm MeSomb sandbox/test credentials (not production) are configured in the current environment.
+- Run a full test purchase: add a product to cart → checkout → select MTN MoMo (test number) → confirm the `initiate-payment` Edge Function creates an `orders` row with status `pending` and a `payments` row with a unique `idempotency_key` → confirm the MeSomb sandbox webhook fires back to `mesomb-webhook` → confirm the HMAC-SHA256 signature verification passes → confirm `orders.status` updates to `paid` and a `commissions` row is generated if the order is attributed to a distributor.
+- Repeat for Orange Money.
+- Test the **failure path** deliberately: a declined/failed test payment should correctly set `orders.status` and `payments.status` to reflect failure, not leave the order stuck in `pending` indefinitely with no user-facing feedback.
+- Test **idempotency**: manually re-trigger the same webhook payload twice (simulate a duplicate delivery, which MeSomb and most payment providers can genuinely do) and confirm the second delivery is rejected/ignored via the `payment_webhook_events` dedupe table rather than double-processing the order or double-crediting a commission.
+- Test the **withdrawal payout** path similarly: distributor requests a withdrawal → `process-withdrawal` Edge Function calls MeSomb payout → webhook confirms → `withdrawals.status` updates and `wallet_transactions`/`wallets.balance_xaf` update correctly (balance decreases by the withdrawn amount, not accidentally increases or double-deducts).
+Report the actual test results (screenshots/logs of each step succeeding), not just "the code looks correct" — this is exactly the kind of flow where a code review can miss a real runtime failure.
+
+═══════════════════════════
+4. THEME CONTRAST FIX — TEXT MUST BE LEGIBLE IN BOTH MODES, INCLUDING COLORED TEXT
+═══════════════════════════
+Audit every text color token currently in use. The core rule: **text color is never hardcoded to a fixed value that ignores the active theme** — every text color must be a CSS variable that flips appropriately between light and dark mode, including colored (non-neutral) text.
+
+```css
+:root {
+  /* Light mode (default) */
+  --text-primary: #0B0F0C;      /* near-black, not pure black — matches existing dark-bg token reused as light-mode text */
+  --text-secondary: #4B5563;
+  --text-on-green: #FFFFFF;      /* text sitting on a green-fill button/badge stays white in both modes */
+  --text-accent-gold: #92751C;   /* darker gold variant for AA contrast on white — pure #C9A227 fails contrast as text-on-white */
+  --text-accent-green: #0A7D32;
+}
+
+[data-theme='dark'] {
+  --text-primary: #F5F5F0;       /* light, warm off-white — not pure white, matches the near-black bg's softness */
+  --text-secondary: #A3A8A0;
+  --text-on-green: #FFFFFF;
+  --text-accent-gold: #E0C158;   /* lighter gold variant for AA contrast on the near-black dark background */
+  --text-accent-green: #4ADE80;  /* lighter green variant — the deep #0A7D32 fails contrast as text on a dark bg */
+}
+```
+Apply this systematically:
+- Any place gold (`#C9A227`) or green (`#0A7D32`) is currently used as a **text color** (not a background fill) — headings, links, badges-as-text, accent labels — must switch to the theme-appropriate lighter/darker variant above, not the raw brand hex, since the raw brand hex frequently fails WCAG AA contrast against one of the two background modes.
+- Run an actual contrast check (axe-core, already part of the CI pipeline from the testing strategy established earlier, or a manual contrast checker) on every text/background combination across both themes — gold-on-white and green-on-dark are the two combinations most likely to still fail even after this fix, per the accessibility risk flagged as far back as the original spec.
+- Confirm every component (admin panel included, not just the public site) pulls from these same variables — no component-local hardcoded text colors that bypass the theme system.
+
+═══════════════════════════
+5. HERO TEXT ANIMATION + HOVER MICRO-INTERACTIONS SITEWIDE
+═══════════════════════════
+- Hero headline: implement the staggered word/character reveal originally specified (if not already present or if it's currently a static block of text) — Framer Motion `staggerChildren` at the word level, 60–100ms delay per word, using the established `cubic-bezier(0.16, 1, 0.3, 1)` easing, respecting `prefers-reduced-motion`.
+- Audit every interactive element sitewide (buttons, cards, nav links, product cards, testimonial cards, gallery thumbnails, footer social icons) for a defined hover state — per the style constraints established for the admin dashboard, this same discipline applies to the public site: hover transitions 150–250ms, subtle scale/glow or the light-reflection sweep already speced for product cards, never an abrupt/instant style change.
+- Confirm this is consistent between light and dark mode — a hover glow tuned for a white background may be invisible or garish on the dark background; verify both.
+
+═══════════════════════════
+6. EVERY HOMEPAGE SECTION EDITABLE FROM THE ADMIN PANEL
+═══════════════════════════
+Beyond Products/Testimonials/Gallery/Events (already data-driven), the homepage almost certainly still has hardcoded copy for: the Hero headline/subheadline/CTA button text, the Company Introduction story text and stat labels/numbers, the Opportunity section's timeline step labels, the Distributor Benefits section's headline/icons/text, and the Newsletter section's headline/copy. Make all of this admin-editable:
+
+```sql
+create table homepage_sections (
+  id uuid primary key default uuid_generate_v4(),
+  section_key text unique not null,  -- 'hero', 'company_intro', 'opportunity', 'benefits', 'newsletter'
+  content jsonb not null,             -- flexible per-section shape, bilingual fields nested inside
+  updated_at timestamptz default now(),
+  updated_by uuid references profiles(id)
+);
+
+alter table homepage_sections enable row level security;
+create policy "public_read_homepage_sections" on homepage_sections for select using (true);
+create policy "admin_homepage_sections_all" on homepage_sections for all using (is_admin()) with check (is_admin());
+
+insert into homepage_sections (section_key, content) values
+  ('hero', '{"headline_en": "Transform Your Life With Songtai Life", "headline_fr": "Transformez Votre Vie Avec Songtai Life", "subheadline_en": "Health. Opportunity. Prosperity.", "subheadline_fr": "Santé. Opportunité. Prospérité.", "cta_primary_en": "Become a Distributor", "cta_primary_fr": "Devenir Distributeur", "cta_secondary_en": "Explore Products", "cta_secondary_fr": "Explorer les Produits"}'),
+  ('company_intro', '{"story_en": "", "story_fr": "", "stat_countries": 0, "stat_members": 0, "stat_products": 0, "stat_years": 0, "stat_awards": 0}'),
+  ('opportunity', '{"steps": [{"label_en": "Join", "label_fr": "Rejoindre"}, {"label_en": "Grow", "label_fr": "Grandir"}, {"label_en": "Lead", "label_fr": "Diriger"}, {"label_en": "Earn", "label_fr": "Gagner"}]}'),
+  ('benefits', '{"headline_en": "", "headline_fr": "", "items": []}'),
+  ('newsletter', '{"headline_en": "", "headline_fr": "", "body_en": "", "body_fr": ""}')
+on conflict (section_key) do nothing;
+```
+Build a `useHomepageSection(key)` hook (mirroring `useSiteSettings()`) with Realtime subscription, and a `/admin/homepage` panel with one form per section (matching each section's actual fields — the stat counters as number inputs, the opportunity steps as a small reorderable list, etc.) so an admin can edit every visible string on the homepage without a code deploy. Every homepage React component swaps its hardcoded JSX text for values pulled through this hook.
+
+═══════════════════════════
+7. FINAL VERIFICATION PASS
+═══════════════════════════
+- [ ] Delete a product, testimonial, gallery image, and event from the admin panel — each disappears from its public page AND the homepage within seconds, verified in an incognito session
+- [ ] A full test purchase and a full test withdrawal both complete end-to-end against MeSomb sandbox, including failure and duplicate-webhook edge cases
+- [ ] Every text/background color combination passes WCAG AA contrast in both light and dark mode
+- [ ] Hero headline animates on load; hover states are present and consistent across both themes sitewide
+- [ ] Every string on the homepage (hero, intro, stats, opportunity steps, benefits, newsletter) is editable via `/admin/homepage` and changes reflect live on the public homepage
+
+DELIVERABLE: Admin deletions/updates reflect correctly and promptly on the public site and homepage across all resource types; Events and Gallery confirmed genuinely Supabase-backed with working admin sync; payments verified working end-to-end including failure and idempotency edge cases with real test transactions; text contrast fixed and legible in both themes including colored text; hero animation and sitewide hover interactions implemented; and every homepage section — not just the dynamic content lists — editable from the admin panel.
