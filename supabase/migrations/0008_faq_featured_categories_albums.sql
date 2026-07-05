@@ -27,11 +27,15 @@ create table if not exists faqs (
 alter table faq_categories enable row level security;
 alter table faqs enable row level security;
 
+drop policy if exists "public_read_faq_categories" on faq_categories;
+drop policy if exists "admin_faq_categories_all"  on faq_categories;
 create policy "public_read_faq_categories"
   on faq_categories for select using (true);
 create policy "admin_faq_categories_all"
   on faq_categories for all using (is_admin()) with check (is_admin());
 
+drop policy if exists "public_read_published_faqs" on faqs;
+drop policy if exists "admin_faqs_all"             on faqs;
 create policy "public_read_published_faqs"
   on faqs for select using (is_published = true);
 create policy "admin_faqs_all"
@@ -66,6 +70,8 @@ update product_categories
 -- Enable RLS (was not enabled before — existing rows default is_active = true so public read still works)
 alter table product_categories enable row level security;
 
+drop policy if exists "public_read_active_categories" on product_categories;
+drop policy if exists "admin_categories_all"          on product_categories;
 create policy "public_read_active_categories"
   on product_categories for select using (is_active = true);
 create policy "admin_categories_all"
@@ -80,6 +86,8 @@ create table if not exists gallery_albums (
 );
 
 alter table gallery_albums enable row level security;
+drop policy if exists "public_read_albums" on gallery_albums;
+drop policy if exists "admin_albums_all"  on gallery_albums;
 create policy "public_read_albums"  on gallery_albums for select using (true);
 create policy "admin_albums_all"    on gallery_albums for all using (is_admin()) with check (is_admin());
 
