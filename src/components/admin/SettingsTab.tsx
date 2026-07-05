@@ -50,10 +50,14 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
   const [socLoading, setSocLoading] = useState(false);
 
   // ── SEO state ───────────────────────────────────────────────────
-  const [seoTitle, setSeoTitle]     = useState(settings.seoDefaults.site_title);
-  const [seoDesc, setSeoDesc]       = useState(settings.seoDefaults.meta_description);
-  const [seoImg, setSeoImg]         = useState(settings.seoDefaults.og_image_url);
-  const [seoLoading, setSeoLoading] = useState(false);
+  const [seoTitle, setSeoTitle]         = useState(settings.seoDefaults.site_title);
+  const [seoDesc, setSeoDesc]           = useState(settings.seoDefaults.meta_description);
+  const [seoImg, setSeoImg]             = useState(settings.seoDefaults.og_image_url);
+  const [seoKeywords, setSeoKeywords]   = useState(settings.seoDefaults.keywords);
+  const [seoGbp, setSeoGbp]             = useState(settings.seoDefaults.google_business_url);
+  const [seoAuthor, setSeoAuthor]       = useState(settings.seoDefaults.author);
+  const [seoColor, setSeoColor]         = useState(settings.seoDefaults.theme_color);
+  const [seoLoading, setSeoLoading]     = useState(false);
 
   // ── Contact state ───────────────────────────────────────────────
   const [phone, setPhone]           = useState(settings.contact.phone);
@@ -268,22 +272,75 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
 
       {/* ── SEO Defaults ───────────────────────────────────────────── */}
       {activeTab === "seo" && (
-        <form onSubmit={e => { e.preventDefault(); saveSection("seo_defaults", { site_title: seoTitle, meta_description: seoDesc, og_image_url: seoImg }, setSeoLoading); }} className={card}>
+        <form onSubmit={e => {
+          e.preventDefault();
+          saveSection("seo_defaults", {
+            site_title: seoTitle,
+            meta_description: seoDesc,
+            og_image_url: seoImg,
+            keywords: seoKeywords,
+            google_business_url: seoGbp,
+            author: seoAuthor,
+            theme_color: seoColor,
+          }, setSeoLoading);
+        }} className={card}>
           <div className="flex items-center gap-2 pb-3 border-b border-stone-800">
             <Globe className="w-4 h-4 text-[#ecc246]" />
-            <h4 className="font-bold text-sm text-stone-100">SEO Defaults</h4>
+            <h4 className="font-bold text-sm text-stone-100">SEO &amp; Discoverability</h4>
           </div>
-          <p className="text-[11px] text-stone-500">Used as fallback on pages that don't set their own title/description.</p>
-          <div>
-            <label className={labelCls}>Site Title</label>
-            <input type="text" value={seoTitle} onChange={e => setSeoTitle(e.target.value)} className={inputCls} />
+          <p className="text-[11px] text-stone-500">All fields propagate to every page in real time — no redeploy needed. Affects Google ranking, social sharing, and Google Business Profile linking.</p>
+
+          {/* Row 1: title + author */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Site Title</label>
+              <input type="text" value={seoTitle} onChange={e => setSeoTitle(e.target.value)} placeholder="Songtai Life" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Author / Publisher Name</label>
+              <input type="text" value={seoAuthor} onChange={e => setSeoAuthor(e.target.value)} placeholder="Songtai Life" className={inputCls} />
+            </div>
           </div>
+
+          {/* Meta description */}
           <div>
-            <label className={labelCls}>Default Meta Description</label>
-            <textarea rows={2} value={seoDesc} onChange={e => setSeoDesc(e.target.value)} className={`${inputCls} resize-none`} />
+            <label className={labelCls}>Default Meta Description <span className="normal-case text-stone-600">(aim for 150–160 chars)</span></label>
+            <textarea rows={3} value={seoDesc} onChange={e => setSeoDesc(e.target.value)} className={`${inputCls} resize-none`} />
+            <p className={`text-right text-[10px] mt-1 ${seoDesc.length > 160 ? "text-red-400" : "text-stone-600"}`}>{seoDesc.length} / 160</p>
           </div>
+
+          {/* Keywords */}
           <div>
-            <label className={labelCls}>Default OG Image (social share preview)</label>
+            <label className={labelCls}>Keywords <span className="normal-case text-stone-600">(comma-separated, 5–15 terms)</span></label>
+            <textarea rows={2} value={seoKeywords} onChange={e => setSeoKeywords(e.target.value)}
+              placeholder="Songtai Life, MLM Cameroon, natural products, wellness Cameroon, …"
+              className={`${inputCls} resize-none`} />
+          </div>
+
+          {/* Row 2: Google Business Profile + theme color */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Google Business Profile URL</label>
+              <input type="url" value={seoGbp} onChange={e => setSeoGbp(e.target.value)}
+                placeholder="https://maps.app.goo.gl/…"
+                className={inputCls} />
+              <p className="text-[10px] text-stone-600 mt-1">Links your site to your Google Business listing in structured data — boosts local search.</p>
+            </div>
+            <div>
+              <label className={labelCls}>Brand Theme Color</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={seoColor} onChange={e => setSeoColor(e.target.value)}
+                  className="w-10 h-9 rounded cursor-pointer bg-transparent border-0 p-0.5" />
+                <input type="text" value={seoColor} onChange={e => setSeoColor(e.target.value)}
+                  placeholder="#0A7D32" className={`${inputCls} flex-1 font-mono`} />
+              </div>
+              <p className="text-[10px] text-stone-600 mt-1">Used for browser tab color on mobile Chrome / Safari.</p>
+            </div>
+          </div>
+
+          {/* OG Image */}
+          <div>
+            <label className={labelCls}>Default OG / Social Share Image <span className="normal-case text-stone-600">(1200×630px recommended)</span></label>
             <MediaUploader
               bucket="media"
               folder="branding"
@@ -291,9 +348,10 @@ export default function SettingsTab({ addNotification }: SettingsTabProps) {
               onUploaded={url => setSeoImg(url)}
               onRemoved={() => setSeoImg("")}
               maxSizeMb={3}
-              label="Drop OG image here or click to browse (1200×630 recommended)"
+              label="Drop OG image here or click to browse"
             />
           </div>
+
           <div className="flex justify-end"><SaveBtn loading={seoLoading} /></div>
         </form>
       )}

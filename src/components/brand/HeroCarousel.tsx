@@ -58,12 +58,15 @@ export default function HeroCarousel() {
   // Fetch slides from Supabase + subscribe to Realtime changes
   useEffect(() => {
     const fetchSlides = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("hero_carousel")
         .select("*")
         .eq("is_active", true)
         .order("sort_order");
-      if (data && data.length > 0) setSlides(data);
+      if (!error) {
+        // Always update — use DB slides if any, otherwise fall back to seeds
+        setSlides(data && data.length > 0 ? data : FALLBACK_SLIDES);
+      }
     };
 
     fetchSlides();
@@ -75,6 +78,13 @@ export default function HeroCarousel() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // Keep current index in bounds if slides array shrinks
+  useEffect(() => {
+    if (slides.length > 0 && current >= slides.length) {
+      setCurrent(slides.length - 1);
+    }
+  }, [slides.length, current]);
 
   // Auto-advance
   const advance = (dir: number) => {

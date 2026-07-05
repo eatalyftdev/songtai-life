@@ -24,6 +24,10 @@ export interface SeoDefaults {
   site_title: string;
   meta_description: string;
   og_image_url: string;
+  keywords: string;
+  google_business_url: string;
+  author: string;
+  theme_color: string;
 }
 export interface ContactSettings {
   phone: string;
@@ -60,6 +64,10 @@ const DEFAULTS: SiteSettings = {
     site_title: "Songtai Life",
     meta_description: "Health. Opportunity. Prosperity. Premium natural products from West African botanical heritage.",
     og_image_url: "",
+    keywords: "Songtai Life, MLM Cameroon, natural products Cameroon, wellness Cameroon, botanical products, organic health products, West African herbal, Yaoundé business opportunity",
+    google_business_url: "",
+    author: "Songtai Life",
+    theme_color: "#0A7D32",
   },
   contact: { phone: "", email: "", address_en: "", address_fr: "", map_url: "" },
   branding: { logo_url: "", logo_dark_url: "", favicon_url: "" },
