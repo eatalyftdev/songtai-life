@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { ShoppingBag, MessageSquareCode, Globe2, Sun, Moon, Menu, X, ChevronDown } from "lucide-react";
+import { ShoppingBag, Globe2, Sun, Moon, Menu, X, ChevronDown } from "lucide-react";
 import i18n from "../i18n";
 import { supabase } from "../lib/supabase";
 import Logo from "./Logo";
@@ -13,7 +13,6 @@ interface NavbarProps {
   setBrandPage: (page: string) => void;
   cartCount: number;
   openCart: () => void;
-  toggleAI: () => void;
   theme: "dark" | "light";
   toggleTheme: () => void;
 }
@@ -260,19 +259,6 @@ export default function Navbar({
                   {cartCount}
                 </span>
               )}
-            </button>
-
-            {/* AI Assistant */}
-            <button
-              onClick={toggleAI}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-300 shadow-md cursor-pointer min-h-[36px] ${
-                theme === "light"
-                  ? "bg-stone-100 hover:bg-stone-200 text-stone-700 border-emerald-200/60 hover:border-[#ecc246]/50"
-                  : "bg-stone-800 hover:bg-stone-750 text-white border-[#006224]/30 hover:border-[#ecc246]/50 shadow-black/40"
-              }`}
-            >
-              <MessageSquareCode className="w-3.5 h-3.5 text-[#ecc246]" />
-              <span className="hidden md:inline">AI Architect</span>
             </button>
 
             {/* Become a Distributor CTA */}

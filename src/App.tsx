@@ -7,7 +7,7 @@ import BrandShowcase from "./components/BrandShowcase";
 import PrivacyPolicyModal from "./components/PrivacyPolicyModal";
 import DistributorPortal from "./components/DistributorPortal";
 import TechSpecBrowser from "./components/TechSpecBrowser";
-import AIAssistant from "./components/AIAssistant";
+import FloatingAI from "./components/FloatingAI";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { DistributorLogin, DistributorSignup, AdminLogin } from "./components/auth/AuthViews";
 import AdminLayout from "./components/admin/layout/AdminLayout";
@@ -31,6 +31,12 @@ import SettingsPage from "./components/admin/pages/SettingsPage";
 import AuditPage from "./components/admin/pages/AuditPage";
 import HeroCarouselPage from "./components/admin/pages/HeroCarouselPage";
 import HomepagePage from "./components/admin/pages/HomepagePage";
+import OurStoryPage from "./components/admin/pages/OurStoryPage";
+import ContactInfoPage from "./components/admin/pages/ContactInfoPage";
+import WellnessHubCMSPage from "./components/admin/pages/WellnessHubCMSPage";
+import BecomeDistributorCMSPage from "./components/admin/pages/BecomeDistributorCMSPage";
+import PaymentConfigPage from "./components/admin/pages/PaymentConfigPage";
+import AISettingsPage from "./components/admin/pages/AISettingsPage";
 import { runCommissionEngine } from "./lib/commissionEngine";
 import WhatsAppWidget from "./components/WhatsAppWidget";
 import Analytics from "./components/Analytics";
@@ -74,7 +80,6 @@ function AppContent() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -256,7 +261,6 @@ function AppContent() {
         }}
         cartCount={cartCount}
         openCart={() => setCartOpen(true)}
-        toggleAI={() => setAiOpen(prev => !prev)}
         theme={theme}
         toggleTheme={toggleTheme}
       />
@@ -306,6 +310,12 @@ function AppContent() {
             <Route path="events"       element={<EventsPage />} />
             <Route path="testimonials" element={<TestimonialsPage />} />
             <Route path="homepage"             element={<HomepagePage />} />
+            <Route path="our-story"            element={<OurStoryPage />} />
+            <Route path="contact-page"         element={<ContactInfoPage />} />
+            <Route path="wellness-hub"         element={<WellnessHubCMSPage />} />
+            <Route path="become-distributor"   element={<BecomeDistributorCMSPage />} />
+            <Route path="payment-config"       element={<PaymentConfigPage />} />
+            <Route path="ai-settings"          element={<AISettingsPage />} />
             <Route path="hero-carousel"        element={<HeroCarouselPage />} />
             <Route path="gallery"              element={<GalleryPage />} />
             <Route path="faq"                 element={<FAQPage />} />
@@ -348,8 +358,8 @@ function AppContent() {
         ))}
       </div>
 
-      {/* INTELLIGENT COMPANION (GEMINI CHAT SIDE PANEL) */}
-      <AIAssistant isOpen={aiOpen} onClose={() => setAiOpen(false)} />
+      {/* FLOATING AI GUIDE (consumer-facing chat) */}
+      <FloatingAI />
 
       {/* PRIVACY & CYBERSECURITY COMPLIANCE MODAL */}
       <PrivacyPolicyModal 

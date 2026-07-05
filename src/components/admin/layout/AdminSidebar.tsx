@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShoppingBag, ShoppingCart, Users, Wallet, Award,
   BookOpen, Calendar, Star, Image, CalendarCheck, Mail, Send,
   Library, Settings, History, LogOut, ChevronLeft, ChevronRight, Menu,
-  HelpCircle, Layers, Sliders
+  HelpCircle, Layers, Sliders, BookMarked, Phone, Leaf, CreditCard, Bot
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 
@@ -20,6 +20,12 @@ const NAV_ITEMS = [
   { label: "Events",           path: "/admin/events",        icon: Calendar,        roles: ["admin","superadmin","content_editor"] },
   { label: "Testimonials",     path: "/admin/testimonials",  icon: Star,            roles: ["admin","superadmin","content_editor"] },
   { label: "Homepage",         path: "/admin/homepage",             icon: LayoutDashboard, roles: ["admin","superadmin","content_editor"] },
+  { label: "Our Story",        path: "/admin/our-story",            icon: BookMarked,   roles: ["admin","superadmin","content_editor"] },
+  { label: "Contact Page",     path: "/admin/contact-page",         icon: Phone,        roles: ["admin","superadmin","content_editor"] },
+  { label: "Wellness Hub",     path: "/admin/wellness-hub",         icon: Leaf,         roles: ["admin","superadmin","content_editor"] },
+  { label: "Become Distrib.",  path: "/admin/become-distributor",   icon: Users,        roles: ["admin","superadmin","content_editor"] },
+  { label: "Payment Config",   path: "/admin/payment-config",       icon: CreditCard,   roles: ["admin","superadmin"] },
+  { label: "AI Settings",      path: "/admin/ai-settings",          icon: Bot,          roles: ["admin","superadmin","content_editor"] },
   { label: "Hero Carousel",    path: "/admin/hero-carousel",        icon: Sliders,      roles: ["admin","superadmin","content_editor"] },
   { label: "Gallery",          path: "/admin/gallery",             icon: Image,        roles: ["admin","superadmin","content_editor"] },
   { label: "FAQ",              path: "/admin/faq",                 icon: HelpCircle,   roles: ["admin","superadmin","content_editor"] },

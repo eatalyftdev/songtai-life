@@ -1,111 +1,142 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Shield, Sparkles, Award, Sprout, Heart, Users } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+
+interface StoryContent {
+  tagline_en: string; tagline_fr: string;
+  headline_en: string; headline_fr: string;
+  intro_en: string; intro_fr: string;
+}
+
+interface StoryBody {
+  story1_en: string; story1_fr: string;
+  story2_en: string; story2_fr: string;
+  mission_en: string; mission_fr: string;
+  vision_en: string; vision_fr: string;
+  image_url: string;
+}
+
+interface TeamMember { name: string; role_en: string; role_fr: string; desc_en: string; image: string; }
+interface Cert { label_en: string; label_fr: string; sub_en: string; sub_fr: string; }
+
+const DEFAULT_HEADER: StoryContent = {
+  tagline_en: "About Songtai Life", tagline_fr: "À Propos de Songtai Life",
+  headline_en: "Empowering Through Science, Sourcing Locally",
+  headline_fr: "Autonomiser par la Science, Sourcer Localement",
+  intro_en: "Our mission is to engineer West Africa's most respected wellness brand, transforming biological resources into sovereign streams of health and economic security.",
+  intro_fr: "Notre mission est de bâtir la marque de bien-être la plus respectée d'Afrique de l'Ouest.",
+};
+
+const DEFAULT_BODY: StoryBody = {
+  story1_en: "Songtai Life began with a single vision in Douala: to bridge the gap between traditional West African plant wisdom and cutting-edge pharmaceutical standards. We realized that our local crops—such as northern Moringa, wild ginger, shea, and adaptogenic roots—possessed incredible bioactive benefits that, when scientifically processed, could transform lives.",
+  story1_fr: "Songtai Life a débuté avec une vision unique à Douala : combler le fossé entre la sagesse traditionnelle des plantes d'Afrique de l'Ouest et les normes pharmaceutiques de pointe.",
+  story2_en: "Today, we have established direct-trade partnerships with organic agricultural cooperatives across Cameroon's West, Centre, and Littoral regions, securing premium incomes for local farmers while delivering pure, high-potency products to our global network of distributors.",
+  story2_fr: "Aujourd'hui, nous avons établi des partenariats de commerce direct avec des coopératives agricoles biologiques à travers les régions Ouest, Centre et Littoral du Cameroun.",
+  mission_en: "To deliver premium-quality botanical solutions and direct-selling templates that provide families with robust health, biological food yields, and sovereign financial independence.",
+  mission_fr: "Fournir des solutions botaniques de haute qualité et des modèles de vente directe qui offrent aux familles une santé robuste et une indépendance financière souveraine.",
+  vision_en: "To become the absolute standard of organic direct-marketing across Sub-Saharan Africa, proving that local natural resources can fuel global-scale enterprises.",
+  vision_fr: "Devenir la référence absolue du marketing direct biologique en Afrique subsaharienne, prouvant que les ressources naturelles locales peuvent alimenter des entreprises à l'échelle mondiale.",
+  image_url: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=600",
+};
+
+const DEFAULT_TEAM: TeamMember[] = [
+  { name: "Dr. Elena Ndip", role_en: "Chief Medical & Botanical Officer", desc_en: "Over 18 years of clinical pharmacology, specializes in phytomedicine research at the University of Yaoundé.", image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300" },
+  { name: "Francois Beyene", role_en: "Agronomist & Sourcing Expert", desc_en: "Advises our cacao, moringa, and coffee farmer cooperatives in Bafoussam on biological growth multipliers.", image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300" },
+  { name: "Amadou Diallo", role_en: "Double Diamond Global Ambassador", desc_en: "An executive business coach who has mentored thousands of direct-selling entrepreneurs throughout CEMAC.", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300" },
+];
+
+const DEFAULT_CERTS: Cert[] = [
+  { label_en: "MINSANTE Approved", label_fr: "Approuvé MINSANTE", sub_en: "Ministry of Public Health Cameroon", sub_fr: "Ministère de la Santé Publique" },
+  { label_en: "100% Organic Sourcing", label_fr: "100% Biologique", sub_en: "Biological chemical-free crops", sub_fr: "Cultures biologiques sans produits chimiques" },
+  { label_en: "HALAL Certified", label_fr: "Certifié HALAL", sub_en: "Pure processing standards", sub_fr: "Normes de traitement pures" },
+  { label_en: "ISO 9001 Compliant", label_fr: "Conforme ISO 9001", sub_en: "Global quality frameworks", sub_fr: "Cadres de qualité mondiaux" },
+];
+
+async function fetchSection<T>(key: string): Promise<T | null> {
+  const { data } = await supabase.from("homepage_sections").select("content").eq("section_key", key).maybeSingle();
+  return data?.content as T | null;
+}
 
 export default function About() {
+  const [header, setHeader] = useState<StoryContent>(DEFAULT_HEADER);
+  const [body, setBody] = useState<StoryBody>(DEFAULT_BODY);
+  const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
+  const [certs, setCerts] = useState<Cert[]>(DEFAULT_CERTS);
+  const [lang] = useState<"en" | "fr">("en");
+
+  useEffect(() => {
+    fetchSection<StoryContent>("page_our_story").then(d => { if (d) setHeader(prev => ({ ...prev, ...d })); });
+    fetchSection<StoryBody>("page_our_story_body").then(d => { if (d) setBody(prev => ({ ...prev, ...d })); });
+    fetchSection<{ members: TeamMember[] }>("page_our_story_team").then(d => { if (d?.members?.length) setTeam(d.members); });
+    fetchSection<{ certs: Cert[] }>("page_our_story_certs").then(d => { if (d?.certs?.length) setCerts(d.certs); });
+  }, []);
+
+  const t = (en: string, fr: string) => lang === "fr" ? (fr || en) : en;
+
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans relative overflow-hidden text-left">
-      {/* Background elements */}
       <div className="absolute top-[15%] left-[5%] w-[400px] h-[400px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
       <div className="absolute bottom-[20%] right-[10%] w-[500px] h-[500px] rounded-full bg-[#C9A227]/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16 relative z-10">
         
-        {/* Header */}
         <div className="space-y-4">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">About Songtai Life</span>
+          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">{t(header.tagline_en, header.tagline_fr)}</span>
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight leading-[1.1]">
-            Empowering Through Science, Sourcing Locally
+            {t(header.headline_en, header.headline_fr)}
           </h1>
           <p className="text-stone-400 text-sm max-w-2xl leading-relaxed">
-            Our mission is to engineer West Africa’s most respected wellness brand, transforming biological resources into sovereign streams of health and economic security.
+            {t(header.intro_en, header.intro_fr)}
           </p>
         </div>
 
-        {/* 1. Our Story */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-stone-900/30 border border-stone-850 p-8 rounded-[32px]">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <Sprout className="w-5 h-5 text-emerald-400" /> Our Story & Heritage
             </h2>
-            <p className="text-stone-300 text-xs sm:text-sm leading-relaxed">
-              Songtai Life began with a single vision in Douala: to bridge the gap between traditional West African plant wisdom and cutting-edge pharmaceutical standards. We realized that our local crops—such as northern Moringa, wild ginger, shea, and adaptogenic roots—possessed incredible bioactive benefits that, when scientifically processed, could transform lives.
-            </p>
-            <p className="text-stone-400 text-xs leading-relaxed">
-              Today, we have established direct-trade partnerships with organic agricultural cooperatives across Cameroon's West, Centre, and Littoral regions, securing premium incomes for local farmers while delivering pure, high-potency products to our global network of distributors.
-            </p>
+            <p className="text-stone-300 text-xs sm:text-sm leading-relaxed">{t(body.story1_en, body.story1_fr)}</p>
+            <p className="text-stone-400 text-xs leading-relaxed">{t(body.story2_en, body.story2_fr)}</p>
           </div>
           <div className="aspect-video rounded-2xl overflow-hidden bg-stone-950 border border-stone-800">
-            <img 
-              src="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=600" 
-              alt="Cameroon organic farms"
-              className="w-full h-full object-cover opacity-80"
-            />
+            <img src={body.image_url} alt="Cameroon organic farms" className="w-full h-full object-cover opacity-80" />
           </div>
         </div>
 
-        {/* 2. Mission & Vision */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-stone-900/10 border border-stone-850 p-8 rounded-[24px] space-y-3">
             <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
               <Heart className="w-5 h-5 text-emerald-400" /> Our Sovereign Mission
             </h3>
-            <p className="text-stone-400 text-xs sm:text-sm leading-relaxed">
-              To deliver premium-quality botanical solutions and direct-selling templates that provide families with robust health, biological food yields, and sovereign financial independence.
-            </p>
+            <p className="text-stone-400 text-xs sm:text-sm leading-relaxed">{t(body.mission_en, body.mission_fr)}</p>
           </div>
-
           <div className="bg-stone-900/10 border border-stone-850 p-8 rounded-[24px] space-y-3">
             <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-[#C9A227]" /> Our Pan-African Vision
             </h3>
-            <p className="text-stone-400 text-xs sm:text-sm leading-relaxed">
-              To become the absolute standard of organic direct-marketing across Sub-Saharan Africa, proving that local natural resources can fuel global-scale enterprises.
-            </p>
+            <p className="text-stone-400 text-xs sm:text-sm leading-relaxed">{t(body.vision_en, body.vision_fr)}</p>
           </div>
         </div>
 
-        {/* 3. Leadership */}
         <div className="space-y-8">
           <h3 className="text-xl font-bold text-white border-b border-stone-900 pb-2">Our Executive Leadership</h3>
-          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                name: "Dr. Elena Ndip",
-                role: "Chief Medical & Botanical Officer",
-                desc: "Over 18 years of clinical pharmacology, specializes in phytomedicine research at the University of Yaoundé.",
-                image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300"
-              },
-              {
-                name: "Francois Beyene",
-                role: "Agronomist & Sourcing Expert",
-                desc: "Advises our cacao, moringa, and coffee farmer cooperatives in Bafoussam on biological growth multipliers.",
-                image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300"
-              },
-              {
-                name: "Amadou Diallo",
-                role: "Double Diamond Global Ambassador",
-                desc: "An executive business coach who has mentored thousands of direct-selling entrepreneurs throughout CEMAC.",
-                image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300"
-              }
-            ].map((member, idx) => (
+            {team.map((member, idx) => (
               <div key={idx} className="bg-stone-900/30 border border-stone-850 p-6 rounded-2xl space-y-4">
-                <img 
-                  src={member.image} 
-                  alt={member.name}
-                  className="w-16 h-16 rounded-full object-cover border border-stone-800"
-                />
+                {member.image && (
+                  <img src={member.image} alt={member.name} className="w-16 h-16 rounded-full object-cover border border-stone-800" />
+                )}
                 <div>
                   <h4 className="font-bold text-white text-base">{member.name}</h4>
-                  <span className="text-[10px] text-[#C9A227] font-bold block uppercase">{member.role}</span>
-                  <p className="text-stone-400 text-xs mt-2.5 leading-relaxed">{member.desc}</p>
+                  <span className="text-[10px] text-[#C9A227] font-bold block uppercase">{lang === "fr" ? (member.role_fr || member.role_en) : member.role_en}</span>
+                  <p className="text-stone-400 text-xs mt-2.5 leading-relaxed">{lang === "fr" ? (member.desc_fr || member.desc_en) : member.desc_en}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 4. Certifications */}
         <div className="bg-stone-900/40 border border-stone-850 p-8 rounded-[32px] space-y-6">
           <div className="space-y-1.5">
             <h3 className="font-extrabold text-white text-xl flex items-center gap-2">
@@ -113,20 +144,14 @@ export default function About() {
             </h3>
             <p className="text-stone-400 text-xs">Every Songtai Life release complies strictly with local and international food & drug safety mandates.</p>
           </div>
-
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
-            {[
-              { label: "MINSANTE Approved", sub: "Ministry of Public Health Cameroon" },
-              { label: "100% Organic Sourcing", sub: "Biological chemical-free crops" },
-              { label: "HALAL Certified", sub: "Pure processing standards" },
-              { label: "ISO 9001 Compliant", sub: "Global quality frameworks" }
-            ].map((cert, idx) => (
+            {certs.map((cert, idx) => (
               <div key={idx} className="bg-stone-950 p-4 rounded-xl border border-stone-900/80 space-y-1">
                 <div className="flex items-center gap-1.5">
                   <Award className="w-4 h-4 text-[#C9A227]" />
-                  <span className="text-white text-xs font-bold">{cert.label}</span>
+                  <span className="text-white text-xs font-bold">{t(cert.label_en, cert.label_fr)}</span>
                 </div>
-                <p className="text-stone-500 text-[10px]">{cert.sub}</p>
+                <p className="text-stone-500 text-[10px]">{t(cert.sub_en, cert.sub_fr)}</p>
               </div>
             ))}
           </div>
