@@ -8,15 +8,15 @@
 -- to fully enforce the constraint on historical data.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- blog_posts.featured_image_url
+-- blog_posts.image
 ALTER TABLE blog_posts
   DROP CONSTRAINT IF EXISTS blog_featured_image_supabase_hosted;
 ALTER TABLE blog_posts
   ADD CONSTRAINT blog_featured_image_supabase_hosted
   CHECK (
-    featured_image_url IS NULL
-    OR featured_image_url = ''
-    OR featured_image_url LIKE 'https://auyjxchghtetxpiyecds.supabase.co/storage/%'
+    image IS NULL
+    OR image = ''
+    OR image LIKE 'https://auyjxchghtetxpiyecds.supabase.co/storage/%'
   ) NOT VALID;
 
 -- gallery_images.url
@@ -56,7 +56,7 @@ ALTER TABLE testimonials
 -- After re-hosting all external images via Media Library → External Images tab,
 -- run these to make the constraints fully enforced on all rows:
 --
--- ALTER TABLE blog_posts       VALIDATE CONSTRAINT blog_featured_image_supabase_hosted;
+-- ALTER TABLE blog_posts VALIDATE CONSTRAINT blog_featured_image_supabase_hosted;
 -- ALTER TABLE gallery_images   VALIDATE CONSTRAINT gallery_image_url_supabase_hosted;
 -- ALTER TABLE product_categories VALIDATE CONSTRAINT product_category_image_supabase_hosted;
 -- ALTER TABLE testimonials     VALIDATE CONSTRAINT testimonials_image_url_supabase_hosted;
