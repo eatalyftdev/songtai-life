@@ -41,15 +41,15 @@ ALTER TABLE product_categories
     OR image_url LIKE 'https://auyjxchghtetxpiyecds.supabase.co/storage/%'
   ) NOT VALID;
 
--- testimonials.image_url  (photo only — video_url stays external by design)
+-- testimonials.image  (photo only — video_url stays external by design)
 ALTER TABLE testimonials
   DROP CONSTRAINT IF EXISTS testimonials_image_url_supabase_hosted;
 ALTER TABLE testimonials
   ADD CONSTRAINT testimonials_image_url_supabase_hosted
   CHECK (
-    image_url IS NULL
-    OR image_url = ''
-    OR image_url LIKE 'https://auyjxchghtetxpiyecds.supabase.co/storage/%'
+    image IS NULL
+    OR image = ''
+    OR image LIKE 'https://auyjxchghtetxpiyecds.supabase.co/storage/%'
   ) NOT VALID;
 
 -- ─────────────────────────────────────────────────────────────────────────────
