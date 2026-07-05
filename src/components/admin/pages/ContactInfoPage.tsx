@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { Phone, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 import PageShell, { Card, Btn } from "../shared/PageShell";
@@ -24,7 +24,7 @@ function BilingualFields({ prefix, values, onChange, multiline = false }: { pref
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
     <Card>

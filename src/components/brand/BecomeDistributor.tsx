@@ -56,7 +56,7 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
   const [paymentMethod, setPaymentMethod] = useState("momo");
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<"form" | "momo_verify" | "success">("form");
-  const lang = "en";
+  const lang: "en" | "fr" = "en";
 
   useEffect(() => {
     supabase.from("homepage_sections").select("content").eq("section_key", "page_become_distributor").maybeSingle()

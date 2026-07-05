@@ -35,7 +35,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function Navbar({
   activeTab, setActiveTab, brandPage, setBrandPage,
-  cartCount, openCart, toggleAI, theme, toggleTheme,
+  cartCount, openCart, theme, toggleTheme,
 }: NavbarProps) {
   const { t, i18n: i18nInstance } = useTranslation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { CreditCard, Save, Eye, EyeOff, ShieldCheck, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 import PageShell, { Card, Btn } from "../shared/PageShell";
@@ -42,7 +42,7 @@ function SecretField({ label, value, onChange, placeholder = "" }: { label: stri
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
     <Card>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Plus, Pencil, Trash2, Star, X } from "lucide-react";
 import { useAdminResource } from "../../hooks/useAdminResource";
 
@@ -55,7 +55,7 @@ export default function TestimonialsTab({ addNotification }: TestimonialsTabProp
     display_order: Number(f.displayOrder),
   });
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
     const { error } = await insert(payload(form));
@@ -66,7 +66,7 @@ export default function TestimonialsTab({ addNotification }: TestimonialsTabProp
     setForm(blank());
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (!editing) return;
     setSaving(true);
@@ -90,7 +90,7 @@ export default function TestimonialsTab({ addNotification }: TestimonialsTabProp
   const TestimonialForm = ({ data, onChange, onSubmit, onCancel }: {
     data: Omit<Testimonial, "id">;
     onChange: (v: Omit<Testimonial, "id">) => void;
-    onSubmit: (e: React.FormEvent) => void;
+    onSubmit: (e: FormEvent) => void;
     onCancel: () => void;
   }) => (
     <form onSubmit={onSubmit} className="bg-stone-900 border border-stone-800 rounded-xl p-6 space-y-4 max-w-3xl">

@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
 import crypto from "crypto";
+import { PaymentOperation } from "@hachther/mesomb";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./server/replit_integrations/auth/index";
 
 dotenv.config();
@@ -387,7 +388,12 @@ async function startServer() {
   });
   // ── End security headers ────────────────────────────────────────────────────
 
-  app.use(express.json());
+  // Capture raw body for MeSomb webhook HMAC verification BEFORE json parsing
+  app.use(express.json({
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  }));
 
   // Setup Replit Auth (session + OIDC) BEFORE other routes
   await setupAuth(app);
@@ -453,12 +459,24 @@ Answer concisely, helpfully, and professionally. Support both English and French
   });
 
   // =========================================================================
-  // MESOMB PAYMENTS WORKFLOW API
+  // MESOMB PAYMENTS WORKFLOW API  (real @hachther/mesomb SDK)
   // =========================================================================
 
+  // Build MeSomb client lazily — only when credentials are present
+  function getMeSombClient(): PaymentOperation | null {
+    const appKey    = process.env.MESOMB_APPLICATION_KEY;
+    const accessKey = process.env.MESOMB_ACCESS_KEY;
+    const secretKey = process.env.MESOMB_SECRET_KEY;
+    if (!appKey || !accessKey || !secretKey) return null;
+    return new PaymentOperation({ applicationKey: appKey, accessKey, secretKey });
+  }
+
+  // ── Collect (customer pays) ───────────────────────────────────────────────
   app.post("/api/payment/checkout", requireDb(async (db, req, res) => {
     const { amountXaf, pvPoints, phone, provider, cart, userId,
-            customerName, customerPhone, deliveryAddress, deliveryNotes } = req.body;
+            customerName, customerPhone, deliveryAddress, deliveryNotes,
+            customerFirstName, customerLastName, customerEmail,
+            customerTown, customerRegion } = req.body;
 
     if (!amountXaf || !phone || !provider) {
       return res.status(400).json({ error: "Missing required checkout parameters: amountXaf, phone, provider" });
@@ -466,7 +484,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
     const orderId = `ord-${crypto.randomBytes(4).toString("hex")}`;
 
-    const { error } = await db.from("orders").insert({
+    const { error: insertError } = await db.from("orders").insert({
       order_id: orderId,
       user_id: userId || "guest",
       amount_xaf: Number(amountXaf),
@@ -481,143 +499,253 @@ Answer concisely, helpfully, and professionally. Support both English and French
       delivery_notes: deliveryNotes || null,
     });
 
-    if (error) throw new Error(error.message);
-    console.log(`[Payments] Order ${orderId} created in pending state.`);
+    if (insertError) throw new Error(insertError.message);
+    console.log(`[Payments] Order ${orderId} created. Initiating MeSomb Collect...`);
+
+    const mesomb = getMeSombClient();
+    if (!mesomb) {
+      // SDK not configured — leave order in pending and return; webhook will finalize later
+      console.warn("[Payments] MeSomb credentials not set — returning pending without initiating collect.");
+      return res.json({
+        success: true,
+        orderId,
+        status: "pending",
+        message: "Payment handshake initiated. Confirm carrier verification on your handset.",
+      });
+    }
+
+    // Normalize phone — MeSomb expects local format without country code (e.g. '670000000')
+    const localPhone = String(phone).replace(/^\+?237/, "").replace(/\s/g, "");
+    const service = String(provider).toUpperCase() === "ORANGE" ? "ORANGE" : "MTN";
+
+    let mesombResponse: any;
+    try {
+      mesombResponse = await mesomb.makeCollect({
+        nonce: crypto.randomUUID(),
+        payer: localPhone,
+        amount: Number(amountXaf),
+        service,
+        country: "CM",
+        currency: "XAF",
+        trxID: orderId,
+        reference: `ORDER-${orderId}`,
+        customer: {
+          email:     customerEmail     || `${orderId}@songtailife.cm`,
+          firstName: customerFirstName || (customerName?.split(" ")[0] ?? "Customer"),
+          lastName:  customerLastName  || (customerName?.split(" ")[1] ?? ""),
+          town:      customerTown   || "Yaoundé",
+          region:    customerRegion || "Centre",
+          country:   "CM",
+        },
+        location: { town: "Yaoundé", region: "Centre", country: "CM" },
+        products: (cart || []).map((item: any) => ({
+          name:     item.name || item.product_name || "Product",
+          category: item.category || "Wellness",
+          quantity: item.quantity || 1,
+          amount:   item.price || item.unit_price_xaf || 0,
+        })),
+      });
+    } catch (sdkErr: any) {
+      console.error("[Payments] MeSomb makeCollect threw:", sdkErr.message);
+      await db.from("orders").update({ status: "failed" }).eq("order_id", orderId);
+      return res.status(502).json({ error: "Mobile money request failed. Please try again.", detail: sdkErr.message });
+    }
+
+    if (mesombResponse.isOperationSuccess() && mesombResponse.isTransactionSuccess()) {
+      // Synchronous success — store MeSomb transaction ID; webhook is still authoritative for final status
+      const txnPk = mesombResponse.transaction?.pk ?? null;
+      await db.from("orders").update({
+        status: "pending_confirmation",
+        mesomb_transaction_id: txnPk,
+      }).eq("order_id", orderId);
+      console.log(`[Payments] MeSomb collect accepted for Order ${orderId}. Tx: ${txnPk}`);
+    } else {
+      const msg = mesombResponse.message ?? "Mobile money request rejected.";
+      console.warn(`[Payments] MeSomb collect failed for Order ${orderId}: ${msg}`);
+      await db.from("orders").update({ status: "failed" }).eq("order_id", orderId);
+      return res.status(400).json({ error: msg });
+    }
 
     res.json({
       success: true,
       orderId,
-      status: "pending",
-      message: "Payment handshake initiated. Confirm carrier verification on your handset.",
+      status: "pending_confirmation",
+      message: "Payment request sent to your handset. Approve the prompt on your phone to complete.",
     });
   }));
 
+  // ── Webhook (MeSomb → server) ─────────────────────────────────────────────
+  // Uses real MeSomb signature scheme: t=<ts>,v1=<hex-hmac-sha256> on "<ts>.<rawBody>"
   app.post("/api/payment/webhook", requireDb(async (db, req, res) => {
-    const signatureHeader = req.headers["x-mesomb-signature"] || req.headers["X-MeSomb-Signature"];
-    const rawBody = JSON.stringify(req.body);
-    const signatureKey = process.env.MESOMB_SIGNATURE_KEY;
-    if (!signatureKey && process.env.NODE_ENV === "production") {
-      console.error("[Webhook] MESOMB_SIGNATURE_KEY is not set — cannot verify signatures in production.");
-      return res.status(500).json({ error: "Webhook signature key not configured." });
-    }
+    const rawBody: string = (req as any).rawBody ?? JSON.stringify(req.body);
+    const sigHeader = (req.headers["x-mesomb-webhook-signature"] ?? "") as string;
+    const eventId   = (req.headers["x-mesomb-webhook-event-id"]  ?? "") as string;
+    const webhookSecret = process.env.MESOMB_WEBHOOK_SECRET;
 
-    if (signatureHeader) {
-      if (!signatureKey) {
-        console.warn("[Webhook] Received signed webhook but MESOMB_SIGNATURE_KEY is not set — rejecting.");
-        return res.status(500).json({ error: "Webhook signature key not configured." });
+    // ── Signature verification ────────────────────────────────────────────
+    if (sigHeader) {
+      if (!webhookSecret) {
+        console.error("[Webhook] MESOMB_WEBHOOK_SECRET not set — cannot verify signature.");
+        return res.status(500).json({ error: "Webhook secret not configured." });
       }
-      const computedSignature = crypto.createHmac("sha256", signatureKey).update(rawBody).digest("hex");
-      if (signatureHeader !== computedSignature) {
-        console.warn("[Webhook] HMAC-SHA256 signature verification failed. Rejecting.");
-        return res.status(401).json({ error: "Invalid webhook signature." });
+
+      const tPart  = sigHeader.split(",").find(p => p.startsWith("t="));
+      const v1Part = sigHeader.split(",").find(p => p.startsWith("v1="));
+      if (!tPart || !v1Part) {
+        console.warn("[Webhook] Malformed signature header:", sigHeader);
+        return res.status(400).json({ error: "Invalid signature format." });
       }
-      console.log("[Webhook] HMAC-SHA256 signature verified successfully.");
+
+      const timestamp = tPart.slice(2);
+      const received  = v1Part.slice(3);
+
+      // Reject replays older than 5 minutes
+      const ageSecs = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+      if (ageSecs > 300) {
+        console.warn(`[Webhook] Timestamp too old (${ageSecs}s). Rejecting replay.`);
+        return res.status(400).json({ error: "Timestamp outside tolerance window." });
+      }
+
+      const expected = crypto.createHmac("sha256", webhookSecret)
+        .update(`${timestamp}.${rawBody}`, "utf8")
+        .digest("hex");
+
+      const recvBuf = Buffer.from(received,  "hex");
+      const expBuf  = Buffer.from(expected, "hex");
+      if (recvBuf.length !== expBuf.length || !crypto.timingSafeEqual(recvBuf, expBuf)) {
+        console.warn("[Webhook] Signature mismatch — rejecting.");
+        return res.status(400).json({ error: "Invalid signature." });
+      }
+      console.log("[Webhook] Signature verified ✓");
+    } else if (process.env.NODE_ENV === "production") {
+      // In production always require a signature
+      console.warn("[Webhook] Missing signature header in production — rejecting.");
+      return res.status(400).json({ error: "Webhook signature header required." });
     } else {
-      if (process.env.NODE_ENV === "production") {
-        console.warn("[Webhook] Missing signature in production — rejecting.");
-        return res.status(401).json({ error: "Webhook signature required in production." });
+      console.log("[Webhook] No signature header — dev/test mode, skipping verification.");
+    }
+
+    // ── Deduplication using event_id ──────────────────────────────────────
+    // Always return 200 on duplicates — MeSomb redelivers on timeouts
+    if (eventId) {
+      const { data: existing } = await db
+        .from("mesomb_webhook_events")
+        .select("id")
+        .eq("event_id", eventId)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`[Webhook] Duplicate event_id ${eventId} — already processed, returning 200.`);
+        return res.json({ received: true, duplicate: true });
       }
-      console.log("[Webhook] No signature header — running in sandbox development mode.");
     }
 
-    const { orderId, transactionId } = req.body;
-    if (!orderId) return res.status(400).json({ error: "Missing orderId in webhook body." });
-
-    const { data: alreadyProcessed } = await db
-      .from("processed_payments")
-      .select("order_id")
-      .eq("order_id", orderId)
-      .maybeSingle();
-
-    if (alreadyProcessed) {
-      console.log(`[Webhook] Duplicate callback skipped for Order ${orderId}.`);
-      return res.json({ success: true, message: "Duplicate callback skipped." });
+    let event: any;
+    try {
+      event = typeof req.body === "object" ? req.body : JSON.parse(rawBody);
+    } catch {
+      return res.status(400).json({ error: "Invalid JSON body." });
     }
 
-    const { data: orderData } = await db
-      .from("orders")
-      .select("*")
-      .eq("order_id", orderId)
-      .maybeSingle();
-
-    if (!orderData) return res.status(404).json({ error: `Order ${orderId} not found.` });
-    if (orderData.status === "paid") {
-      console.log(`[Webhook] Order ${orderId} is already marked as paid.`);
-      return res.json({ success: true });
+    // Record event BEFORE processing — prevents double-processing if handler crashes halfway
+    if (eventId) {
+      await db.from("mesomb_webhook_events").insert({
+        event_id:   eventId,
+        event_type: event.event_type ?? "unknown",
+        payload:    event,
+      }).then(({ error: evErr }: any) => {
+        if (evErr) console.warn("[Webhook] Could not insert event record:", evErr.message);
+      });
     }
 
-    const finalTxId = transactionId || `tx-${crypto.randomBytes(6).toString("hex")}`;
+    // ── Route by event type ───────────────────────────────────────────────
+    try {
+      const txn      = event?.data?.object;
+      const ref      = txn?.reference ?? txn?.trxID ?? "";
+      // reference is stored as "ORDER-<orderId>" — strip prefix
+      const orderId  = ref.startsWith("ORDER-") ? ref.replace("ORDER-", "") : ref;
+      const mesombTx = txn?.pk ?? txn?.id ?? null;
 
-    await db.from("orders").update({
-      status: "paid",
-      transaction_id: finalTxId,
-      paid_at: new Date().toISOString(),
-    }).eq("order_id", orderId);
+      switch (event.event_type) {
+        case "payment.transaction.success": {
+          if (!orderId) { console.warn("[Webhook] No orderId in success event."); break; }
 
-    await db.from("processed_payments").insert({
-      order_id: orderId,
-      transaction_id: finalTxId,
-    });
+          const { data: orderData } = await db.from("orders").select("*").eq("order_id", orderId).maybeSingle();
+          if (!orderData) { console.warn(`[Webhook] Order ${orderId} not found.`); break; }
+          if (orderData.status === "paid") { console.log(`[Webhook] Order ${orderId} already paid.`); break; }
 
-    console.log(`[Webhook] Order ${orderId} marked as PAID. Initializing commission calculations.`);
+          await db.from("orders").update({
+            status: "paid",
+            transaction_id: mesombTx ?? `tx-${crypto.randomBytes(6).toString("hex")}`,
+            mesomb_transaction_id: mesombTx,
+            paid_at: new Date().toISOString(),
+          }).eq("order_id", orderId);
 
-    if (orderData.user_id && orderData.user_id !== "guest") {
-      await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
-    }
+          // Also keep processed_payments for backwards-compat idempotency guard
+          await db.from("processed_payments").insert({
+            order_id: orderId,
+            transaction_id: mesombTx ?? orderId,
+          }).then(({ error: ppErr }: any) => {
+            if (ppErr && !ppErr.message?.includes("duplicate")) console.warn("[Webhook] processed_payments insert:", ppErr.message);
+          });
 
-    // Send WhatsApp notification to admin — non-blocking, must never fail the order
-    (async () => {
-      try {
-        const { data: setting } = await db
-          .from("site_settings")
-          .select("value")
-          .eq("key", "order_notifications")
-          .maybeSingle();
+          console.log(`[Webhook] Order ${orderId} → paid. MeSomb tx: ${mesombTx}`);
 
-        const notifConfig = setting?.value ?? {};
-        const adminNumber  = notifConfig?.whatsapp_number ?? "";
-        const notifEnabled = notifConfig?.enabled ?? false;
+          if (orderData.user_id && orderData.user_id !== "guest") {
+            await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
+          }
 
-        if (!notifEnabled || !adminNumber) {
-          console.log(`[WhatsApp] Order notifications disabled or no number configured — skipping.`);
-          return;
+          // WhatsApp admin notification — non-blocking
+          (async () => {
+            try {
+              const { data: setting } = await db.from("site_settings").select("value").eq("key", "order_notifications").maybeSingle();
+              const notifConfig  = setting?.value ?? {};
+              const adminNumber  = notifConfig?.whatsapp_number ?? "";
+              const notifEnabled = notifConfig?.enabled ?? false;
+              if (!notifEnabled || !adminNumber) return;
+
+              const result = await sendOrderWhatsApp(adminNumber, {
+                orderId,
+                amountXaf:       orderData.amount_xaf,
+                customerName:    orderData.customer_name    ?? undefined,
+                customerPhone:   orderData.customer_phone   ?? undefined,
+                deliveryAddress: orderData.delivery_address ?? undefined,
+                deliveryNotes:   orderData.delivery_notes   ?? undefined,
+                cart:            orderData.cart ?? [],
+              });
+
+              await db.from("orders").update(
+                result.success
+                  ? { whatsapp_notified: true,  whatsapp_notified_at: new Date().toISOString(), whatsapp_notification_error: null }
+                  : { whatsapp_notified: false, whatsapp_notification_error: result.error ?? "Unknown error" }
+              ).eq("order_id", orderId);
+
+              if (result.success) console.log(`[WhatsApp] Admin notified for Order ${orderId}.`);
+              else console.error(`[WhatsApp] Notification failed for Order ${orderId}: ${result.error}`);
+            } catch (err: any) {
+              console.error(`[WhatsApp] Error for Order ${orderId}:`, err.message);
+            }
+          })();
+          break;
         }
 
-        const result = await sendOrderWhatsApp(adminNumber, {
-          orderId,
-          amountXaf: orderData.amount_xaf,
-          customerName:    orderData.customer_name    ?? undefined,
-          customerPhone:   orderData.customer_phone   ?? undefined,
-          deliveryAddress: orderData.delivery_address ?? undefined,
-          deliveryNotes:   orderData.delivery_notes   ?? undefined,
-          cart: orderData.cart ?? [],
-        });
-
-        if (result.success) {
-          await db.from("orders").update({
-            whatsapp_notified:    true,
-            whatsapp_notified_at: new Date().toISOString(),
-            whatsapp_notification_error: null,
-          }).eq("order_id", orderId);
-          console.log(`[WhatsApp] Admin notification sent for Order ${orderId}.`);
-        } else {
-          await db.from("orders").update({
-            whatsapp_notified: false,
-            whatsapp_notification_error: result.error ?? "Unknown error",
-          }).eq("order_id", orderId);
-          console.error(`[WhatsApp] Notification failed for Order ${orderId}: ${result.error}`);
+        case "payment.transaction.failed": {
+          if (!orderId) { console.warn("[Webhook] No orderId in failed event."); break; }
+          await db.from("orders").update({ status: "cancelled", mesomb_transaction_id: mesombTx }).eq("order_id", orderId);
+          console.log(`[Webhook] Order ${orderId} → cancelled (payment failed).`);
+          break;
         }
-      } catch (err: any) {
-        console.error(`[WhatsApp] Unexpected error sending notification for Order ${orderId}:`, err.message);
-        try {
-          await db.from("orders").update({
-            whatsapp_notification_error: err.message,
-          }).eq("order_id", orderId);
-        } catch { /* ignore secondary failure */ }
-      }
-    })();
 
-    res.json({ success: true, message: "Order processed successfully." });
+        default:
+          console.log(`[Webhook] Unhandled event type: ${event.event_type}`);
+      }
+    } catch (handlerErr: any) {
+      // Log but still return 200 — signature/dedup passed, MeSomb should not redeliver
+      console.error("[Webhook] Handler error (event accepted but processing failed):", handlerErr.message);
+    }
+
+    // Always return 200 after signature + dedup checks pass
+    return res.json({ received: true });
   }));
 
   // In-memory rate limiter for resend-notification (per user, not IP)
@@ -717,8 +845,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
     }
   }));
 
+  // ── Deposit / Payout (server pays distributor) ───────────────────────────
   app.post("/api/payment/payout", requireDb(async (db, req, res) => {
-    // Verify caller via Replit Auth session
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) {
       return res.status(401).json({ error: "Authorization required." });
@@ -740,6 +868,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
       return res.status(400).json({ error: "Insufficient wallet balance to request this payout." });
     }
 
+    // Deduct wallet immediately — webhook is authoritative for final completion
     await db.from("wallets").update({
       balance_xaf: currentBalance - amount,
       updated_at: new Date().toISOString(),
@@ -751,29 +880,105 @@ Answer concisely, helpfully, and professionally. Support both English and French
       wallet_id: userId,
       type: "withdrawal",
       amount_xaf: amount,
-      description: `MeSomb Payout withdrawal initiated to ${phone} (${provider.toUpperCase()})`,
-      status: "pending",
+      description: `MeSomb Deposit payout to ${phone} (${String(provider).toUpperCase()})`,
+      status: "processing",
     });
 
-    console.log(`[Payout] Withdrawal request logged for User ${userId}, amount ${amount} XAF. Status: Pending.`);
+    console.log(`[Payout] Withdrawal ${txId} for User ${userId}, ${amount} XAF → ${phone}. Calling MeSomb makeDeposit...`);
 
-    setTimeout(async () => {
-      try {
-        await db.from("wallet_transactions").update({
-          status: "completed",
-        }).eq("id", txId);
-        console.log(`[Payout-Cron] Withdrawal transaction ${txId} successfully completed.`);
-      } catch (subErr: any) {
-        console.error("[Payout-Cron-Error]", subErr.message);
-      }
-    }, 5000);
+    const mesomb = getMeSombClient();
+    if (!mesomb) {
+      console.warn("[Payout] MeSomb credentials not set — leaving transaction in processing state.");
+      return res.json({
+        success: true,
+        transactionId: txId,
+        status: "processing",
+        message: "Payout queued. MeSomb credentials are not yet configured — process manually.",
+      });
+    }
+
+    // Fetch distributor profile for customer fields
+    const { data: distData } = await db.from("distributors").select("*").eq("id", userId).maybeSingle();
+    const localPhone = String(phone).replace(/^\+?237/, "").replace(/\s/g, "");
+    const service = String(provider).toUpperCase() === "ORANGE" ? "ORANGE" : "MTN";
+
+    let depositResponse: any;
+    try {
+      depositResponse = await mesomb.makeDeposit({
+        receiver: localPhone,
+        amount,
+        service,
+        country: "CM",
+        currency: "XAF",
+        nonce: crypto.randomUUID(),
+        trxID: txId,
+        customer: {
+          email:     distData?.email      ?? `${txId}@songtailife.cm`,
+          firstName: distData?.first_name ?? "Distributor",
+          lastName:  distData?.last_name  ?? "",
+          town:      distData?.city       ?? "Yaoundé",
+          region:    distData?.region     ?? "Centre",
+          country:   "CM",
+        },
+        location: { town: "Yaoundé", region: "Centre", country: "CM" },
+      });
+    } catch (sdkErr: any) {
+      console.error("[Payout] MeSomb makeDeposit threw:", sdkErr.message);
+      // Refund wallet on SDK error
+      await db.from("wallets").update({ balance_xaf: currentBalance, updated_at: new Date().toISOString() }).eq("id", userId);
+      await db.from("wallet_transactions").update({ status: "failed" }).eq("id", txId);
+      return res.status(502).json({ error: "Payout request failed. Your wallet has been refunded.", detail: sdkErr.message });
+    }
+
+    if (depositResponse.isOperationSuccess() && depositResponse.isTransactionSuccess()) {
+      const mesombTx = depositResponse.transaction?.pk ?? null;
+      await db.from("wallet_transactions").update({
+        status: "processing",
+        reference_id: mesombTx ?? txId,
+      }).eq("id", txId);
+      console.log(`[Payout] MeSomb deposit accepted for tx ${txId}. MeSomb tx: ${mesombTx}`);
+    } else {
+      const msg = depositResponse.message ?? "Deposit rejected by MeSomb.";
+      console.warn(`[Payout] MeSomb deposit failed for tx ${txId}: ${msg}`);
+      // Refund wallet
+      await db.from("wallets").update({ balance_xaf: currentBalance, updated_at: new Date().toISOString() }).eq("id", userId);
+      await db.from("wallet_transactions").update({ status: "failed" }).eq("id", txId);
+      return res.status(400).json({ error: msg });
+    }
 
     res.json({
       success: true,
       transactionId: txId,
-      status: "pending",
-      message: "Sovereign Payout initiated securely. Funds will clear within minutes.",
+      status: "processing",
+      message: "Payout request accepted by mobile network. Funds will arrive within minutes.",
     });
+  }));
+
+  // ── Transaction reconciliation — check stuck payments ────────────────────
+  app.post("/api/payment/check-transaction", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+
+    // Admin only
+    const { data: profile } = await db.from("profiles").select("role").eq("id", sessionUser.claims.sub).maybeSingle();
+    if (!["admin", "superadmin"].includes(profile?.role ?? "")) {
+      return res.status(403).json({ error: "Forbidden." });
+    }
+
+    const { mesombTransactionId } = req.body;
+    if (!mesombTransactionId) return res.status(400).json({ error: "mesombTransactionId is required." });
+
+    const mesomb = getMeSombClient();
+    if (!mesomb) return res.status(503).json({ error: "MeSomb credentials not configured." });
+
+    try {
+      const results = await (mesomb as any).checkTransactions([mesombTransactionId], { source: "MESOMB" });
+      const status = Array.isArray(results) ? results[0]?.status : results?.status;
+      console.log(`[Reconcile] MeSomb status for tx ${mesombTransactionId}: ${status}`);
+      return res.json({ success: true, status, raw: Array.isArray(results) ? results[0] : results });
+    } catch (err: any) {
+      return res.status(502).json({ error: "checkTransactions failed.", detail: err.message });
+    }
   }));
 
   app.post("/api/distributor/add-downline", requireDb(async (db, req, res) => {

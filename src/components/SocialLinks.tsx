@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useSiteSettings, SocialSettings } from "../hooks/useSiteSettings";
 import { trackEvent } from "./Analytics";
 
@@ -10,7 +11,7 @@ interface SocialPlatform {
   key: keyof SocialSettings;
   label: string;
   color: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }
 
 const FacebookIcon = ({ size = 18 }: { size?: number }) => (

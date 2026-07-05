@@ -17,7 +17,7 @@ interface StoryBody {
   image_url: string;
 }
 
-interface TeamMember { name: string; role_en: string; role_fr: string; desc_en: string; image: string; }
+interface TeamMember { name: string; role_en: string; role_fr?: string; desc_en: string; desc_fr?: string; image: string; }
 interface Cert { label_en: string; label_fr: string; sub_en: string; sub_fr: string; }
 
 const DEFAULT_HEADER: StoryContent = {

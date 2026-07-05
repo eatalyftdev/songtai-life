@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Plus, Trash2, X, Image as ImageIcon } from "lucide-react";
 import { useAdminResource } from "../../hooks/useAdminResource";
 import MediaUploader from "../MediaUploader";
@@ -48,7 +48,7 @@ export default function GalleryTab({ addNotification }: GalleryTabProps) {
     setForm(f => ({ ...f, url }));
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     const url = form.url || uploadedUrl;
     if (!url) { addNotification("Please provide or upload an image.", "info"); return; }

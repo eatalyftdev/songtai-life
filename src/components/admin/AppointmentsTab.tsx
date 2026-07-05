@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Calendar, Clock, User, Mail, Phone, CheckCircle2, XCircle, AlertCircle, Filter, Plus, Pencil, X } from "lucide-react";
 import { useAdminResource } from "../../hooks/useAdminResource";
 import { supabase } from "../../lib/supabase";
@@ -79,7 +79,7 @@ export default function AppointmentsTab({ addNotification }: AppointmentsTabProp
     else addNotification(`Appointment ${status}.`, "success");
   };
 
-  const handleAddType = async (e: React.FormEvent) => {
+  const handleAddType = async (e: FormEvent) => {
     e.preventDefault();
     setAddingType(true);
     const { error } = await insertType({

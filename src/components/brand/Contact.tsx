@@ -42,7 +42,7 @@ export default function Contact({ addNotification }: ContactProps) {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const lang = "en";
+  const lang: "en" | "fr" = "en";
 
   useEffect(() => {
     supabase.from("homepage_sections").select("content").eq("section_key", "page_contact").maybeSingle()
