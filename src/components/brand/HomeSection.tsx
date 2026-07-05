@@ -124,16 +124,23 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
     : (newsletterSection.body_en || t("newsletter.desc"));
 
   // ── Live data: products ─────────────────────────────────────────────────
-  const [liveProducts, setLiveProducts] = useState<typeof PRODUCTS_SEED>(PRODUCTS_SEED);
+  const [liveProducts, setLiveProducts] = useState<typeof PRODUCTS_SEED>([]);
+  const [dbProductsLoaded, setDbProductsLoaded] = useState(false);
   useEffect(() => {
     const fetch = async () => {
-      const { data: featured } = await supabase
+      const { data: featured, error } = await supabase
         .from("products")
         .select("*, product_categories(name)")
         .eq("is_active", true)
         .eq("is_featured", true)
         .order("featured_order", { ascending: true })
         .limit(8);
+
+      if (error) {
+        // Only fall back to seeds on first load if Supabase is unreachable
+        if (!dbProductsLoaded) setLiveProducts(PRODUCTS_SEED);
+        return;
+      }
 
       let rows = featured ?? [];
       if (rows.length < 4) {
@@ -150,26 +157,26 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         rows = [...rows, ...padding];
       }
 
-      if (rows.length > 0) {
-        setLiveProducts(rows.map((row: any) => ({
-          id: row.id, slug: row.slug ?? "",
-          name: locale === "fr" ? (row.name_fr || row.name_en || "") : (row.name_en || ""),
-          description: locale === "fr" ? (row.description_fr || row.description_en || "") : (row.description_en || ""),
-          priceXaf: row.price_xaf ?? 0, pvPoints: row.pv_points ?? 0,
-          category: row.product_categories?.name ?? "Health",
-          images: row.images ?? (row.image ? [row.image] : []),
-          isActive: row.is_active ?? true,
-          benefits: [], usage: "", usageInstructions: "",
-          strikePrice: row.strike_price_xaf,
-        })));
-      }
+      // Always update — even empty result clears deleted products
+      setLiveProducts(rows.map((row: any) => ({
+        id: row.id, slug: row.slug ?? "",
+        name: locale === "fr" ? (row.name_fr || row.name_en || "") : (row.name_en || ""),
+        description: locale === "fr" ? (row.description_fr || row.description_en || "") : (row.description_en || ""),
+        priceXaf: row.price_xaf ?? 0, pvPoints: row.pv_points ?? 0,
+        category: row.product_categories?.name ?? "Health",
+        images: row.images ?? (row.image ? [row.image] : []),
+        isActive: row.is_active ?? true,
+        benefits: [], usage: "", usageInstructions: "",
+        strikePrice: row.strike_price_xaf,
+      })));
+      setDbProductsLoaded(true);
     };
     fetch();
     const ch = supabase.channel("home_products_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, fetch)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [locale]);
+  }, [locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live data: blog posts ───────────────────────────────────────────────
   const [liveBlogPosts, setLiveBlogPosts] = useState<typeof BLOG_SEED>(BLOG_SEED);
@@ -281,12 +288,32 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
     return () => clearInterval(iv);
   }, [liveTestimonials.length]);
 
+  // ── Live data: product categories (for homepage filter tabs) ───────────────
+  const [liveCategories, setLiveCategories] = useState<{ key: string; label: string }[]>([]);
+  useEffect(() => {
+    const fetchCats = async () => {
+      const { data } = await supabase
+        .from("product_categories")
+        .select("name, name_fr, display_order")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+      if (data && data.length > 0) {
+        setLiveCategories(data.map((c: any) => ({
+          key: c.name ?? "",
+          label: locale === "fr" ? (c.name_fr || c.name || "") : (c.name || ""),
+        })));
+      }
+    };
+    fetchCats();
+    const ch = supabase.channel("home_cats_rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_categories" }, fetchCats)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [locale]);
+
   const CATEGORIES = [
-    { key: "all",         label: t("home.cat.all") },
-    { key: "Health",      label: t("home.cat.health") },
-    { key: "Beauty",      label: t("home.cat.beauty") },
-    { key: "Agriculture", label: t("home.cat.agriculture") },
-    { key: "New Arrivals", label: t("home.cat.new") },
+    { key: "all", label: t("home.cat.all") },
+    ...liveCategories,
   ];
 
   const filteredProducts = activeCategory === "all"
