@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import ForcePasswordChange from "./auth/ForcePasswordChange";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -41,6 +42,16 @@ export default function ProtectedRoute({
     }
   }
 
-  // 4. Authorized -> render content safely with no flash
+  // 4. Force password change if flagged on profile
+  if (userProfile?.mustChangePassword) {
+    return (
+      <ForcePasswordChange
+        onComplete={() => window.location.reload()}
+        addNotification={addNotification ?? (() => {})}
+      />
+    );
+  }
+
+  // 5. Authorized -> render content safely with no flash
   return <>{children}</>;
 }

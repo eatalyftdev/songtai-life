@@ -5,7 +5,6 @@ import { motion } from "motion/react";
 import i18n from "../i18n";
 import { useSiteSettings } from "../hooks/useSiteSettings";
 import { supabase } from "../lib/supabase";
-import { useAuth } from "../context/AuthContext";
 import Logo from "./Logo";
 
 const SOCIAL_ICONS: Record<string, ReactElement> = {
@@ -48,12 +47,11 @@ export default function Footer({ setBrandPage, openPrivacyPolicy, theme }: Foote
   const locale = i18nInstance.language?.startsWith("fr") ? "fr" : "en";
   const year = new Date().getFullYear();
 
-  const { user } = useAuth();
-
   const toggleLanguage = async () => {
     const nextLang = locale === "en" ? "fr" : "en";
     i18n.changeLanguage(nextLang);
     localStorage.setItem("songtai_lng", nextLang);
+    const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       supabase.from("profiles").update({ locale: nextLang }).eq("id", user.id).then(() => {});
     }

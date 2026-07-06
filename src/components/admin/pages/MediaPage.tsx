@@ -22,10 +22,12 @@ interface ExternalRef {
 
 const BUCKETS = ["media","documents","testimonials"];
 
-// URLs served from our own media API are "owned"; anything else is external
+// The Supabase Storage base for this project — URLs that start with this are owned
+const STORAGE_BASE = "https://auyjxchghtetxpiyecds.supabase.co/storage/";
+
 function isExternal(url: string | null | undefined): boolean {
   if (!url || url.trim() === "") return false;
-  return !url.startsWith("/api/media");
+  return !url.startsWith(STORAGE_BASE);
 }
 
 export default function MediaPage() {
