@@ -171,16 +171,12 @@ export default function DistributorPortal({ addNotification }: { addNotification
     setPayoutLoading(true);
 
     try {
-      // Route through authenticated server endpoint — prevents IDOR and wallet tampering
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error("No active session token.");
-
+      // Route through authenticated server endpoint (cookie session) — prevents IDOR and wallet tampering
       const res = await fetch("/api/payment/payout", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           amountXaf: amountNum,
@@ -209,16 +205,12 @@ export default function DistributorPortal({ addNotification }: { addNotification
     if (!user || !distributorProfile || !newMemberName.trim()) return;
 
     try {
-      // Route through server endpoint — uses admin SDK to create a valid auth user
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error("No active session token.");
-
+      // Route through server endpoint (cookie session) — creates a valid downline record
       const res = await fetch("/api/distributor/add-downline", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           memberName: newMemberName,

@@ -1,6 +1,12 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { User } from "@supabase/supabase-js";
-import { supabase } from "../lib/supabase";
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+}
 
 export interface UserProfile {
   uid: string;
@@ -29,44 +35,39 @@ export interface Wallet {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   userProfile: UserProfile | null;
   distributorProfile: DistributorProfile | null;
   wallet: Wallet | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, phone: string, role: UserProfile["role"]) => Promise<void>;
+  login: () => void;
+  logout: () => void;
   becomeDistributor: (sponsorCode: string) => Promise<void>;
-  logout: () => Promise<void>;
-  simulatePhoneOTP: (phone: string) => Promise<string>;
-  verifyPhoneOTPAndLogin: (phone: string, code: string, enteredCode: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Map Supabase snake_case row → camelCase DistributorProfile
 function mapDistributor(uid: string, row: any): DistributorProfile {
   return {
     uid,
-    distributorCode: row.distributor_code,
-    sponsorId: row.sponsor_id ?? null,
-    placementId: row.placement_id ?? null,
+    distributorCode: row.distributorCode,
+    sponsorId: row.sponsorId ?? null,
+    placementId: row.placementId ?? null,
     rank: row.rank ?? "bronze",
-    kycStatus: row.kyc_status ?? "none",
-    joinedAt: row.joined_at,
+    kycStatus: row.kycStatus ?? "none",
+    joinedAt: row.joinedAt,
   };
 }
 
-// Map Supabase snake_case row → camelCase Wallet
 function mapWallet(uid: string, row: any): Wallet {
   return {
     uid,
-    balanceXaf: row.balance_xaf ?? 0,
-    updatedAt: row.updated_at,
+    balanceXaf: row.balanceXaf ?? 0,
+    updatedAt: row.updatedAt,
   };
 }
 
-// Map Supabase snake_case row → camelCase UserProfile
 function mapProfile(uid: string, row: any): UserProfile {
   return {
     uid,
@@ -74,269 +75,81 @@ function mapProfile(uid: string, row: any): UserProfile {
     phone: row.phone ?? "",
     role: row.role,
     locale: row.locale ?? "fr",
-    mustChangePassword: row.must_change_password ?? false,
-    createdAt: row.created_at,
+    mustChangePassword: false,
+    createdAt: row.createdAt,
   };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [distributorProfile, setDistributorProfile] = useState<DistributorProfile | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch distributor and wallet for a given uid
-  async function fetchDistributorData(uid: string) {
-    const [distRes, walletRes] = await Promise.all([
-      supabase.from("distributors").select("*").eq("id", uid).maybeSingle(),
-      supabase.from("wallets").select("*").eq("id", uid).maybeSingle(),
-    ]);
-    setDistributorProfile(distRes.data ? mapDistributor(uid, distRes.data) : null);
-    setWallet(walletRes.data ? mapWallet(uid, walletRes.data) : null);
-  }
-
-  useEffect(() => {
-    // Auth state listener
-    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        const supabaseUser = session?.user ?? null;
-        setUser(supabaseUser);
-
-        if (!supabaseUser) {
-          setUserProfile(null);
-          setDistributorProfile(null);
-          setWallet(null);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch profile from Supabase
-        const { data: profileRow } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", supabaseUser.id)
-          .maybeSingle();
-
-        if (profileRow) {
-          const profile = mapProfile(supabaseUser.id, profileRow);
-          setUserProfile(profile);
-          if (profile.role === "distributor") {
-            await fetchDistributorData(supabaseUser.id);
-          } else {
-            setDistributorProfile(null);
-            setWallet(null);
-          }
-        } else {
-          setUserProfile(null);
-        }
-        setLoading(false);
-      }
-    );
-
-    return () => authSub.unsubscribe();
-  }, []);
-
-  // Realtime: keep wallet + distributor live after auth is established
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`user-data-${user.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
-        async () => {
-          const { data } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-          if (data) {
-            const profile = mapProfile(user.id, data);
-            setUserProfile(profile);
-            if (profile.role === "distributor") {
-              await fetchDistributorData(user.id);
-            }
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "wallets", filter: `id=eq.${user.id}` },
-        async () => {
-          const { data } = await supabase.from("wallets").select("*").eq("id", user.id).maybeSingle();
-          if (data) setWallet(mapWallet(user.id, data));
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
-
-  const login = async (email: string, password: string) => {
-    setLoading(true);
+  const refreshProfile = useCallback(async () => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        // Only count FAILED attempts toward the rate limit bucket.
-        // check_rate_limit returns false when the bucket is already full (no insert),
-        // true when the attempt was recorded and we're still under the cap.
-        const { data: allowed, error: rlError } = await supabase.rpc("check_rate_limit", {
-          p_bucket: "login",
-          p_identifier: email.toLowerCase(),
-          p_max_attempts: 5,
-          p_window_seconds: 300,
-        });
-        // If RPC is available and signals we've hit the cap, override the error message.
-        if (!rlError && allowed === false) {
-          setLoading(false);
-          throw new Error("Too many failed login attempts. Please wait 5 minutes and try again.");
-        }
+      const authRes = await fetch("/api/auth/user", { credentials: "include" });
+      if (!authRes.ok) {
+        setUser(null);
+        setUserProfile(null);
+        setDistributorProfile(null);
+        setWallet(null);
         setLoading(false);
-        throw error;
+        return;
       }
-      // Successful login — do NOT record a rate-limit event; let the bucket drain naturally.
-    } catch (err) {
-      setLoading(false);
-      throw err;
-    }
-  };
-
-  const signup = async (email: string, password: string, phone: string, role: UserProfile["role"]) => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      const uid = data.user!.id;
-
-      await supabase.from("profiles").upsert({
-        id: uid,
-        email,
-        phone,
-        role,
-        locale: "fr",
+      const authUser = await authRes.json();
+      setUser({
+        id: authUser.id,
+        email: authUser.email,
+        firstName: authUser.firstName,
+        lastName: authUser.lastName,
+        profileImageUrl: authUser.profileImageUrl,
       });
 
-      if (role === "distributor") {
-        const uniqueId = Math.floor(1000 + Math.random() * 9000);
-        const distCode = `ST-REG-${uniqueId}`;
-
-        await supabase.from("distributors").upsert({
-          id: uid,
-          distributor_code: distCode,
-          sponsor_id: "ST-ELENA-88",
-          placement_id: "ST-ELENA-88",
-          rank: "bronze",
-          kyc_status: "none",
-        });
-
-        await supabase.from("wallets").upsert({
-          id: uid,
-          balance_xaf: 0,
-        });
+      const profRes = await fetch("/api/profile", { credentials: "include" });
+      if (profRes.ok) {
+        const { profile, distributor, wallet: walletRow } = await profRes.json();
+        setUserProfile(profile ? mapProfile(authUser.id, profile) : null);
+        setDistributorProfile(distributor ? mapDistributor(authUser.id, distributor) : null);
+        setWallet(walletRow ? mapWallet(authUser.id, walletRow) : null);
       }
     } catch (err) {
+      console.error("Failed to load session:", err);
+    } finally {
       setLoading(false);
-      throw err;
     }
+  }, []);
+
+  useEffect(() => {
+    refreshProfile();
+  }, [refreshProfile]);
+
+  const login = () => {
+    window.location.href = "/api/login";
+  };
+
+  const logout = () => {
+    window.location.href = "/api/logout";
   };
 
   const becomeDistributor = async (sponsorCode: string) => {
-    if (!user || !userProfile) throw new Error("No active authenticated session.");
+    if (!user) throw new Error("No active authenticated session.");
     setLoading(true);
     try {
-      const uniqueId = Math.floor(1000 + Math.random() * 9000);
-      const newDistCode = `ST-DIST-${uniqueId}`;
-
-      await supabase.from("distributors").upsert({
-        id: user.id,
-        distributor_code: newDistCode,
-        sponsor_id: sponsorCode,
-        placement_id: sponsorCode,
-        rank: "bronze",
-        kyc_status: "none",
+      const res = await fetch("/api/become-distributor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ sponsorCode }),
       });
-
-      await supabase.from("wallets").upsert({
-        id: user.id,
-        balance_xaf: 0,
-      });
-
-      await supabase.from("profiles").update({ role: "distributor" }).eq("id", user.id);
-
-      setLoading(false);
-    } catch (err) {
-      setLoading(false);
-      throw err;
-    }
-  };
-
-  const logout = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (err) {
-      setLoading(false);
-      throw err;
-    }
-  };
-
-  const simulatePhoneOTP = async (phone: string): Promise<string> => {
-    const mockCode = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log(`[SMS-OTP-GATEWAY] Sending verification code ${mockCode} to ${phone}`);
-    return mockCode;
-  };
-
-  const verifyPhoneOTPAndLogin = async (phone: string, code: string, enteredCode: string) => {
-    if (code !== enteredCode) {
-      throw new Error("Invalid verification code. Please request a new OTP code.");
-    }
-    setLoading(true);
-    try {
-      const sanitizedPhone = phone.replace(/\s+/g, "").replace("+", "");
-      const simulatedEmail = `${sanitizedPhone}@songtailife.otp`;
-      const fallbackPassword = `OTP-Pass-${sanitizedPhone}`;
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: simulatedEmail,
-        password: fallbackPassword,
-      });
-
-      if (signInError) {
-        // User doesn't exist — sign up
-        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-          email: simulatedEmail,
-          password: fallbackPassword,
-        });
-        if (signUpErr) throw signUpErr;
-
-        const uid = signUpData.user!.id;
-        const uniqueId = Math.floor(1000 + Math.random() * 9000);
-        const distCode = `ST-OTP-${uniqueId}`;
-
-        await supabase.from("profiles").upsert({
-          id: uid,
-          email: simulatedEmail,
-          phone,
-          role: "distributor",
-          locale: "fr",
-        });
-
-        await supabase.from("distributors").upsert({
-          id: uid,
-          distributor_code: distCode,
-          sponsor_id: "ST-ELENA-88",
-          placement_id: "ST-ELENA-88",
-          rank: "bronze",
-          kyc_status: "none",
-        });
-
-        await supabase.from("wallets").upsert({
-          id: uid,
-          balance_xaf: 10000, // Welcome bonus
-        });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to register as distributor.");
       }
-    } catch (err) {
+      await refreshProfile();
+    } finally {
       setLoading(false);
-      throw err;
     }
   };
 
@@ -349,11 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         wallet,
         loading,
         login,
-        signup,
-        becomeDistributor,
         logout,
-        simulatePhoneOTP,
-        verifyPhoneOTPAndLogin,
+        becomeDistributor,
+        refreshProfile,
       }}
     >
       {children}

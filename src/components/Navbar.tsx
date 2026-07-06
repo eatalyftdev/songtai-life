@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ShoppingBag, Globe2, Sun, Moon, Menu, X, ChevronDown } from "lucide-react";
 import i18n from "../i18n";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
 import Logo from "./Logo";
 
 interface NavbarProps {
@@ -88,11 +89,12 @@ export default function Navbar({
     setMegaOpen(false);
   };
 
+  const { user } = useAuth();
+
   const toggleLanguage = async () => {
     const nextLang = locale === "en" ? "fr" : "en";
     i18n.changeLanguage(nextLang);
     localStorage.setItem("songtai_lng", nextLang);
-    const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       supabase.from("profiles").update({ locale: nextLang }).eq("id", user.id).then(() => {});
     }
