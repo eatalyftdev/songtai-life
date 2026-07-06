@@ -1,0 +1,245 @@
+Continuing the Songtai Life build on Supabase. This pass adds a unified "Page Edits" section in the admin panel — one place where an admin can select any public page, see all its editable subsections, edit them, and save, with changes syncing to Supabase and reflecting on the live frontend via the existing revalidation pattern. This is for page-level static content (headlines, intro copy, hero banners, CTA text) — it does NOT duplicate the dedicated Products/Blog/Events/Testimonials/Gallery/FAQ admin sections already built, which remain their own CRUD areas for those dynamic collections. Read ARCHITECTURE.md first per the standing rule.
+
+═══════════════════════════
+1. GENERALIZE homepage_sections INTO A SITE-WIDE page_sections TABLE
+═══════════════════════════
+If `homepage_sections` already exists from the previous pass, migrate it into this broader structure rather than keeping homepage editing separate from every other page:
+
+```sql
+create table page_sections (
+  id uuid primary key default uuid_generate_v4(),
+  page_key text not null,        -- 'home', 'about', 'products', 'opportunity', 'events', 'blog', 'gallery', 'media_center', 'contact', 'become_distributor'
+  section_key text not null,     -- 'hero', 'intro', 'mission', 'stats', 'benefits', 'cta', etc. — scoped within the page
+  content jsonb not null,        -- flexible shape per section, bilingual fields nested inside (see Section 3 for the config that defines each shape)
+  display_order integer default 0,
+  updated_at timestamptz default now(),
+  updated_by uuid references profiles(id),
+  unique (page_key, section_key)
+);
+
+alter table page_sections enable row level security;
+create policy "public_read_page_sections" on page_sections for select using (true);
+create policy "admin_page_sections_all" on page_sections for all using (is_admin()) with check (is_admin());
+```
+
+If `homepage_sections` already has real admin-entered content, migrate it in rather than starting empty:
+```sql
+insert into page_sections (page_key, section_key, content)
+select 'home', section_key, content from homepage_sections
+on conflict (page_key, section_key) do nothing;
+-- then, once confirmed working, drop table homepage_sections;
+```
+
+═══════════════════════════
+2. PAGE REGISTRY — ONE CONFIG FILE DEFINING EVERY PAGE'S EDITABLE SECTIONS
+═══════════════════════════
+Build a single config (`lib/pageRegistry.ts`) as the source of truth for what's editable per page — the admin UI in Section 4 renders itself entirely from this config, so adding a new editable section later means editing this file once, not building a new bespoke form:
+
+```ts
+export const pageRegistry = {
+  home: {
+    label: 'Home',
+    publicPath: '/', // used for the revalidation call in Section 5
+    sections: {
+      hero: {
+        label: 'Hero',
+        fields: [
+          { key: 'headline', type: 'text', bilingual: true },
+          { key: 'subheadline', type: 'text', bilingual: true },
+          { key: 'cta_primary', type: 'text', bilingual: true },
+          { key: 'cta_secondary', type: 'text', bilingual: true },
+          { key: 'background_image', type: 'image' },
+        ],
+      },
+      company_intro: {
+        label: 'Company Introduction',
+        fields: [
+          { key: 'story', type: 'richtext', bilingual: true },
+          { key: 'stat_countries', type: 'number' },
+          { key: 'stat_members', type: 'number' },
+          { key: 'stat_products', type: 'number' },
+          { key: 'stat_years', type: 'number' },
+          { key: 'stat_awards', type: 'number' },
+        ],
+      },
+      opportunity_teaser: {
+        label: 'Opportunity Timeline',
+        fields: [{ key: 'steps', type: 'repeater', itemFields: [{ key: 'label', type: 'text', bilingual: true }] }],
+      },
+      benefits: {
+        label: 'Distributor Benefits',
+        fields: [
+          { key: 'headline', type: 'text', bilingual: true },
+          { key: 'items', type: 'repeater', itemFields: [
+            { key: 'icon', type: 'icon_select' },
+            { key: 'title', type: 'text', bilingual: true },
+            { key: 'description', type: 'text', bilingual: true },
+          ]},
+        ],
+      },
+      newsletter: {
+        label: 'Newsletter Section',
+        fields: [
+          { key: 'headline', type: 'text', bilingual: true },
+          { key: 'body', type: 'text', bilingual: true },
+        ],
+      },
+    },
+  },
+  about: {
+    label: 'About',
+    publicPath: '/about',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+        { key: 'banner_image', type: 'image' },
+      ]},
+      our_story: { label: 'Our Story', fields: [{ key: 'body', type: 'richtext', bilingual: true }] },
+      mission: { label: 'Mission', fields: [{ key: 'body', type: 'richtext', bilingual: true }] },
+      vision: { label: 'Vision', fields: [{ key: 'body', type: 'richtext', bilingual: true }] },
+      leadership_intro: { label: 'Leadership Section Intro', fields: [{ key: 'body', type: 'text', bilingual: true }] },
+      certifications_intro: { label: 'Certifications Intro', fields: [{ key: 'body', type: 'text', bilingual: true }] },
+    },
+  },
+  products: {
+    label: 'Products',
+    publicPath: '/products',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+      // NOTE: individual products themselves stay in the existing /admin/products CRUD — this section
+      // only covers the intro banner/copy above the product grid, not the products list itself.
+    },
+  },
+  opportunity: {
+    label: 'Opportunity',
+    publicPath: '/opportunity',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+      why_join: { label: 'Why Join', fields: [{ key: 'body', type: 'richtext', bilingual: true }] },
+      compensation_overview: { label: 'Compensation Overview (visual copy, not the actual comp plan)', fields: [{ key: 'body', type: 'richtext', bilingual: true }] },
+      benefits_expanded: { label: 'Benefits (expanded)', fields: [
+        { key: 'items', type: 'repeater', itemFields: [
+          { key: 'title', type: 'text', bilingual: true },
+          { key: 'description', type: 'text', bilingual: true },
+        ]},
+      ]},
+      // Success Stories on this page pulls from the existing testimonials table — not duplicated here.
+    },
+  },
+  events: {
+    label: 'Events',
+    publicPath: '/events',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+    },
+  },
+  blog: {
+    label: 'Blog',
+    publicPath: '/blog',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+    },
+  },
+  gallery: {
+    label: 'Gallery',
+    publicPath: '/gallery',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+    },
+  },
+  media_center: {
+    label: 'Media Center',
+    publicPath: '/media-center',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+    },
+  },
+  contact: {
+    label: 'Contact',
+    publicPath: '/contact',
+    sections: {
+      hero: { label: 'Page Header', fields: [
+        { key: 'title', type: 'text', bilingual: true },
+        { key: 'subtitle', type: 'text', bilingual: true },
+      ]},
+      // Phone/email/address stay in the existing site_settings.contact (Settings → Contact tab) —
+      // this section is just the page's intro copy, avoiding two places to edit the same phone number.
+    },
+  },
+  become_distributor: {
+    label: 'Become a Distributor',
+    publicPath: '/become-a-distributor',
+    sections: {
+      hero: { label: 'Hero', fields: [
+        { key: 'headline', type: 'text', bilingual: true },
+        { key: 'subheadline', type: 'text', bilingual: true },
+        { key: 'cta', type: 'text', bilingual: true },
+        { key: 'background_image', type: 'image' },
+      ]},
+      benefits_recap: { label: 'Benefits Recap', fields: [{ key: 'body', type: 'richtext', bilingual: true }] },
+      faq_strip_intro: { label: 'FAQ Strip Intro', fields: [{ key: 'body', type: 'text', bilingual: true }] },
+      // Application form fields, testimonials, and full FAQ list are handled by their own existing systems.
+    },
+  },
+} as const;
+```
+
+═══════════════════════════
+3. FIELD TYPES — RENDER RULES
+═══════════════════════════
+The admin form-renderer (Section 4) interprets each field's `type`:
+- `text` — single-line input; if `bilingual: true`, render two stacked inputs labeled EN/FR, stored as `{ [key]_en, [key]_fr }` inside the section's `content` jsonb.
+- `richtext` — a lightweight rich-text editor (reuse whatever's already used for Blog post bodies — don't introduce a second rich-text library), bilingual same as above.
+- `number` — numeric input, no language variant.
+- `image` — the existing shared `<MediaUploader />` component (per the earlier "no raw URLs" pass), uploading into `media/pages/{page_key}/{section_key}/`, storing the returned Supabase Storage URL.
+- `icon_select` — a small icon picker (reuse whatever icon set is already in use elsewhere in the admin, e.g. lucide-react) for benefit/feature icons.
+- `repeater` — a reorderable list of sub-items, each rendered per `itemFields`, with add/remove/drag-reorder controls — used for things like the Opportunity timeline steps or Benefits grid items where the count isn't fixed.
+
+═══════════════════════════
+4. ADMIN UI — /admin/pages
+═══════════════════════════
+- Left panel: a list of every page from the `pageRegistry` (Home, About, Products, Opportunity, Events, Blog, Gallery, Media Center, Contact, Become a Distributor), grouped under one "Page Edits" sidebar nav item — clicking a page loads its editor on the right.
+- Right panel: for the selected page, render one collapsible card per section (from that page's `sections` config), each showing its fields per Section 3's render rules, pre-filled with the current value from `page_sections` (falling back to an empty/placeholder state if that page/section has no row yet).
+- Each section card has its own **Save** button (not one giant page-wide save) — saving a section:
+  1. Upserts the row into `page_sections` (`page_key`, `section_key`, `content`), via `supabase.from('page_sections').upsert(...)`.
+  2. Calls the existing `/api/revalidate` endpoint (built in the earlier "deletes don't reflect" fix) with that page's `publicPath` from the registry, so the live page updates immediately — no separate manual step, this fires automatically as part of the save action.
+  3. Shows a clear "Saved" confirmation tied to the actual Supabase response (success/error toast), same convention as every other admin form already built.
+  4. Logs to `audit_logs` via the existing `logAdminAction()` helper (`action: 'page_section_update'`, `table_name: 'page_sections'`, `record_id`).
+- A "Preview" link/button per page opens the live public page in a new tab so the admin can immediately verify the change.
+- Sections with no saved content yet show a clear "Not yet customized — showing default placeholder text" indicator, so it's obvious to the admin what's live-but-unedited versus intentionally set.
+
+═══════════════════════════
+5. FRONTEND — READ THROUGH ONE SHARED HOOK
+═══════════════════════════
+Build `usePageSection(pageKey, sectionKey)` (mirroring the existing `useSiteSettings()`/`useHomepageSection()` pattern) with Realtime subscription to `page_sections` filtered by `page_key`/`section_key`. Every public page component that currently has hardcoded copy for these sections swaps to reading through this hook, using the existing `useLocalizedField`-style helper for the bilingual EN/FR fields nested in `content`.
+
+Confirm every page in the registry actually has its hardcoded strings replaced — this is the completion step, not just adding the admin UI. Grep each public page component for the specific hardcoded strings enumerated in the registry above and confirm each one now resolves through `usePageSection`.
+
+═══════════════════════════
+6. WHAT STAYS OUT OF PAGE EDITS (avoid duplicate sources of truth)
+═══════════════════════════
+Explicitly confirmed NOT part of this system, to avoid two admin screens editing the same underlying thing:
+- Products, Blog posts, Events, Testimonials, Gallery images/albums, FAQ — all keep their own dedicated CRUD sections already built.
+- Site-wide settings (WhatsApp number, GTM ID, socials, contact phone/email/address, branding/logo) — stay in `/admin/settings`, already built, and Page Edits sections that reference this info (e.g., Contact page) should link to Settings rather than duplicating the field.
+- Homepage's dynamic lists (Featured Products, Blog Preview, Gallery Teaser, Upcoming Events, Success Stories) — these pull live from their respective tables, not from `page_sections`; only the static copy/headlines around them lives here.
+
+DELIVERABLE: A single "Page Edits" admin section listing every public page, each expandable into its config-defined editable sections (headlines, intro copy, hero images, repeatable items like timeline steps or benefit cards), where every section saves independently to Supabase, triggers immediate revalidation of the exact affected public page, and confirms success — with the dynamic collections (Products/Blog/Events/Testimonials/Gallery/FAQ) and site-wide settings deliberately left out of this system to avoid duplicate, conflicting sources of truth for the same content.

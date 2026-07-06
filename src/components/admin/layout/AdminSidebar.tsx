@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShoppingBag, ShoppingCart, Users, Wallet, Award,
   BookOpen, Calendar, Star, Image, CalendarCheck, Mail, Send,
   Library, Settings, History, LogOut, ChevronLeft, ChevronRight, Menu,
-  HelpCircle, Layers, Sliders, BookMarked, Phone, Leaf, CreditCard, Bot
+  HelpCircle, Layers, Sliders, BookMarked, Phone, Leaf, CreditCard, Bot, FileEdit
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { label: "Blog",             path: "/admin/blog",          icon: BookOpen,        roles: ["admin","superadmin","content_editor"] },
   { label: "Events",           path: "/admin/events",        icon: Calendar,        roles: ["admin","superadmin","content_editor"] },
   { label: "Testimonials",     path: "/admin/testimonials",  icon: Star,            roles: ["admin","superadmin","content_editor"] },
+  { label: "Page Edits",       path: "/admin/pages",                icon: FileEdit,     roles: ["admin","superadmin","content_editor"] },
   { label: "Homepage",         path: "/admin/homepage",             icon: LayoutDashboard, roles: ["admin","superadmin","content_editor"] },
   { label: "Our Story",        path: "/admin/our-story",            icon: BookMarked,   roles: ["admin","superadmin","content_editor"] },
   { label: "Contact Page",     path: "/admin/contact-page",         icon: Phone,        roles: ["admin","superadmin","content_editor"] },

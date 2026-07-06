@@ -37,6 +37,7 @@ import WellnessHubCMSPage from "./components/admin/pages/WellnessHubCMSPage";
 import BecomeDistributorCMSPage from "./components/admin/pages/BecomeDistributorCMSPage";
 import PaymentConfigPage from "./components/admin/pages/PaymentConfigPage";
 import AISettingsPage from "./components/admin/pages/AISettingsPage";
+import PageEditsPage from "./components/admin/pages/PageEditsPage";
 import { runCommissionEngine } from "./lib/commissionEngine";
 import WhatsAppWidget from "./components/WhatsAppWidget";
 import Analytics from "./components/Analytics";
@@ -316,6 +317,7 @@ function AppContent() {
             <Route path="become-distributor"   element={<BecomeDistributorCMSPage />} />
             <Route path="payment-config"       element={<PaymentConfigPage />} />
             <Route path="ai-settings"          element={<AISettingsPage />} />
+            <Route path="pages"                element={<PageEditsPage />} />
             <Route path="hero-carousel"        element={<HeroCarouselPage />} />
             <Route path="gallery"              element={<GalleryPage />} />
             <Route path="faq"                 element={<FAQPage />} />

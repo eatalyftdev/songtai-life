@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
 import crypto from "crypto";
-import { PaymentOperation } from "@hachther/mesomb";
+import { getMeSombClient } from "./server/mesomb";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./server/replit_integrations/auth/index";
 
 dotenv.config();
@@ -459,17 +459,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
   });
 
   // =========================================================================
-  // MESOMB PAYMENTS WORKFLOW API  (real @hachther/mesomb SDK)
+  // MESOMB PAYMENTS WORKFLOW API  (direct fetch implementation in server/mesomb.ts)
   // =========================================================================
-
-  // Build MeSomb client lazily — only when credentials are present
-  function getMeSombClient(): PaymentOperation | null {
-    const appKey    = process.env.MESOMB_APPLICATION_KEY;
-    const accessKey = process.env.MESOMB_ACCESS_KEY;
-    const secretKey = process.env.MESOMB_SECRET_KEY;
-    if (!appKey || !accessKey || !secretKey) return null;
-    return new PaymentOperation({ applicationKey: appKey, accessKey, secretKey });
-  }
 
   // ── Collect (customer pays) ───────────────────────────────────────────────
   app.post("/api/payment/checkout", requireDb(async (db, req, res) => {
@@ -520,8 +511,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
     let mesombResponse: any;
     try {
-      mesombResponse = await mesomb.makeCollect({
-        nonce: crypto.randomUUID(),
+      mesombResponse = await mesomb.collect({
         payer: localPhone,
         amount: Number(amountXaf),
         service,
@@ -546,14 +536,13 @@ Answer concisely, helpfully, and professionally. Support both English and French
         })),
       });
     } catch (sdkErr: any) {
-      console.error("[Payments] MeSomb makeCollect threw:", sdkErr.message);
+      console.error("[Payments] MeSomb collect threw:", sdkErr.message);
       await db.from("orders").update({ status: "failed" }).eq("order_id", orderId);
       return res.status(502).json({ error: "Mobile money request failed. Please try again.", detail: sdkErr.message });
     }
 
-    if (mesombResponse.isOperationSuccess() && mesombResponse.isTransactionSuccess()) {
-      // Synchronous success — store MeSomb transaction ID; webhook is still authoritative for final status
-      const txnPk = mesombResponse.transaction?.pk ?? null;
+    if (mesombResponse.operationSuccess && mesombResponse.transactionSuccess) {
+      const txnPk = mesombResponse.transactionId;
       await db.from("orders").update({
         status: "pending_confirmation",
         mesomb_transaction_id: txnPk,
@@ -904,13 +893,12 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
     let depositResponse: any;
     try {
-      depositResponse = await mesomb.makeDeposit({
+      depositResponse = await mesomb.deposit({
         receiver: localPhone,
         amount,
         service,
         country: "CM",
         currency: "XAF",
-        nonce: crypto.randomUUID(),
         trxID: txId,
         customer: {
           email:     distData?.email      ?? `${txId}@songtailife.cm`,
@@ -923,15 +911,14 @@ Answer concisely, helpfully, and professionally. Support both English and French
         location: { town: "Yaoundé", region: "Centre", country: "CM" },
       });
     } catch (sdkErr: any) {
-      console.error("[Payout] MeSomb makeDeposit threw:", sdkErr.message);
-      // Refund wallet on SDK error
+      console.error("[Payout] MeSomb deposit threw:", sdkErr.message);
       await db.from("wallets").update({ balance_xaf: currentBalance, updated_at: new Date().toISOString() }).eq("id", userId);
       await db.from("wallet_transactions").update({ status: "failed" }).eq("id", txId);
       return res.status(502).json({ error: "Payout request failed. Your wallet has been refunded.", detail: sdkErr.message });
     }
 
-    if (depositResponse.isOperationSuccess() && depositResponse.isTransactionSuccess()) {
-      const mesombTx = depositResponse.transaction?.pk ?? null;
+    if (depositResponse.operationSuccess && depositResponse.transactionSuccess) {
+      const mesombTx = depositResponse.transactionId;
       await db.from("wallet_transactions").update({
         status: "processing",
         reference_id: mesombTx ?? txId,
@@ -940,7 +927,6 @@ Answer concisely, helpfully, and professionally. Support both English and French
     } else {
       const msg = depositResponse.message ?? "Deposit rejected by MeSomb.";
       console.warn(`[Payout] MeSomb deposit failed for tx ${txId}: ${msg}`);
-      // Refund wallet
       await db.from("wallets").update({ balance_xaf: currentBalance, updated_at: new Date().toISOString() }).eq("id", userId);
       await db.from("wallet_transactions").update({ status: "failed" }).eq("id", txId);
       return res.status(400).json({ error: msg });
@@ -972,12 +958,11 @@ Answer concisely, helpfully, and professionally. Support both English and French
     if (!mesomb) return res.status(503).json({ error: "MeSomb credentials not configured." });
 
     try {
-      const results = await (mesomb as any).checkTransactions([mesombTransactionId], { source: "MESOMB" });
-      const status = Array.isArray(results) ? results[0]?.status : results?.status;
-      console.log(`[Reconcile] MeSomb status for tx ${mesombTransactionId}: ${status}`);
-      return res.json({ success: true, status, raw: Array.isArray(results) ? results[0] : results });
+      const result = await mesomb.checkTransaction(mesombTransactionId);
+      console.log(`[Reconcile] MeSomb status for tx ${mesombTransactionId}: ${result.status}`);
+      return res.json({ success: true, status: result.status, raw: result.raw });
     } catch (err: any) {
-      return res.status(502).json({ error: "checkTransactions failed.", detail: err.message });
+      return res.status(502).json({ error: "checkTransaction failed.", detail: err.message });
     }
   }));
 
