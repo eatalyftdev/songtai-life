@@ -31,18 +31,23 @@ where (slug is null or slug = '')
 -- Then run these RLS policies:
 -- ─────────────────────────────────────────────────────────────────────────────
 
-create policy if not exists "public_read_product_videos"
+drop policy if exists "public_read_product_videos"   on storage.objects;
+drop policy if exists "admin_insert_product_videos"  on storage.objects;
+drop policy if exists "admin_update_product_videos"  on storage.objects;
+drop policy if exists "admin_delete_product_videos"  on storage.objects;
+
+create policy "public_read_product_videos"
   on storage.objects for select
   using (bucket_id = 'product-videos');
 
-create policy if not exists "admin_insert_product_videos"
+create policy "admin_insert_product_videos"
   on storage.objects for insert
   with check (bucket_id = 'product-videos');
 
-create policy if not exists "admin_update_product_videos"
+create policy "admin_update_product_videos"
   on storage.objects for update
   using (bucket_id = 'product-videos');
 
-create policy if not exists "admin_delete_product_videos"
+create policy "admin_delete_product_videos"
   on storage.objects for delete
   using (bucket_id = 'product-videos');
