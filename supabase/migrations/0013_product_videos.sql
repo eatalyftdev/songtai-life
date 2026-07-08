@@ -3,7 +3,7 @@
 -- Run via: Supabase Dashboard > SQL Editor, or `supabase db push`
 -- ─────────────────────────────────────────────────────────────────────────────
 
-alter table products
+alter table public.products
   add column if not exists video_url_en          text,
   add column if not exists video_url_fr          text,
   add column if not exists video_thumbnail_en    text,
@@ -15,7 +15,7 @@ alter table products
   add column if not exists video_description_fr  text;
 
 -- Backfill missing/malformed slugs from name_en
-update products
+update public.products
 set slug = lower(regexp_replace(trim(name_en), '[^a-zA-Z0-9]+', '-', 'g'))
 where (slug is null or slug = '')
   and name_en is not null
