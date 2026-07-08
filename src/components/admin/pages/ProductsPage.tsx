@@ -1,12 +1,13 @@
 import React from "react";
 import { useState, useEffect } from "react";
-import { ShoppingBag, Plus, Edit, Trash2, ToggleLeft, ToggleRight, Copy } from "lucide-react";
+import { ShoppingBag, Plus, Edit, Trash2, ToggleLeft, ToggleRight, Copy, Video } from "lucide-react";
 import { supabase } from "../../../lib/supabase";
 import PageShell, { Card, TableWrapper, Th, Td, Btn, SearchInput, Select } from "../shared/PageShell";
 import SlideOver from "../shared/SlideOver";
 import { SkeletonTable } from "../shared/Skeleton";
 import EmptyState from "../shared/EmptyState";
 import MediaUploader from "../../MediaUploader";
+import VideoUploader from "../../VideoUploader";
 
 interface Product {
   id: string; slug: string; nameEn: string; nameFr: string;
@@ -14,12 +15,20 @@ interface Product {
   strikePriceXaf: number | null; pvPoints: number; isActive: boolean;
   isFeatured: boolean; featuredOrder: number;
   images: string[]; categoryId: string | null; stock: number;
+  videoUrlEn?: string; videoUrlFr?: string;
+  videoThumbnailEn?: string; videoThumbnailFr?: string;
+  videoDurationSeconds?: number;
+  videoTitleEn?: string; videoTitleFr?: string;
+  videoDescriptionEn?: string; videoDescriptionFr?: string;
 }
 
 const BLANK: Partial<Product> = {
   nameEn: "", nameFr: "", slug: "", descriptionEn: "", descriptionFr: "",
   priceXaf: 0, strikePriceXaf: null, pvPoints: 0, isActive: true,
   isFeatured: false, featuredOrder: 0, images: [], stock: 100,
+  videoUrlEn: "", videoUrlFr: "", videoThumbnailEn: "", videoThumbnailFr: "",
+  videoDurationSeconds: undefined, videoTitleEn: "", videoTitleFr: "",
+  videoDescriptionEn: "", videoDescriptionFr: "",
 };
 
 export default function ProductsPage() {
@@ -33,6 +42,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState<Partial<Product>>(BLANK);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [videoTab, setVideoTab] = useState<"en" | "fr">("en");
 
   const load = async () => {
     setLoading(true);
@@ -48,6 +58,11 @@ export default function ProductsPage() {
       pvPoints: p.pv_points ?? 0, isActive: p.is_active ?? true,
       isFeatured: p.is_featured ?? false, featuredOrder: p.featured_order ?? 0,
       images: p.images ?? [], categoryId: p.category_id ?? null, stock: p.stock ?? 0,
+      videoUrlEn: p.video_url_en ?? "", videoUrlFr: p.video_url_fr ?? "",
+      videoThumbnailEn: p.video_thumbnail_en ?? "", videoThumbnailFr: p.video_thumbnail_fr ?? "",
+      videoDurationSeconds: p.video_duration_seconds ?? undefined,
+      videoTitleEn: p.video_title_en ?? "", videoTitleFr: p.video_title_fr ?? "",
+      videoDescriptionEn: p.video_description_en ?? "", videoDescriptionFr: p.video_description_fr ?? "",
     })));
     setLoading(false);
   };
@@ -82,6 +97,11 @@ export default function ProductsPage() {
       images: form.images ?? [], is_active: form.isActive ?? true,
       is_featured: form.isFeatured ?? false, featured_order: Number(form.featuredOrder ?? 0),
       category_id: form.categoryId || null,
+      video_url_en: form.videoUrlEn || null, video_url_fr: form.videoUrlFr || null,
+      video_thumbnail_en: form.videoThumbnailEn || null, video_thumbnail_fr: form.videoThumbnailFr || null,
+      video_duration_seconds: form.videoDurationSeconds ?? null,
+      video_title_en: form.videoTitleEn || null, video_title_fr: form.videoTitleFr || null,
+      video_description_en: form.videoDescriptionEn || null, video_description_fr: form.videoDescriptionFr || null,
     };
     if (editing) {
       await supabase.from("products").update(payload).eq("id", editing.id);
@@ -313,6 +333,132 @@ export default function ProductsPage() {
               onRemoved={() => f("images", [])}
             />
           </div>
+
+          {/* ── Product Video Section ──────────────────────────── */}
+          <div className="border-t border-stone-800 pt-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Video className="w-4 h-4 text-stone-400" />
+              <span className="text-stone-300 text-xs font-semibold uppercase tracking-wider">Product Video</span>
+            </div>
+
+            {/* EN / FR tabs */}
+            <div className="flex gap-1 bg-stone-950 p-1 rounded-xl border border-stone-850/60 w-fit">
+              {(["en", "fr"] as const).map(loc => {
+                const hasVideo = loc === "en" ? !!form.videoUrlEn : !!form.videoUrlFr;
+                return (
+                  <button
+                    key={loc}
+                    type="button"
+                    onClick={() => setVideoTab(loc)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      videoTab === loc
+                        ? "bg-[#0A7D32]/15 border border-[#0A7D32]/30 text-emerald-400"
+                        : "text-stone-400 hover:text-white"
+                    }`}
+                  >
+                    {loc.toUpperCase()}
+                    {hasVideo && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Missing-locale indicator */}
+            {videoTab === "fr" && !form.videoUrlFr && form.videoUrlEn && (
+              <p className="text-[10px] text-amber-400 bg-amber-950/20 border border-amber-900/30 rounded-lg px-3 py-2">
+                French video not yet added — English video will show as fallback on the public page.
+              </p>
+            )}
+            {videoTab === "en" && !form.videoUrlEn && form.videoUrlFr && (
+              <p className="text-[10px] text-amber-400 bg-amber-950/20 border border-amber-900/30 rounded-lg px-3 py-2">
+                English video not yet added — French video will show as fallback.
+              </p>
+            )}
+
+            {/* Video uploader */}
+            <VideoUploader
+              folder={editing?.id ?? `draft-${Date.now()}`}
+              locale={videoTab}
+              currentVideoUrl={videoTab === "en" ? form.videoUrlEn || "" : form.videoUrlFr || ""}
+              currentThumbnailUrl={videoTab === "en" ? form.videoThumbnailEn || "" : form.videoThumbnailFr || ""}
+              onUploaded={(videoUrl, thumbnailUrl, durationSeconds) => {
+                if (videoTab === "en") {
+                  setForm(prev => ({
+                    ...prev,
+                    videoUrlEn: videoUrl,
+                    videoThumbnailEn: thumbnailUrl || prev.videoThumbnailEn,
+                    videoDurationSeconds: durationSeconds || prev.videoDurationSeconds,
+                  }));
+                } else {
+                  setForm(prev => ({
+                    ...prev,
+                    videoUrlFr: videoUrl,
+                    videoThumbnailFr: thumbnailUrl || prev.videoThumbnailFr,
+                    videoDurationSeconds: durationSeconds || prev.videoDurationSeconds,
+                  }));
+                }
+              }}
+              onRemoved={() => {
+                if (videoTab === "en") setForm(prev => ({ ...prev, videoUrlEn: "", videoThumbnailEn: "" }));
+                else setForm(prev => ({ ...prev, videoUrlFr: "", videoThumbnailFr: "" }));
+              }}
+            />
+
+            {/* Thumbnail manual replacement */}
+            <div>
+              <label className="text-stone-500 text-[10px] block mb-1.5 uppercase tracking-wider">
+                Thumbnail ({videoTab.toUpperCase()}) — auto-captured; replace if needed
+              </label>
+              <MediaUploader
+                bucket="media"
+                folder="products/thumbnails"
+                accept="image/*"
+                currentUrl={(videoTab === "en" ? form.videoThumbnailEn : form.videoThumbnailFr) || undefined}
+                onUploaded={url => {
+                  if (videoTab === "en") f("videoThumbnailEn", url);
+                  else f("videoThumbnailFr", url);
+                }}
+                onRemoved={() => {
+                  if (videoTab === "en") f("videoThumbnailEn", "");
+                  else f("videoThumbnailFr", "");
+                }}
+                label="Drop thumbnail image here"
+              />
+            </div>
+
+            {/* Duration (read-only display) */}
+            {(form.videoDurationSeconds ?? 0) > 0 && (
+              <p className="text-[10px] text-stone-500">
+                Duration detected: {Math.floor((form.videoDurationSeconds ?? 0) / 60)}m {(form.videoDurationSeconds ?? 0) % 60}s
+              </p>
+            )}
+
+            {/* Video title & description */}
+            <div>
+              <label className="text-stone-400 text-xs block mb-1.5">
+                Video Title ({videoTab.toUpperCase()})
+              </label>
+              <input
+                value={(videoTab === "en" ? form.videoTitleEn : form.videoTitleFr) ?? ""}
+                onChange={e => f(videoTab === "en" ? "videoTitleEn" : "videoTitleFr", e.target.value)}
+                placeholder="e.g. Discover the benefits of Songtai Aloe Vera..."
+                className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32]"
+              />
+            </div>
+            <div>
+              <label className="text-stone-400 text-xs block mb-1.5">
+                Video Description ({videoTab.toUpperCase()})
+              </label>
+              <textarea
+                value={(videoTab === "en" ? form.videoDescriptionEn : form.videoDescriptionFr) ?? ""}
+                onChange={e => f(videoTab === "en" ? "videoDescriptionEn" : "videoDescriptionFr", e.target.value)}
+                rows={2}
+                placeholder="Short description of what the video covers..."
+                className="w-full px-3 py-2 bg-stone-800 border border-stone-700 rounded-xl text-white text-xs focus:outline-none focus:border-[#0A7D32] resize-none"
+              />
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-2">
             <Btn variant="secondary" onClick={() => setSlideOpen(false)} className="flex-1">Cancel</Btn>
             <Btn variant="primary" loading={saving} className="flex-1">{editing ? "Save Changes" : "Create Product"}</Btn>

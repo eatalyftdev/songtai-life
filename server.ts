@@ -1230,7 +1230,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
     try {
       const [{ data: products }, { data: posts }, { data: events }] = await Promise.all([
         db
-          ? db.from("products").select("slug, updated_at").eq("is_active", true)
+          ? db.from("products").select("slug, updated_at, video_url_en, video_url_fr, video_thumbnail_en, video_thumbnail_fr, video_duration_seconds, video_title_en, video_title_fr, video_description_en, video_description_fr, name_en").eq("is_active", true)
           : { data: [] },
         db
           ? db.from("blog_posts").select("slug, published_at").eq("status", "published")
@@ -1253,12 +1253,20 @@ Answer concisely, helpfully, and professionally. Support both English and French
         { loc: `${base}/?section=media`,       priority: "0.6", changefreq: "monthly" },
       ];
 
-      const productUrls = (products ?? []).map((p: any) => ({
-        loc: `${base}/?section=products&slug=${p.slug}`,
-        lastmod: p.updated_at ? new Date(p.updated_at).toISOString() : now,
-        priority: "0.7",
-        changefreq: "weekly",
-      }));
+      const productUrls = (products ?? []).map((p: any) => {
+        const videoUrl = p.video_url_en || p.video_url_fr || null;
+        const videoThumb = p.video_thumbnail_en || p.video_thumbnail_fr || null;
+        const videoTitle = p.video_title_en || p.video_title_fr || p.name_en || "";
+        const videoDesc = p.video_description_en || p.video_description_fr || "";
+        const videoDuration = p.video_duration_seconds ?? null;
+        return {
+          loc: `${base}/?section=products&slug=${p.slug}`,
+          lastmod: p.updated_at ? new Date(p.updated_at).toISOString() : now,
+          priority: "0.7",
+          changefreq: "weekly",
+          video: videoUrl ? { url: videoUrl, thumb: videoThumb, title: videoTitle, desc: videoDesc, duration: videoDuration } : null,
+        };
+      });
 
       const postUrls = (posts ?? []).map((p: any) => ({
         loc: `${base}/?section=blog&slug=${p.slug}`,
@@ -1281,22 +1289,38 @@ Answer concisely, helpfully, and professionally. Support both English and French
         ...eventUrls,
       ];
 
+      const escXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
       const xml = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
-        '        xmlns:xhtml="http://www.w3.org/1999/xhtml">',
-        ...allUrls.map(u => [
-          "  <url>",
-          `    <loc>${u.loc}</loc>`,
-          `    <lastmod>${u.lastmod}</lastmod>`,
-          `    <changefreq>${u.changefreq}</changefreq>`,
-          `    <priority>${u.priority}</priority>`,
-          "    <!-- EN alternate -->",
-          `    <xhtml:link rel="alternate" hreflang="en" href="${u.loc}${u.loc.includes("?") ? "&amp;" : "?"}lang=en"/>`,
-          "    <!-- FR alternate -->",
-          `    <xhtml:link rel="alternate" hreflang="fr" href="${u.loc}${u.loc.includes("?") ? "&amp;" : "?"}lang=fr"/>`,
-          "  </url>",
-        ].join("\n")),
+        '        xmlns:xhtml="http://www.w3.org/1999/xhtml"',
+        '        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">',
+        ...allUrls.map((u: any) => {
+          const sep = u.loc.includes("?") ? "&amp;" : "?";
+          const lines = [
+            "  <url>",
+            `    <loc>${u.loc}</loc>`,
+            `    <lastmod>${u.lastmod}</lastmod>`,
+            `    <changefreq>${u.changefreq}</changefreq>`,
+            `    <priority>${u.priority}</priority>`,
+            `    <xhtml:link rel="alternate" hreflang="en" href="${u.loc}${sep}lang=en"/>`,
+            `    <xhtml:link rel="alternate" hreflang="fr" href="${u.loc}${sep}lang=fr"/>`,
+          ];
+          if (u.video) {
+            const v = u.video;
+            lines.push("    <video:video>");
+            if (v.thumb) lines.push(`      <video:thumbnail_loc>${escXml(v.thumb)}</video:thumbnail_loc>`);
+            lines.push(`      <video:title>${escXml(v.title)}</video:title>`);
+            if (v.desc) lines.push(`      <video:description>${escXml(v.desc)}</video:description>`);
+            lines.push(`      <video:content_loc>${escXml(v.url)}</video:content_loc>`);
+            if (v.duration) lines.push(`      <video:duration>${v.duration}</video:duration>`);
+            lines.push(`      <video:publication_date>${u.lastmod}</video:publication_date>`);
+            lines.push("    </video:video>");
+          }
+          lines.push("  </url>");
+          return lines.join("\n");
+        }),
         "</urlset>",
       ].join("\n");
 

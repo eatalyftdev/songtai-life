@@ -8,3 +8,4 @@
 - [FAQ/Categories/Gallery admin patterns](faq-categories-gallery-patterns.md) — FAQ, ProductCategories, GalleryAlbums all follow same bilingual lookup-table shape; delete guards check dependent row counts.
 - [SPA SEO architecture](spa-seo-architecture.md) — all public content lives at `/` via brandPage state; SEO.tsx + react-helmet-async; robots.txt + sitemap.xml as Express routes; noindex on admin/auth pages.
 - [Homepage Sections CMS](homepage-sections-cms.md) — homepage_sections table + useHomepageSection hook + HomepagePage admin; DB overrides i18n, Realtime propagates live; icon map type must use `typeof Award` not React.ElementType.
+- [Product video feature](product-video-feature.md) — TUS resumable uploads to product-videos bucket; auto thumbnail via canvas; VideoObject JSON-LD; video sitemap namespace; bilingual with locale fallback.

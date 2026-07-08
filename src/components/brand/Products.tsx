@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, ShoppingBag, ArrowLeft, CheckCircle2, ShieldAlert } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import { supabase } from "../../lib/supabase";
 import { useTranslation } from "react-i18next";
 import SEO from "../SEO";
@@ -18,6 +19,16 @@ interface LiveProduct {
   images: string[];
   isActive: boolean;
   strikePrice?: number;
+  createdAt?: string;
+  videoUrlEn?: string;
+  videoUrlFr?: string;
+  videoThumbnailEn?: string;
+  videoThumbnailFr?: string;
+  videoDurationSeconds?: number;
+  videoTitleEn?: string;
+  videoTitleFr?: string;
+  videoDescriptionEn?: string;
+  videoDescriptionFr?: string;
 }
 
 interface ProductsProps {
@@ -38,6 +49,16 @@ function mapDbRow(row: any): LiveProduct {
     images: row.images ?? (row.image ? [row.image] : []),
     isActive: row.is_active ?? true,
     strikePrice: row.strike_price_xaf ?? undefined,
+    createdAt: row.created_at ?? undefined,
+    videoUrlEn: row.video_url_en ?? undefined,
+    videoUrlFr: row.video_url_fr ?? undefined,
+    videoThumbnailEn: row.video_thumbnail_en ?? undefined,
+    videoThumbnailFr: row.video_thumbnail_fr ?? undefined,
+    videoDurationSeconds: row.video_duration_seconds ?? undefined,
+    videoTitleEn: row.video_title_en ?? undefined,
+    videoTitleFr: row.video_title_fr ?? undefined,
+    videoDescriptionEn: row.video_description_en ?? undefined,
+    videoDescriptionFr: row.video_description_fr ?? undefined,
   };
 }
 
@@ -134,6 +155,39 @@ export default function Products({ onAddToCart }: ProductsProps) {
     const p = selectedProduct;
     const name = getName(p);
     const desc = getDesc(p);
+
+    // Locale-appropriate video with fallback
+    const activeVideoUrl = locale === "fr"
+      ? (p.videoUrlFr || p.videoUrlEn || "")
+      : (p.videoUrlEn || p.videoUrlFr || "");
+    const videoPoster = locale === "fr"
+      ? (p.videoThumbnailFr || p.videoThumbnailEn || "")
+      : (p.videoThumbnailEn || p.videoThumbnailFr || "");
+    const videoTitle = locale === "fr"
+      ? (p.videoTitleFr || p.videoTitleEn || "")
+      : (p.videoTitleEn || p.videoTitleFr || "");
+    const videoDesc = locale === "fr"
+      ? (p.videoDescriptionFr || p.videoDescriptionEn || "")
+      : (p.videoDescriptionEn || p.videoDescriptionFr || "");
+    const videoFallback = locale === "fr" && !p.videoUrlFr && !!p.videoUrlEn;
+
+    const SITE_URL = typeof window !== "undefined" ? window.location.origin : "https://songtailife.cm";
+    const isoDuration = p.videoDurationSeconds
+      ? `PT${Math.floor(p.videoDurationSeconds / 60)}M${p.videoDurationSeconds % 60}S`
+      : undefined;
+
+    const videoJsonLd = activeVideoUrl ? {
+      "@context": "https://schema.org",
+      "@type": "VideoObject",
+      name: videoTitle || `${name} — Product Video`,
+      description: videoDesc || desc.slice(0, 200),
+      thumbnailUrl: videoPoster || p.images[0] || "",
+      uploadDate: p.createdAt ?? new Date().toISOString(),
+      ...(isoDuration ? { duration: isoDuration } : {}),
+      contentUrl: activeVideoUrl,
+      embedUrl: `${SITE_URL}/?section=products&slug=${p.slug}`,
+    } : undefined;
+
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
         <SEO
@@ -142,7 +196,15 @@ export default function Products({ onAddToCart }: ProductsProps) {
           image={p.images[0]}
           type="product"
           breadcrumbs={[{ name: "Products", url: "/?page=products" }, { name, url: `/?page=products&slug=${p.slug}` }]}
+          jsonLd={videoJsonLd}
         />
+        {activeVideoUrl && (
+          <Helmet>
+            <meta property="og:video" content={activeVideoUrl} />
+            <meta property="og:video:type" content="video/mp4" />
+            {videoPoster && <meta property="og:video:secure_url" content={activeVideoUrl} />}
+          </Helmet>
+        )}
         {/* Soft radial backdrop */}
         <div className="absolute top-[20%] left-[10%] w-[500px] h-[500px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
 
@@ -155,6 +217,35 @@ export default function Products({ onAddToCart }: ProductsProps) {
             <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
             <span>Back to Products Catalog</span>
           </button>
+
+          {/* Video Player Section — shown above the detail grid if a video is available */}
+          {activeVideoUrl && (
+            <div className="bg-stone-900/20 border border-stone-850 p-6 sm:p-8 rounded-[32px] space-y-4">
+              {(videoTitle || videoFallback) && (
+                <div className="space-y-1">
+                  {videoTitle && (
+                    <h2 className="text-base font-bold text-white">{videoTitle}</h2>
+                  )}
+                  {videoFallback && (
+                    <p className="text-[10px] text-amber-400">
+                      Vidéo en anglais (version française bientôt disponible)
+                    </p>
+                  )}
+                  {videoDesc && (
+                    <p className="text-stone-400 text-xs leading-relaxed">{videoDesc}</p>
+                  )}
+                </div>
+              )}
+              <video
+                src={activeVideoUrl}
+                poster={videoPoster || undefined}
+                controls
+                preload="metadata"
+                playsInline
+                className="w-full rounded-xl bg-stone-950 max-h-[480px] object-contain"
+              />
+            </div>
+          )}
 
           {/* Core Detail Grid */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start bg-stone-900/20 border border-stone-850 p-6 sm:p-8 rounded-[32px]">
