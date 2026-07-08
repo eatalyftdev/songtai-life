@@ -1,15 +1,22 @@
+-- ALL MIGRATIONS COMBINED — idempotent (safe to re-run)
+-- Generated automatically from supabase/migrations/
+
+-- ══════════════════════════════════════════════════════
+-- 0001_init.sql
+-- ══════════════════════════════════════════════════════
+
 -- 1. Enable UUID Extension
 create extension if not exists "uuid-ossp";
 
 -- 2. Create Product Categories
-create table product_categories (
+create table if not exists product_categories (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   slug text unique not null
 );
 
 -- 3. Create Products Table
-create table products (
+create table if not exists products (
   id uuid primary key default uuid_generate_v4(),
   slug text unique not null,
   name text not null,
@@ -23,13 +30,13 @@ create table products (
 );
 
 -- 4. Create Blog Categories
-create table blog_categories (
+create table if not exists blog_categories (
   id uuid primary key default uuid_generate_v4(),
   name text not null
 );
 
 -- 5. Create Blog Posts Table
-create table blog_posts (
+create table if not exists blog_posts (
   id uuid primary key default uuid_generate_v4(),
   slug text unique not null,
   title text not null,
@@ -40,7 +47,7 @@ create table blog_posts (
 );
 
 -- 6. Create Events Table
-create table events (
+create table if not exists events (
   id uuid primary key default uuid_generate_v4(),
   slug text unique not null,
   title text not null,
@@ -51,7 +58,7 @@ create table events (
 );
 
 -- 7. Create Event Registrations Table
-create table event_registrations (
+create table if not exists event_registrations (
   id uuid primary key default uuid_generate_v4(),
   event_id uuid references events(id) not null,
   user_id uuid references auth.users(id),
@@ -60,7 +67,7 @@ create table event_registrations (
 );
 
 -- 8. Create Gallery Images Table
-create table gallery_images (
+create table if not exists gallery_images (
   id uuid primary key default uuid_generate_v4(),
   url text not null,
   album text,
@@ -68,7 +75,7 @@ create table gallery_images (
 );
 
 -- 9. Create Testimonials Table
-create table testimonials (
+create table if not exists testimonials (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   rank text,
@@ -78,7 +85,7 @@ create table testimonials (
 );
 
 -- 10. Create Contact Messages Table
-create table contact_messages (
+create table if not exists contact_messages (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   email text not null,
@@ -88,7 +95,7 @@ create table contact_messages (
 );
 
 -- 11. Create Newsletter Subscribers Table
-create table newsletter_subscribers (
+create table if not exists newsletter_subscribers (
   id uuid primary key default uuid_generate_v4(),
   email text unique not null,
   locale text default 'en',
@@ -104,14 +111,42 @@ alter table testimonials enable row level security;
 alter table contact_messages enable row level security;
 alter table newsletter_subscribers enable row level security;
 
-create policy "Public read active products" on products for select using (is_active = true);
-create policy "Public read published posts" on blog_posts for select using (status = 'published');
-create policy "Public read events" on events for select using (true);
-create policy "Public read gallery" on gallery_images for select using (true);
-create policy "Public read testimonials" on testimonials for select using (true);
+do $$ begin
+  create policy "Public read active products" on products for select using (is_active = true);
+exception when duplicate_object then null;
+end $$;
 
-create policy "Public insert contact" on contact_messages for insert with check (true);
-create policy "Public insert newsletter" on newsletter_subscribers for insert with check (true);
+do $$ begin
+  create policy "Public read published posts" on blog_posts for select using (status = 'published');
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Public read events" on events for select using (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Public read gallery" on gallery_images for select using (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Public read testimonials" on testimonials for select using (true);
+exception when duplicate_object then null;
+end $$;
+
+
+do $$ begin
+  create policy "Public insert contact" on contact_messages for insert with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Public insert newsletter" on newsletter_subscribers for insert with check (true);
+exception when duplicate_object then null;
+end $$;
+
 
 -- 13. Seed Initial Sample Data
 -- Seed Product Categories
@@ -160,6 +195,12 @@ insert into gallery_images (url, album, caption) values
 ('https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=600', 'Farms', 'Direct botanical sourcing with our agricultural farming cooperatives.'),
 ('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&q=80&w=600', 'Summits', 'Our physical business forum training and entrepreneur coaching sessions in Douala.')
 on conflict do nothing;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0002_mlm_tables.sql
+-- ══════════════════════════════════════════════════════
+
 -- =========================================================
 -- SONGTAI LIFE — MLM CORE TABLES
 -- =========================================================
@@ -292,38 +333,110 @@ alter table orders enable row level security;
 alter table kyc_documents enable row level security;
 
 -- Profiles
-create policy "profiles_select_own" on profiles for select using (auth.uid() = id);
-create policy "profiles_insert_own" on profiles for insert with check (auth.uid() = id);
-create policy "profiles_update_own" on profiles for update using (auth.uid() = id);
+do $$ begin
+  create policy "profiles_select_own" on profiles for select using (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "profiles_insert_own" on profiles for insert with check (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "profiles_update_own" on profiles for update using (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- Distributors: users can read their own row; full list readable for downline queries
-create policy "distributors_select_own" on distributors for select using (true);
-create policy "distributors_insert_own" on distributors for insert with check (auth.uid() = id);
-create policy "distributors_update_own" on distributors for update using (auth.uid() = id);
+do $$ begin
+  create policy "distributors_select_own" on distributors for select using (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "distributors_insert_own" on distributors for insert with check (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "distributors_update_own" on distributors for update using (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- Wallets
-create policy "wallets_select_own" on wallets for select using (auth.uid() = id);
-create policy "wallets_insert_own" on wallets for insert with check (auth.uid() = id);
-create policy "wallets_update_own" on wallets for update using (auth.uid() = id);
+do $$ begin
+  create policy "wallets_select_own" on wallets for select using (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "wallets_insert_own" on wallets for insert with check (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "wallets_update_own" on wallets for update using (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- Wallet Transactions
-create policy "wallet_tx_select_own" on wallet_transactions for select using (auth.uid() = wallet_id);
-create policy "wallet_tx_insert_own" on wallet_transactions for insert with check (auth.uid() = wallet_id);
+do $$ begin
+  create policy "wallet_tx_select_own" on wallet_transactions for select using (auth.uid() = wallet_id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "wallet_tx_insert_own" on wallet_transactions for insert with check (auth.uid() = wallet_id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- Commissions
-create policy "commissions_select_own" on commissions for select using (auth.uid() = distributor_id);
+do $$ begin
+  create policy "commissions_select_own" on commissions for select using (auth.uid() = distributor_id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- Withdrawals
-create policy "withdrawals_select_own" on withdrawals for select using (auth.uid() = distributor_id);
-create policy "withdrawals_insert_own" on withdrawals for insert with check (auth.uid() = distributor_id);
+do $$ begin
+  create policy "withdrawals_select_own" on withdrawals for select using (auth.uid() = distributor_id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "withdrawals_insert_own" on withdrawals for insert with check (auth.uid() = distributor_id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- Orders
-create policy "orders_select_own" on orders for select using (auth.uid()::text = user_id);
+do $$ begin
+  create policy "orders_select_own" on orders for select using (auth.uid()::text = user_id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- KYC Documents
-create policy "kyc_select_own" on kyc_documents for select using (auth.uid() = distributor_id);
-create policy "kyc_insert_own" on kyc_documents for insert with check (auth.uid() = distributor_id);
-create policy "kyc_upsert_own" on kyc_documents for update using (auth.uid() = distributor_id);
+do $$ begin
+  create policy "kyc_select_own" on kyc_documents for select using (auth.uid() = distributor_id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "kyc_insert_own" on kyc_documents for insert with check (auth.uid() = distributor_id);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "kyc_upsert_own" on kyc_documents for update using (auth.uid() = distributor_id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- =========================================================
 -- RPC: Atomic wallet balance increment (replaces Firestore transactions)
@@ -347,6 +460,12 @@ alter publication supabase_realtime add table wallets;
 alter publication supabase_realtime add table wallet_transactions;
 alter publication supabase_realtime add table distributors;
 alter publication supabase_realtime add table commissions;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0003_add_missing_columns.sql
+-- ══════════════════════════════════════════════════════
+
 -- =========================================================
 -- SONGTAI LIFE — Add columns missing from initial migration
 -- =========================================================
@@ -380,6 +499,12 @@ alter table audit_logs add column if not exists details text;
 alter table products add column if not exists stock integer default 0;
 alter table products add column if not exists image text
   generated always as (images[1]) stored;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0004_fix_rls_policies.sql
+-- ══════════════════════════════════════════════════════
+
 -- =========================================================
 -- SONGTAI LIFE — Fix RLS policies
 -- 1. Add admin/superadmin bypass policies for all tables
@@ -401,108 +526,198 @@ as $$
 $$;
 
 -- ── profiles ────────────────────────────────────────────
-create policy "admin_profiles_all" on profiles
+do $$ begin
+  create policy "admin_profiles_all" on profiles
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── distributors ─────────────────────────────────────────
-create policy "admin_distributors_all" on distributors
+do $$ begin
+  create policy "admin_distributors_all" on distributors
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── wallets ──────────────────────────────────────────────
 -- Remove the dangerously permissive direct balance update policy
 drop policy if exists "wallets_update_own" on wallets;
 
 -- Admins may read all wallets
-create policy "admin_wallets_read" on wallets
+do $$ begin
+  create policy "admin_wallets_read" on wallets
   for select
   using (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Users may still read their own wallet (existing select policy should cover this,
 -- but ensure it exists)
-create policy "wallets_select_own" on wallets
+do $$ begin
+  create policy "wallets_select_own" on wallets
   for select
   using (auth.uid() = id);
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── wallet_transactions ──────────────────────────────────
-create policy "admin_wallet_transactions_all" on wallet_transactions
+do $$ begin
+  create policy "admin_wallet_transactions_all" on wallet_transactions
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── commissions ─────────────────────────────────────────
-create policy "admin_commissions_all" on commissions
+do $$ begin
+  create policy "admin_commissions_all" on commissions
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── withdrawals ─────────────────────────────────────────
-create policy "admin_withdrawals_all" on withdrawals
+do $$ begin
+  create policy "admin_withdrawals_all" on withdrawals
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── orders ───────────────────────────────────────────────
-create policy "admin_orders_all" on orders
+do $$ begin
+  create policy "admin_orders_all" on orders
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── kyc_documents ────────────────────────────────────────
-create policy "admin_kyc_all" on kyc_documents
+do $$ begin
+  create policy "admin_kyc_all" on kyc_documents
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── processed_payments ───────────────────────────────────
-create policy "admin_processed_payments_all" on processed_payments
+do $$ begin
+  create policy "admin_processed_payments_all" on processed_payments
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── audit_logs ───────────────────────────────────────────
-create policy "admin_audit_logs_all" on audit_logs
+do $$ begin
+  create policy "admin_audit_logs_all" on audit_logs
   for all
   using (is_admin())
   with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── blog_posts ───────────────────────────────────────────
 alter table if exists blog_posts enable row level security;
-create policy "public_blog_posts_read" on blog_posts
+do $$ begin
+  create policy "public_blog_posts_read" on blog_posts
   for select using (true);
-create policy "admin_blog_posts_all" on blog_posts
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_blog_posts_all" on blog_posts
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── events ───────────────────────────────────────────────
 alter table if exists events enable row level security;
-create policy "public_events_read" on events
+do $$ begin
+  create policy "public_events_read" on events
   for select using (true);
-create policy "admin_events_all" on events
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_events_all" on events
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── contact_messages ─────────────────────────────────────
 alter table if exists contact_messages enable row level security;
-create policy "public_contact_messages_insert" on contact_messages
+do $$ begin
+  create policy "public_contact_messages_insert" on contact_messages
   for insert with check (true);
-create policy "admin_contact_messages_all" on contact_messages
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_contact_messages_all" on contact_messages
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── newsletter_subscribers ───────────────────────────────
 alter table if exists newsletter_subscribers enable row level security;
-create policy "public_newsletter_insert" on newsletter_subscribers
+do $$ begin
+  create policy "public_newsletter_insert" on newsletter_subscribers
   for insert with check (true);
-create policy "admin_newsletter_all" on newsletter_subscribers
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_newsletter_all" on newsletter_subscribers
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── products ─────────────────────────────────────────────
 alter table if exists products enable row level security;
-create policy "public_products_read" on products
+do $$ begin
+  create policy "public_products_read" on products
   for select using (true);
-create policy "admin_products_all" on products
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_products_all" on products
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
+
+
+-- ══════════════════════════════════════════════════════
+-- 0005_schema_additions.sql
+-- ══════════════════════════════════════════════════════
+
 -- ============================================================
 -- 0005_schema_additions.sql
 -- Auth hardening, RBAC, rate limiting, bilingual products,
@@ -538,17 +753,25 @@ $$;
 
 -- Blog posts: allow content editors to write
 drop policy if exists "editor_blog_posts_write" on public.blog_posts;
-create policy "editor_blog_posts_write" on public.blog_posts
+do $$ begin
+  create policy "editor_blog_posts_write" on public.blog_posts
   for all
   using (is_content_editor_or_above())
   with check (is_content_editor_or_above());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Events: allow content editors to write
 drop policy if exists "editor_events_write" on public.events;
-create policy "editor_events_write" on public.events
+do $$ begin
+  create policy "editor_events_write" on public.events
   for all
   using (is_content_editor_or_above())
   with check (is_content_editor_or_above());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── 4. RATE LIMITING ─────────────────────────────────────────
 create table if not exists public.rate_limit_events (
@@ -565,8 +788,12 @@ create index if not exists rate_limit_events_lookup_idx
 alter table public.rate_limit_events enable row level security;
 
 drop policy if exists "rate_limit_no_direct_access" on public.rate_limit_events;
-create policy "rate_limit_no_direct_access" on public.rate_limit_events
+do $$ begin
+  create policy "rate_limit_no_direct_access" on public.rate_limit_events
   for all using (false);
+exception when duplicate_object then null;
+end $$;
+
 
 create or replace function public.check_rate_limit(
   p_bucket       text,
@@ -626,12 +853,20 @@ create table if not exists public.hero_carousel (
 alter table public.hero_carousel enable row level security;
 
 drop policy if exists "hero_carousel_public_read" on public.hero_carousel;
-create policy "hero_carousel_public_read" on public.hero_carousel
+do $$ begin
+  create policy "hero_carousel_public_read" on public.hero_carousel
   for select using (is_active = true);
+exception when duplicate_object then null;
+end $$;
+
 
 drop policy if exists "hero_carousel_admin_write" on public.hero_carousel;
-create policy "hero_carousel_admin_write" on public.hero_carousel
+do $$ begin
+  create policy "hero_carousel_admin_write" on public.hero_carousel
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Seed default carousel images
 insert into public.hero_carousel (image_url, title_en, title_fr, subtitle_en, subtitle_fr, sort_order)
@@ -668,6 +903,12 @@ on conflict do nothing;
 -- with body: { "bootstrapKey": "<value of ADMIN_BOOTSTRAP_KEY env var>" }
 -- This uses the service-role key to bypass email validation.
 -- Never hardcode admin credentials in the frontend.
+
+
+-- ══════════════════════════════════════════════════════
+-- 0006_site_settings_appointments.sql
+-- ══════════════════════════════════════════════════════
+
 -- ============================================================
 -- 0006_site_settings_appointments.sql
 -- Site settings singleton, appointment booking, testimonials
@@ -688,11 +929,19 @@ alter table public.site_settings enable row level security;
 drop policy if exists "public_settings_read"  on public.site_settings;
 drop policy if exists "admin_settings_write"  on public.site_settings;
 
-create policy "public_settings_read" on public.site_settings
+do $$ begin
+  create policy "public_settings_read" on public.site_settings
   for select using (true);
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_settings_write" on public.site_settings
+
+do $$ begin
+  create policy "admin_settings_write" on public.site_settings
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Seed defaults (idempotent)
 insert into public.site_settings (key, value) values
@@ -720,11 +969,19 @@ alter table public.appointment_types enable row level security;
 drop policy if exists "public_read_appointment_types" on public.appointment_types;
 drop policy if exists "admin_appointment_types_all"   on public.appointment_types;
 
-create policy "public_read_appointment_types" on public.appointment_types
+do $$ begin
+  create policy "public_read_appointment_types" on public.appointment_types
   for select using (is_active = true);
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_appointment_types_all" on public.appointment_types
+
+do $$ begin
+  create policy "admin_appointment_types_all" on public.appointment_types
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Seed default types
 insert into public.appointment_types (name_en, name_fr, duration_minutes, description_en, description_fr, display_order) values
@@ -753,11 +1010,19 @@ alter table public.appointments enable row level security;
 drop policy if exists "public_insert_appointments" on public.appointments;
 drop policy if exists "admin_appointments_all"      on public.appointments;
 
-create policy "public_insert_appointments" on public.appointments
+do $$ begin
+  create policy "public_insert_appointments" on public.appointments
   for insert with check (true);
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_appointments_all" on public.appointments
+
+do $$ begin
+  create policy "admin_appointments_all" on public.appointments
   for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── 4. EXTEND TESTIMONIALS ────────────────────────────────────
 alter table public.testimonials
@@ -781,9 +1046,21 @@ alter table public.gallery_images
 drop policy if exists "public_read_media"        on storage.objects;
 drop policy if exists "public_read_documents"    on storage.objects;
 drop policy if exists "public_read_testimonials" on storage.objects;
-create policy "public_read_media"        on storage.objects for select using (bucket_id = 'media');
-create policy "public_read_documents"    on storage.objects for select using (bucket_id = 'documents');
-create policy "public_read_testimonials" on storage.objects for select using (bucket_id = 'testimonials');
+do $$ begin
+  create policy "public_read_media"        on storage.objects for select using (bucket_id = 'media');
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "public_read_documents"    on storage.objects for select using (bucket_id = 'documents');
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "public_read_testimonials" on storage.objects for select using (bucket_id = 'testimonials');
+exception when duplicate_object then null;
+end $$;
+
 
 -- Admin write access
 drop policy if exists "admin_insert_media"        on storage.objects;
@@ -796,17 +1073,59 @@ drop policy if exists "admin_insert_testimonials"  on storage.objects;
 drop policy if exists "admin_update_testimonials"  on storage.objects;
 drop policy if exists "admin_delete_testimonials"  on storage.objects;
 
-create policy "admin_insert_media"       on storage.objects for insert with check (bucket_id = 'media'        and is_admin());
-create policy "admin_update_media"       on storage.objects for update using      (bucket_id = 'media'        and is_admin());
-create policy "admin_delete_media"       on storage.objects for delete using      (bucket_id = 'media'        and is_admin());
+do $$ begin
+  create policy "admin_insert_media"       on storage.objects for insert with check (bucket_id = 'media'        and is_admin());
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_insert_documents"   on storage.objects for insert with check (bucket_id = 'documents'    and is_admin());
-create policy "admin_update_documents"   on storage.objects for update using      (bucket_id = 'documents'    and is_admin());
-create policy "admin_delete_documents"   on storage.objects for delete using      (bucket_id = 'documents'    and is_admin());
+do $$ begin
+  create policy "admin_update_media"       on storage.objects for update using      (bucket_id = 'media'        and is_admin());
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_insert_testimonials" on storage.objects for insert with check (bucket_id = 'testimonials' and is_admin());
-create policy "admin_update_testimonials" on storage.objects for update using      (bucket_id = 'testimonials' and is_admin());
-create policy "admin_delete_testimonials" on storage.objects for delete using      (bucket_id = 'testimonials' and is_admin());
+do $$ begin
+  create policy "admin_delete_media"       on storage.objects for delete using      (bucket_id = 'media'        and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+
+do $$ begin
+  create policy "admin_insert_documents"   on storage.objects for insert with check (bucket_id = 'documents'    and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_update_documents"   on storage.objects for update using      (bucket_id = 'documents'    and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_delete_documents"   on storage.objects for delete using      (bucket_id = 'documents'    and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+
+do $$ begin
+  create policy "admin_insert_testimonials" on storage.objects for insert with check (bucket_id = 'testimonials' and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_update_testimonials" on storage.objects for update using      (bucket_id = 'testimonials' and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_delete_testimonials" on storage.objects for delete using      (bucket_id = 'testimonials' and is_admin());
+exception when duplicate_object then null;
+end $$;
+
+
+
+-- ══════════════════════════════════════════════════════
+-- 0007_order_delivery_whatsapp.sql
+-- ══════════════════════════════════════════════════════
+
 -- ============================================================
 -- 0007_order_delivery_whatsapp.sql
 -- Delivery address fields on orders, WhatsApp notification
@@ -844,6 +1163,12 @@ alter table public.testimonials
 insert into public.site_settings (key, value) values
   ('order_notifications', '{"whatsapp_number": "", "enabled": false}')
 on conflict (key) do nothing;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0008_faq_featured_categories_albums.sql
+-- ══════════════════════════════════════════════════════
+
 -- ================================================================
 -- 0008: FAQ tables, Featured Products flags, Product Categories
 --       enhancements, Gallery Albums table
@@ -875,17 +1200,33 @@ alter table faqs enable row level security;
 
 drop policy if exists "public_read_faq_categories" on faq_categories;
 drop policy if exists "admin_faq_categories_all"  on faq_categories;
-create policy "public_read_faq_categories"
+do $$ begin
+  create policy "public_read_faq_categories"
   on faq_categories for select using (true);
-create policy "admin_faq_categories_all"
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_faq_categories_all"
   on faq_categories for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 drop policy if exists "public_read_published_faqs" on faqs;
 drop policy if exists "admin_faqs_all"             on faqs;
-create policy "public_read_published_faqs"
+do $$ begin
+  create policy "public_read_published_faqs"
   on faqs for select using (is_published = true);
-create policy "admin_faqs_all"
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_faqs_all"
   on faqs for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Seed FAQ categories to match the existing hardcoded categories on the public page
 insert into faq_categories (name_en, name_fr, display_order) values
@@ -918,10 +1259,18 @@ alter table product_categories enable row level security;
 
 drop policy if exists "public_read_active_categories" on product_categories;
 drop policy if exists "admin_categories_all"          on product_categories;
-create policy "public_read_active_categories"
+do $$ begin
+  create policy "public_read_active_categories"
   on product_categories for select using (is_active = true);
-create policy "admin_categories_all"
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_categories_all"
   on product_categories for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── 4. GALLERY ALBUMS ────────────────────────────────────────────
 create table if not exists gallery_albums (
@@ -934,8 +1283,16 @@ create table if not exists gallery_albums (
 alter table gallery_albums enable row level security;
 drop policy if exists "public_read_albums" on gallery_albums;
 drop policy if exists "admin_albums_all"  on gallery_albums;
-create policy "public_read_albums"  on gallery_albums for select using (true);
-create policy "admin_albums_all"    on gallery_albums for all using (is_admin()) with check (is_admin());
+do $$ begin
+  create policy "public_read_albums"  on gallery_albums for select using (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "admin_albums_all"    on gallery_albums for all using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- ── 5. GALLERY IMAGES — MISSING COLUMNS ──────────────────────────
 alter table gallery_images
@@ -949,6 +1306,12 @@ alter table gallery_images
 update gallery_images
   set caption_en = caption
   where caption_en is null and caption is not null;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0009_image_url_constraints.sql
+-- ══════════════════════════════════════════════════════
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 0009: DB-level check constraints to enforce Supabase-hosted images
 --
@@ -1012,6 +1375,12 @@ ALTER TABLE testimonials
 -- ALTER TABLE product_categories VALIDATE CONSTRAINT product_category_image_supabase_hosted;
 -- ALTER TABLE testimonials     VALIDATE CONSTRAINT testimonials_image_url_supabase_hosted;
 -- ─────────────────────────────────────────────────────────────────────────────
+
+
+-- ══════════════════════════════════════════════════════
+-- 0010_homepage_sections.sql
+-- ══════════════════════════════════════════════════════
+
 -- 0010: Homepage Sections CMS table
 -- Makes every hardcoded homepage text string admin-editable.
 
@@ -1028,12 +1397,20 @@ alter table public.homepage_sections enable row level security;
 drop policy if exists "public_read_homepage_sections"  on public.homepage_sections;
 drop policy if exists "admin_homepage_sections_all"    on public.homepage_sections;
 
-create policy "public_read_homepage_sections"
+do $$ begin
+  create policy "public_read_homepage_sections"
   on public.homepage_sections for select using (true);
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_homepage_sections_all"
+
+do $$ begin
+  create policy "admin_homepage_sections_all"
   on public.homepage_sections for all
   using (is_admin()) with check (is_admin());
+exception when duplicate_object then null;
+end $$;
+
 
 -- Seed default content (do nothing on conflict so live edits survive re-runs)
 insert into public.homepage_sections (section_key, content) values
@@ -1082,6 +1459,12 @@ insert into public.homepage_sections (section_key, content) values
     "body_fr": "Nouveaux produits, promotions de rang, alertes événements et conseils de distributeur — directement dans votre boîte mail."
   }'::jsonb)
 on conflict (section_key) do nothing;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0011_mesomb_webhook_events.sql
+-- ══════════════════════════════════════════════════════
+
 -- MeSomb webhook event deduplication ledger
 create table if not exists mesomb_webhook_events (
   id uuid primary key default uuid_generate_v4(),
@@ -1094,7 +1477,8 @@ create table if not exists mesomb_webhook_events (
 alter table mesomb_webhook_events enable row level security;
 
 -- Only admins can read webhook events; Edge Function / service role writes
-create policy "admin_read_webhook_events"
+do $$ begin
+  create policy "admin_read_webhook_events"
   on mesomb_webhook_events for select
   using (
     exists (
@@ -1103,10 +1487,19 @@ create policy "admin_read_webhook_events"
       and profiles.role in ('admin','superadmin')
     )
   );
+exception when duplicate_object then null;
+end $$;
+
 
 -- Add MeSomb transaction ID column to orders for reconciliation
 alter table orders
   add column if not exists mesomb_transaction_id text;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0012_page_sections.sql
+-- ══════════════════════════════════════════════════════
+
 -- Unified page_sections table for site-wide static content CMS
 create table if not exists page_sections (
   id uuid primary key default uuid_generate_v4(),
@@ -1121,10 +1514,15 @@ create table if not exists page_sections (
 
 alter table page_sections enable row level security;
 
-create policy "public_read_page_sections"
+do $$ begin
+  create policy "public_read_page_sections"
   on page_sections for select using (true);
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_page_sections_all"
+
+do $$ begin
+  create policy "admin_page_sections_all"
   on page_sections for all
   using (
     exists (
@@ -1140,6 +1538,9 @@ create policy "admin_page_sections_all"
         and profiles.role in ('admin', 'superadmin', 'content_editor')
     )
   );
+exception when duplicate_object then null;
+end $$;
+
 
 -- Trigger to auto-update updated_at
 create or replace function update_page_sections_timestamp()
@@ -1158,6 +1559,12 @@ create trigger page_sections_updated_at
 insert into page_sections (page_key, section_key, content)
 select 'home', section_key, content from homepage_sections
 on conflict (page_key, section_key) do nothing;
+
+
+-- ══════════════════════════════════════════════════════
+-- 0013_product_videos.sql
+-- ══════════════════════════════════════════════════════
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 0013: Product video fields (bilingual EN/FR)
 -- Run via: Supabase Dashboard > SQL Editor, or `supabase db push`
@@ -1196,18 +1603,36 @@ drop policy if exists "admin_insert_product_videos"  on storage.objects;
 drop policy if exists "admin_update_product_videos"  on storage.objects;
 drop policy if exists "admin_delete_product_videos"  on storage.objects;
 
-create policy "public_read_product_videos"
+do $$ begin
+  create policy "public_read_product_videos"
   on storage.objects for select
   using (bucket_id = 'product-videos');
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_insert_product_videos"
+
+do $$ begin
+  create policy "admin_insert_product_videos"
   on storage.objects for insert
   with check (bucket_id = 'product-videos');
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_update_product_videos"
+
+do $$ begin
+  create policy "admin_update_product_videos"
   on storage.objects for update
   using (bucket_id = 'product-videos');
+exception when duplicate_object then null;
+end $$;
 
-create policy "admin_delete_product_videos"
+
+do $$ begin
+  create policy "admin_delete_product_videos"
   on storage.objects for delete
   using (bucket_id = 'product-videos');
+exception when duplicate_object then null;
+end $$;
+
+
+
