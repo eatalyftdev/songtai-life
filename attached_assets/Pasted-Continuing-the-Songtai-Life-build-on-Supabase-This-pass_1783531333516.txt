@@ -1,0 +1,164 @@
+Continuing the Songtai Life build on Supabase. This pass adds a "Know More" product detail experience with bilingual (EN/FR) product videos, uses resumable uploads so large video files upload reliably, and adds video-specific SEO (VideoObject structured data + video sitemap entries) so each product's video is indexable and searchable by Google.
+
+═══════════════════════════
+1. SCHEMA — VIDEO FIELDS PER LANGUAGE
+═══════════════════════════
+```sql
+alter table products
+  add column if not exists video_url_en text,
+  add column if not exists video_url_fr text,
+  add column if not exists video_thumbnail_en text,
+  add column if not exists video_thumbnail_fr text,
+  add column if not exists video_duration_seconds integer,
+  add column if not exists video_title_en text,
+  add column if not exists video_title_fr text,
+  add column if not exists video_description_en text,
+  add column if not exists video_description_fr text;
+```
+`slug` already exists on `products` from the earlier schema — confirm every product has a real, unique, URL-safe slug (lowercase, hyphenated, no special characters) since this is the backbone of the "Know More" page URL and its indexability. Backfill any missing/malformed slugs from `name_en` before proceeding.
+
+═══════════════════════════
+2. STORAGE — DEDICATED BUCKET, HIGH LIMIT, RESUMABLE UPLOAD
+═══════════════════════════
+Create a dedicated bucket for product videos (separate from `media`, since video files are large and benefit from their own lifecycle/limit config):
+```sql
+-- Run via Supabase Dashboard > Storage > New Bucket, or the management API:
+-- Bucket name: 'product-videos'
+-- Public: true
+-- File size limit: set to the highest value your current Supabase plan allows
+--   (check Dashboard > Storage > Configuration — Free tier caps well below what's useful for video;
+--   a Pro-tier plan is realistically required to raise this into a usable range, e.g. 500MB–a few GB per file).
+--   There is no literal "unlimited" option — set it to the maximum your plan supports and treat that as the practical ceiling.
+```
+```sql
+create policy "public_read_product_videos" on storage.objects
+  for select using (bucket_id = 'product-videos');
+create policy "admin_write_product_videos" on storage.objects
+  for insert with check (bucket_id = 'product-videos' and is_admin());
+create policy "admin_update_product_videos" on storage.objects
+  for update using (bucket_id = 'product-videos' and is_admin());
+create policy "admin_delete_product_videos" on storage.objects
+  for delete using (bucket_id = 'product-videos' and is_admin());
+```
+
+**Use resumable (TUS protocol) upload, not a standard single-request upload** — this is the actual fix for large-file reliability, independent of the size limit:
+```bash
+npm install tus-js-client
+```
+```ts
+import * as tus from 'tus-js-client';
+
+function uploadProductVideo(file: File, productId: string, locale: 'en' | 'fr', onProgress: (pct: number) => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${supabaseAccessToken}`,
+        'x-upsert': 'true',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        bucketName: 'product-videos',
+        objectName: `${productId}/${locale}-${file.name}`,
+        contentType: file.type,
+        cacheControl: '3600',
+      },
+      chunkSize: 6 * 1024 * 1024, // 6MB chunks — required value for Supabase's TUS implementation
+      onError: reject,
+      onProgress: (bytesUploaded, bytesTotal) => onProgress(Math.round((bytesUploaded / bytesTotal) * 100)),
+      onSuccess: () => {
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/product-videos/${productId}/${locale}-${file.name}`;
+        resolve(publicUrl);
+      },
+    });
+    upload.findPreviousUploads().then((previous) => {
+      if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
+      upload.start();
+    });
+  });
+}
+```
+This uploads directly from the browser to Supabase Storage — it must NOT be routed through a Next.js API route or Vercel serverless function, since those have their own request body size limits (well below what a video file needs) that would break this regardless of the Storage bucket's configured limit.
+
+**Extend the shared `<MediaUploader />`** with a `mode="video-resumable"` variant (or a new `<VideoUploader />` sibling component reusing its drag-and-drop/preview/progress-bar UI) that uses the TUS upload above instead of the standard upload — keep the same visual/interaction language (progress bar, thumbnail preview, error states) so it feels consistent with every other upload in the admin panel.
+
+═══════════════════════════
+3. ADMIN — PRODUCT VIDEO SECTION (extend the existing Product edit form)
+═══════════════════════════
+Add a "Product Video" panel to the existing `/admin/products` edit form (slide-over), with two tabs — **English** and **French** — each containing:
+- Video upload (the resumable uploader above), with progress percentage shown live during upload.
+- Auto-generate a thumbnail: after upload completes, capture a frame (client-side via a hidden `<video>` + `<canvas>` grab at ~1s into the clip, or use a serverless function with ffmpeg if you want a more reliable server-side thumbnail) and upload that still image to the `media` bucket, storing the URL in `video_thumbnail_en`/`_fr`. Allow the admin to manually replace the auto-generated thumbnail if it looks wrong.
+- Video title and description fields (bilingual, separate from the product's main name/description — these specifically describe the video content, used in Section 5's structured data).
+- Duration: read automatically from the uploaded file's metadata (`video.duration` in the browser) rather than requiring manual entry.
+- Preview player inline in the form for both languages once uploaded.
+- Clear indicator if only one language has a video uploaded (e.g., "French video not yet added — English will be shown as fallback").
+
+═══════════════════════════
+4. PUBLIC — "KNOW MORE" PRODUCT PAGE
+═══════════════════════════
+The existing product detail page (`/products/[slug]`) becomes the "Know More" experience — this is not a separate route, it's what that page becomes:
+- Above or alongside the product image gallery: a prominent video player section, showing the video matching the active site locale (`video_url_en` or `video_url_fr`), falling back to whichever language IS available if the active locale's version is missing (never show a blank/broken player).
+- Use a proper HTML5 `<video>` element with native controls (or a lightweight player wrapper) — not an embedded third-party player — since these are self-hosted files and a native player gives Google's crawler the most straightforward `<video>` tag to associate with the page for indexing.
+- Poster image set to `video_thumbnail_en`/`_fr` so the player doesn't show a black box before playback starts.
+- Video section includes its own heading using `video_title_en`/`_fr`, and the `video_description_en`/`_fr` displayed as supporting copy beneath the player — this text also feeds the structured data in Section 5.
+- Lazy-load the video (don't autoplay, don't preload the full file on page load) — use `preload="metadata"` so only duration/dimensions load upfront, keeping the page's performance budget (LCP < 2.5s target established earlier) intact even with a video embedded.
+
+═══════════════════════════
+5. SEO — VideoObject STRUCTURED DATA + VIDEO SITEMAP
+═══════════════════════════
+Add `VideoObject` JSON-LD to every product page that has a video, alongside the existing `Product` schema already in place:
+```ts
+{
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "name": localizedVideoTitle,
+  "description": localizedVideoDescription,
+  "thumbnailUrl": localizedThumbnailUrl,
+  "uploadDate": product.created_at,
+  "duration": `PT${Math.floor(product.video_duration_seconds / 60)}M${product.video_duration_seconds % 60}S`, // ISO 8601 duration
+  "contentUrl": localizedVideoUrl,
+  "embedUrl": `${baseUrl}/${locale}/products/${product.slug}`,
+}
+```
+Extend the existing `sitemap.ts` (Section 5 of the earlier SEO pass) to include video-specific sitemap entries for any product that has at least one language's video — Next.js's sitemap generator supports the `videos` field per URL entry:
+```ts
+const { data: productsWithVideo } = await supabase
+  .from('products')
+  .select('slug, video_url_en, video_url_fr, video_thumbnail_en, video_thumbnail_fr, video_title_en, video_title_fr, video_description_en, video_description_fr, video_duration_seconds, created_at')
+  .eq('is_active', true)
+  .or('video_url_en.not.is.null,video_url_fr.not.is.null');
+
+const videoSitemapEntries = productsWithVideo.flatMap((p) =>
+  ['en', 'fr'].map((locale) => {
+    const videoUrl = locale === 'en' ? p.video_url_en : p.video_url_fr;
+    if (!videoUrl) return null;
+    return {
+      url: `${baseUrl}/${locale}/products/${p.slug}`,
+      lastModified: new Date(p.created_at),
+      videos: [{
+        title: locale === 'en' ? p.video_title_en : p.video_title_fr,
+        thumbnail_loc: locale === 'en' ? p.video_thumbnail_en : p.video_thumbnail_fr,
+        description: locale === 'en' ? p.video_description_en : p.video_description_fr,
+        content_loc: videoUrl,
+        duration: p.video_duration_seconds,
+      }],
+    };
+  }).filter(Boolean)
+);
+```
+Merge these into the existing product sitemap entries (don't create a second, separate `sitemap-videos.xml` unless your product count grows large enough to need sitemap splitting — one combined sitemap is simpler to maintain at current scale).
+
+Confirm `og:video` meta tags are also set on product pages with video (in addition to the existing `og:image`), so sharing a product link on social platforms shows a native video preview where supported.
+
+═══════════════════════════
+6. VERIFICATION
+═══════════════════════════
+- [ ] Upload a large (500MB+) test video via the admin panel — confirm it completes reliably via the resumable upload (test on a deliberately unstable/throttled connection to confirm resume-on-reconnect actually works, which is the whole point of TUS over a standard upload).
+- [ ] Confirm the video plays correctly on the public product page in both EN and FR (switch language toggle, confirm the correct video loads, confirm fallback works if only one language has a video).
+- [ ] Validate the `VideoObject` JSON-LD on a product page using Google's Rich Results Test.
+- [ ] Confirm `/sitemap.xml` includes the video entries for products that have them, and validate the video sitemap format using Google Search Console's sitemap report after submission.
+- [ ] Confirm the product page's Lighthouse performance score doesn't regress due to the added video (check LCP specifically — `preload="metadata"` and lazy player mounting should prevent the video from becoming the largest contentful paint element).
+
+DELIVERABLE: Every product can have a distinct English and French video, uploaded reliably at large file sizes via resumable (TUS) upload directly to a dedicated Supabase Storage bucket configured at the maximum file-size limit your plan supports, displayed on the product's "Know More" detail page (the existing `/products/[slug]` route) with correct locale-based fallback, and made indexable via VideoObject structured data plus video sitemap entries so Google can surface these videos in search and video search results.
