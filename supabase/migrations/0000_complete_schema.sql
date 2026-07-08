@@ -509,6 +509,9 @@ insert into blog_categories (id, name) values
   ('a8d68965-0a18-47e2-895c-9c7ef2b6e1b3', 'Eco Agriculture')
 on conflict do nothing;
 
+-- Ensure body column exists before seeding
+alter table blog_posts add column if not exists body text;
+
 -- Blog Posts
 insert into blog_posts (slug, title, body, category_id, status) values
   ('moringa-cellular-benefits',

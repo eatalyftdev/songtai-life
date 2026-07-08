@@ -25,18 +25,18 @@ create table if not exists product_categories (
   slug text unique not null
 );
 
--- products
+-- products (columns already use final bilingual names to stay consistent on re-runs)
 create table if not exists products (
-  id          uuid primary key default uuid_generate_v4(),
-  slug        text unique not null,
-  name        text not null,
-  description text,
-  price_xaf   integer not null,
-  pv_points   integer default 0,
-  category_id uuid references product_categories(id),
-  images      text[] default '{}',
-  is_active   boolean default true,
-  created_at  timestamptz default now()
+  id             uuid primary key default uuid_generate_v4(),
+  slug           text unique not null,
+  name_en        text not null,
+  description_en text,
+  price_xaf      integer not null,
+  pv_points      integer default 0,
+  category_id    uuid references product_categories(id),
+  images         text[] default '{}',
+  is_active      boolean default true,
+  created_at     timestamptz default now()
 );
 
 -- blog_categories
@@ -151,11 +151,11 @@ insert into product_categories (id, name, slug) values
   ('f8d68965-0a18-47e2-895c-9c7ef2b6e1b4', 'New Arrivals', 'new-arrivals')
 on conflict (slug) do nothing;
 
-insert into products (slug, name, description, price_xaf, pv_points, category_id, images, is_active) values
-  ('cellular-vitality', 'Cellular Vitality Capsules', 'High-purity organic moringa and ginseng complex designed to renew cellular energy and boost regional immune health.', 18500, 25, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b1', array['https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&q=80&w=800'], true),
-  ('luminous-elixir',   'Luminous Facial Elixir',    'Anti-aging daily serum rich in shea oil esters, wild ginger, and vitamin C to smooth and brighten West African skin.',    22000, 30, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b2', array['https://images.unsplash.com/photo-1608248597481-496100c80836?auto=format&fit=crop&q=80&w=800'], true),
-  ('bio-yield-booster', 'Bio-Yield Soil Booster',    '100% ecological organic agricultural fertilizer to accelerate seed germination and crop yield in Cameroon farm soils.',    15000, 20, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b3', array['https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?auto=format&fit=crop&q=80&w=800'], true),
-  ('shampoo-bar',       'Botanical Purifying Shampoo Bar', 'Zero-waste premium conditioning hair cleanser formulated with wild tea tree and rosemary leaf extracts.',            8500, 10, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b4', array['https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&q=80&w=800'], true)
+insert into products (slug, name_en, description_en, price_xaf, pv_points, category_id, images, is_active) values
+  ('cellular-vitality', 'Cellular Vitality Capsules',    'High-purity organic moringa and ginseng complex designed to renew cellular energy and boost regional immune health.', 18500, 25, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b1', array['https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?auto=format&fit=crop&q=80&w=800'], true),
+  ('luminous-elixir',   'Luminous Facial Elixir',        'Anti-aging daily serum rich in shea oil esters, wild ginger, and vitamin C to smooth and brighten West African skin.',    22000, 30, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b2', array['https://images.unsplash.com/photo-1608248597481-496100c80836?auto=format&fit=crop&q=80&w=800'], true),
+  ('bio-yield-booster', 'Bio-Yield Soil Booster',        '100% ecological organic agricultural fertilizer to accelerate seed germination and crop yield in Cameroon farm soils.',    15000, 20, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b3', array['https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?auto=format&fit=crop&q=80&w=800'], true),
+  ('shampoo-bar',       'Botanical Purifying Shampoo Bar','Zero-waste premium conditioning hair cleanser formulated with wild tea tree and rosemary leaf extracts.',            8500, 10, 'f8d68965-0a18-47e2-895c-9c7ef2b6e1b4', array['https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&q=80&w=800'], true)
 on conflict (slug) do nothing;
 
 insert into blog_categories (id, name) values
@@ -163,6 +163,9 @@ insert into blog_categories (id, name) values
   ('a8d68965-0a18-47e2-895c-9c7ef2b6e1b2', 'Direct Selling'),
   ('a8d68965-0a18-47e2-895c-9c7ef2b6e1b3', 'Eco Agriculture')
 on conflict do nothing;
+
+-- Ensure body column exists before seeding (may be absent on some deployments)
+alter table blog_posts add column if not exists body text;
 
 insert into blog_posts (slug, title, body, category_id, status) values
   ('moringa-cellular-benefits', 'Sourcing Northern Moringa: Active Botanical Cellular Benefits',       'Moringa Oleifera grown in northern Cameroon boasts extraordinary concentration of vitamins and active antioxidants...', 'a8d68965-0a18-47e2-895c-9c7ef2b6e1b1', 'published'),
