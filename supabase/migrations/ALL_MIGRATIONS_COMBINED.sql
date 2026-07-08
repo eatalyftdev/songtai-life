@@ -404,6 +404,7 @@ exception when others then null; end $$;
 -- 0003 — Missing columns
 -- ══════════════════════════════════════════════════════════════════
 
+alter table blog_posts           add column if not exists body       text;
 alter table blog_posts           add column if not exists excerpt    text;
 alter table blog_posts           add column if not exists author     text;
 alter table blog_posts           add column if not exists image      text;

@@ -54,6 +54,7 @@ create table if not exists blog_posts (
   status       text default 'draft' check (status in ('draft','published','archived')),
   published_at timestamptz default now()
 );
+alter table blog_posts add column if not exists body     text;
 alter table blog_posts add column if not exists excerpt  text;
 alter table blog_posts add column if not exists author   text;
 alter table blog_posts add column if not exists image    text;
