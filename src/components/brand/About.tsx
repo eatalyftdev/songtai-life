@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Shield, Sparkles, Award, Sprout, Heart, Users } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 
 interface StoryContent {
@@ -17,7 +18,7 @@ interface StoryBody {
   image_url: string;
 }
 
-interface TeamMember { name: string; role_en: string; role_fr?: string; desc_en: string; desc_fr?: string; image: string; }
+interface TeamMember { name: string; role_en: string; role_fr?: string; desc_en: string; desc_fr?: string; bio_en?: string; bio_fr?: string; image: string; photo_url?: string; }
 interface Cert { label_en: string; label_fr: string; sub_en: string; sub_fr: string; }
 
 const DEFAULT_HEADER: StoryContent = {
@@ -59,11 +60,13 @@ async function fetchSection<T>(key: string): Promise<T | null> {
 }
 
 export default function About() {
+  const { i18n } = useTranslation();
+  const lang: "en" | "fr" = i18n.language?.startsWith("fr") ? "fr" : "en";
   const [header, setHeader] = useState<StoryContent>(DEFAULT_HEADER);
   const [body, setBody] = useState<StoryBody>(DEFAULT_BODY);
   const [team, setTeam] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [certs, setCerts] = useState<Cert[]>(DEFAULT_CERTS);
-  const [lang] = useState<"en" | "fr">("en");
+  const [expandedBio, setExpandedBio] = useState<number | null>(null);
 
   useEffect(() => {
     fetchSection<StoryContent>("page_our_story").then(d => { if (d) setHeader(prev => ({ ...prev, ...d })); });
@@ -122,18 +125,37 @@ export default function About() {
         <div className="space-y-8">
           <h3 className="text-xl font-bold text-white border-b border-stone-900 pb-2">Our Executive Leadership</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {team.map((member, idx) => (
-              <div key={idx} className="bg-stone-900/30 border border-stone-850 p-6 rounded-2xl space-y-4">
-                {member.image && (
-                  <img src={member.image} alt={member.name} className="w-16 h-16 rounded-full object-cover border border-stone-800" />
-                )}
-                <div>
-                  <h4 className="font-bold text-white text-base">{member.name}</h4>
-                  <span className="text-[10px] text-[#C9A227] font-bold block uppercase">{lang === "fr" ? (member.role_fr || member.role_en) : member.role_en}</span>
-                  <p className="text-stone-400 text-xs mt-2.5 leading-relaxed">{lang === "fr" ? (member.desc_fr || member.desc_en) : member.desc_en}</p>
+            {team.map((member, idx) => {
+              const photo = member.photo_url || member.image;
+              const desc = lang === "fr" ? (member.desc_fr || member.bio_fr || member.desc_en || member.bio_en || "") : (member.desc_en || member.bio_en || "");
+              const isLong = desc.length > 140;
+              const isOpen = expandedBio === idx;
+              const shownDesc = isLong && !isOpen ? `${desc.slice(0, 140).trimEnd()}…` : desc;
+              return (
+                <div key={idx} className="bg-stone-900/30 border border-stone-850 p-6 rounded-2xl space-y-4">
+                  {photo ? (
+                    <img src={photo} alt={member.name} className="w-16 h-16 rounded-full object-cover border border-stone-800" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-stone-800 border border-stone-750 flex items-center justify-center text-stone-500 font-bold text-lg">
+                      {member.name?.trim()?.charAt(0) || "?"}
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-bold text-white text-base">{member.name}</h4>
+                    <span className="text-[10px] text-[#C9A227] font-bold block uppercase">{lang === "fr" ? (member.role_fr || member.role_en) : member.role_en}</span>
+                    <p className="text-stone-400 text-xs mt-2.5 leading-relaxed">{shownDesc}</p>
+                    {isLong && (
+                      <button
+                        onClick={() => setExpandedBio(isOpen ? null : idx)}
+                        className="mt-2 text-[10px] font-bold text-emerald-400 hover:underline cursor-pointer"
+                      >
+                        {isOpen ? (lang === "fr" ? "Réduire" : "Read less") : (lang === "fr" ? "Lire plus" : "Read more")}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

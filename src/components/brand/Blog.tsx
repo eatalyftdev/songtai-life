@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, User, Calendar, BookOpen, Clock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import SEO from "../SEO";
 import { BLOG_SEED, BlogPostSeed } from "../../data/mockData";
@@ -46,6 +47,10 @@ const FALLBACK: LivePost[] = BLOG_SEED.map((p: BlogPostSeed) => ({
 }));
 
 export default function Blog() {
+  const { i18n } = useTranslation();
+  const locale = i18n.language?.startsWith("fr") ? "fr" : "en";
+  const getTitle = (p: LivePost) => (locale === "fr" && p.titleFr) ? p.titleFr : p.title;
+
   const [posts, setPosts] = useState<LivePost[]>(FALLBACK);
   const [selectedPost, setSelectedPost] = useState<LivePost | null>(null);
   const [activeCategory, setActiveCategory] = useState("All");
@@ -85,11 +90,11 @@ export default function Blog() {
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
         <SEO
-          title={post.title}
+          title={getTitle(post)}
           description={post.excerpt.slice(0, 160)}
           image={post.image || undefined}
           type="article"
-          breadcrumbs={[{ name: "Blog", url: "/?page=blog" }, { name: post.title, url: `/?page=blog&slug=${post.slug}` }]}
+          breadcrumbs={[{ name: "Blog", url: "/?page=blog" }, { name: getTitle(post), url: `/?page=blog&slug=${post.slug}` }]}
         />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 relative z-10">
 
@@ -108,7 +113,7 @@ export default function Blog() {
                 {post.category}
               </span>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white leading-tight tracking-tight">
-                {post.title}
+                {getTitle(post)}
               </h1>
 
               <div className="flex flex-wrap items-center gap-6 text-xs text-stone-500 font-medium pt-2">
@@ -136,7 +141,7 @@ export default function Blog() {
             {/* Hero Image */}
             {post.image && (
               <div className="aspect-[21/9] rounded-[32px] overflow-hidden bg-stone-950 border border-stone-850">
-                <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
+                <img src={post.image} alt={getTitle(post)} className="w-full h-full object-cover" />
               </div>
             )}
 
@@ -219,7 +224,7 @@ export default function Blog() {
                 <div className="space-y-4">
                   <div className="aspect-[16/10] rounded-2xl overflow-hidden bg-stone-950">
                     {post.image ? (
-                      <img src={post.image} alt={post.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102" />
+                      <img src={post.image} alt={getTitle(post)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102" />
                     ) : (
                       <div className="w-full h-full bg-stone-900 flex items-center justify-center">
                         <BookOpen className="w-12 h-12 text-stone-700" />
@@ -228,7 +233,7 @@ export default function Blog() {
                   </div>
                   <div className="space-y-1.5">
                     <span className="text-[10px] font-bold text-[#C9A227] uppercase tracking-wider">{post.category}</span>
-                    <h4 className="font-extrabold text-base text-white group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">{post.title}</h4>
+                    <h4 className="font-extrabold text-base text-white group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">{getTitle(post)}</h4>
                     <p className="text-stone-400 text-xs line-clamp-2 leading-relaxed">{post.excerpt}</p>
                   </div>
                 </div>
