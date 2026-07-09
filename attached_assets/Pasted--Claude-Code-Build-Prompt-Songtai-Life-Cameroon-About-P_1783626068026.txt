@@ -1,0 +1,87 @@
+# Claude Code Build Prompt — Songtai Life Cameroon: About, Products, FAQ, Blog
+
+Paste this whole prompt into Claude Code inside the `songtai-life` repo.
+
+---
+
+## 0. Skill activation (mandatory first step)
+
+Before writing any code, activate the relevant skills from the `jeffallan/claude-skills` framework (github.com/jeffallan/claude-skills) per the 66-skill guide:
+- **Frontend/Mobile** — for the Next.js UI components (About, Products, FAQ, Blog)
+- **API/Architecture** — for the Supabase data-fetching layer and i18n routing
+- **Backend** — for any server actions / route handlers needed
+- **Quality/Testing** — for basic smoke tests before deploy
+- **DevOps** — for the Vercel deployment step
+
+State which skills you're activating before you start coding.
+
+---
+
+## 1. Context
+
+This is the `songtai-life` project (Supabase project ref `auyjxchghtetxpiyecds`, Vercel deployment at `songtai-life.vercel.app`). It's a bilingual (English/French) direct-selling wellness site for Songtai Life Cameroon. The Supabase database has already been seeded with real content — your job is to **build/verify the UI that reads and renders it**, not to invent new data.
+
+The site uses a `locale` pattern (`en` / `fr`) — check the existing routing convention in the repo (e.g. `/fr/...` prefix or a cookie/context-based locale) and match it. Every table already has `_en` / `_fr` suffixed columns or a nested `content` JSONB with `_en`/`_fr` keys — always render both, switching on the active locale, and never hardcode English strings for user-facing copy.
+
+## 2. Data already seeded (read-only reference — do not duplicate seed data in code)
+
+**`page_sections`** (`page_key='home'`, `section_key='company_intro'`) → `content.story_en` / `content.story_fr`: the "Our Story" narrative. Also `content.stat_years`, `stat_members`, `stat_products`, `stat_countries`, `stat_awards` (numeric, already populated).
+
+**`homepage_sections`**:
+- `section_key='page_our_story_team'` → `content.members[]` array, each with `name`, `role_en`/`role_fr`, `photo_url` (currently empty — needs an image), `bio_en`/`bio_fr`. Currently contains CEO Jackson Wang.
+- `section_key='page_our_story_certs'` → `content.certs[]` (MINSANTE, Organic, Halal, ISO 9001 badges) — already populated, just needs rendering as a certification strip.
+
+**`product_categories`** (3 rows): `health-supplements`, `oral-care`, `functional-beverages` — `name` / `name_fr`, `slug`, `display_order`.
+
+**`products`** (7 rows, currently `is_active = false`): Rev-Cell, Omega-3 Fish Oil, Lemon & Green Tea Toothpaste, Chitosan Life, Ganoderma Lucidum Spore Coffee, Immune Up Multivitamin, Calcium + Vitamin D3. Columns: `name_en`/`name_fr`, `description_en`/`description_fr`, `price_xaf`, `pv_points`, `category_id`, `images[]`, `is_featured`.
+
+**`faq_categories`** (4, clean, deduped): Products, Distributor, Payments, Shipping.
+
+**`faqs`** (13 rows, `is_published = true`): `question_en`/`fr`, `answer_en`/`fr`, grouped by `category_id`, ordered by `display_order`.
+
+**`blog_categories`** (3): Nutraceuticals, Direct Selling, Eco Agriculture.
+
+**`blog_posts`** (3 rows, currently `status = 'draft'`): `title`/`title_fr`, `excerpt`, `body`, `category_id`, `author`, `slug`.
+
+## 3. Pages to build / update
+
+### 3.1 About / Our Story page (`/about` or `/notre-histoire`, whatever the existing route convention is)
+- Hero/intro pulling `page_sections.home.company_intro.story_en/fr`
+- Stats strip: years, members, products, countries, awards (from same section)
+- Leadership section: render `homepage_sections.page_our_story_team.content.members[]` as a card — photo (fallback avatar if `photo_url` empty), name, role, bio, with a "read more" toggle for the bio since it's long
+- Certification strip: render `page_our_story_certs.content.certs[]` as icon + label + sublabel badges
+- Keep this in sync with whatever the homepage's `company_intro` section already renders — don't create a second source of truth; if the homepage has a short teaser, link "Read our full story" through to this page
+
+### 3.2 Products page (`/products` or `/produits`)
+- Fetch `products` joined to `product_categories`, filtered by `is_active = true` (so the 7 seeded products **will not show yet** until pricing is finalized — that's intentional, don't force them visible)
+- Group/filter by category using `name`/`name_fr`
+- Product card: image (placeholder graphic if `images` is empty), localized name, localized description (truncate with "read more"), price formatted as XAF only if `price_xaf > 0`, PV badge only if `pv_points > 0`
+- Product detail page/modal at `/products/[slug]`
+
+### 3.3 FAQ page (`/faq`)
+- Fetch `faq_categories` ordered by `display_order`, and `faqs` where `is_published = true` ordered by `display_order`, grouped under their category
+- Accordion UI per category tab or section — question in the active locale, answer collapses/expands
+- Add a simple client-side search/filter across question text (both locales) if the existing site has a search pattern elsewhere; otherwise keep it simple
+
+### 3.4 Blog page (`/blog`)
+- List `blog_posts` where `status = 'published'` (the 3 seeded posts are `draft` — they intentionally will not show until reviewed and published from admin)
+- Blog index: title (localized via `title`/`title_fr`), excerpt, category badge, author, published date
+- Blog detail page at `/blog/[slug]` rendering `body` (render as paragraphs/markdown — check how `body` is currently formatted elsewhere in the codebase before assuming plain text vs markdown)
+- If there's an existing admin panel for `blog_posts`, verify the 3 draft posts appear there for Zayne to add images and publish — don't build a duplicate admin UI if one exists
+
+## 4. Non-negotiables
+- Every string shown to a visitor must have both an English and French rendering, switching correctly with the locale toggle — no hardcoded fallback language
+- Do not flip `is_active` on products or `status` on blog_posts to make things "look done" — leave that gating to Zayne, since pricing/images aren't final
+- Reuse existing design tokens/components (buttons, section headers, card styles) already in the codebase — don't introduce a new visual language for these four pages
+- Add loading and empty states for every list (products, faqs, blog) since `products` and `blog_posts` are currently empty-of-visible-rows by design (all inactive/draft)
+
+## 5. QA checklist before deploy
+- [ ] Toggle locale EN ⇄ FR on all four pages — confirm no missing/blank strings
+- [ ] Confirm About page renders CEO bio and cert badges correctly with no `photo_url` (fallback state)
+- [ ] Confirm Products page shows an appropriate empty state (not a blank page) since all 7 are `is_active = false`
+- [ ] Confirm Blog page shows an appropriate empty state since all 3 posts are `draft`
+- [ ] Run existing test suite / linter
+- [ ] `git commit` with a clear message, then deploy via Vercel
+
+## 6. Deploy
+Once QA passes, deploy to the existing Vercel project (`songtai-life`) — do not create a new project. Confirm the deployment URL matches `songtai-life.vercel.app` (or its current custom domain if one has since been attached) and report back the live URL and deployment ID.
