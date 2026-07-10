@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { id: "videos",   labelKey: "nav.videos" },
   { id: "faq",      labelKey: "nav.faq" },
   { id: "contact",  labelKey: "nav.contact" },
+  { id: "appointment", labelKey: "nav.appointment" },
 ];
 
 // Category icons keyed by slug — fallback to 🛍️ for unknown slugs

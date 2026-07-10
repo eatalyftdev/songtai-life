@@ -7,7 +7,6 @@ import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
 import crypto from "crypto";
 import { getMeSombClient } from "./server/mesomb";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./server/replit_integrations/auth/index";
 
 dotenv.config();
 
@@ -394,10 +393,6 @@ async function startServer() {
       req.rawBody = buf.toString("utf8");
     },
   }));
-
-  // Setup Replit Auth (session + OIDC) BEFORE other routes
-  await setupAuth(app);
-  registerAuthRoutes(app);
 
   await hydrateSeeds();
 
@@ -1252,6 +1247,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
         { loc: `${base}/?section=contact`,     priority: "0.6", changefreq: "yearly" },
         { loc: `${base}/?section=media`,       priority: "0.6", changefreq: "monthly" },
         { loc: `${base}/?section=videos`,      priority: "0.7", changefreq: "weekly" },
+        { loc: `${base}/?section=appointment`, priority: "0.6", changefreq: "monthly" },
       ];
 
       const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;

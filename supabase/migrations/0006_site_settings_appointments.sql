@@ -89,11 +89,33 @@ create policy "public_insert_appointments" on public.appointments
 create policy "admin_appointments_all" on public.appointments
   for all using (is_admin()) with check (is_admin());
 
+-- Server-side enforced rate limit — runs on every insert regardless of
+-- client path, closing the gap where a client could skip the RPC call.
+create or replace function public.enforce_appointment_rate_limit()
+returns trigger language plpgsql security definer
+set search_path = public as $
+begin
+  if not public.check_rate_limit('appointment_booking', lower(new.email), 3, 3600) then
+    raise exception 'Too many appointment requests. Please try again later.';
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists trg_appointment_rate_limit on public.appointments;
+create trigger trg_appointment_rate_limit
+  before insert on public.appointments
+  for each row execute function public.enforce_appointment_rate_limit();
+
 -- ── 4. EXTEND TESTIMONIALS ────────────────────────────────────
 alter table public.testimonials
   add column if not exists quote_fr       text,
   add column if not exists is_featured    boolean default false,
   add column if not exists display_order  integer default 0;
+
+drop policy if exists "admin_testimonials_write" on public.testimonials;
+create policy "admin_testimonials_write" on public.testimonials
+  for all using (is_admin()) with check (is_admin());
 
 -- ── 5. EXTEND GALLERY ─────────────────────────────────────────
 alter table public.gallery_images
@@ -102,6 +124,10 @@ alter table public.gallery_images
   add column if not exists uploaded_by       uuid references public.profiles(id),
   add column if not exists file_size_bytes   integer,
   add column if not exists mime_type         text;
+
+drop policy if exists "admin_gallery_images_write" on public.gallery_images;
+create policy "admin_gallery_images_write" on public.gallery_images
+  for all using (is_admin()) with check (is_admin());
 
 -- ── 6. STORAGE POLICIES ───────────────────────────────────────
 -- Note: create buckets 'media', 'documents', 'testimonials' via Supabase Dashboard

@@ -135,7 +135,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
         description={lang === "fr"
           ? "Planifiez une consultation gratuite avec l'équipe Songtai Life."
           : "Schedule a free consultation with the Songtai Life team."}
-        url="/appointment"
+        url="/?section=appointment"
         jsonLd={{
           "@context": "https://schema.org",
           "@type": "LocalBusiness",

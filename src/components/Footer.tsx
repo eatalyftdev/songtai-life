@@ -69,6 +69,7 @@ export default function Footer({ setBrandPage, openPrivacyPolicy, theme }: Foote
     { key: "faq",         label: t("footer.faq") },
     { key: "contact",     label: t("footer.contact") },
     { key: "join",        label: t("footer.becomeDistributor") },
+    { key: "appointment", label: t("footer.appointment") },
   ];
 
   const activeSocials = Object.entries(socials).filter(([, url]) => !!url);

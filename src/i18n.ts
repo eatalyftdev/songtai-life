@@ -107,6 +107,10 @@ const resources = {
       "footer.faq": "FAQ",
       "footer.contact": "Contact",
       "footer.becomeDistributor": "Become a Distributor",
+      "footer.appointment": "Book an Appointment",
+      "nav.appointment": "Book Appointment",
+      "appointment.title": "Book an Appointment",
+      "appointment.subtitle": "Schedule a personal consultation with our team",
       // ── WhatsApp ─────────────────────────────────────────────────
       "whatsapp.defaultMessage": "Hi Songtai Life, I would like to know more!",
       // ── About ────────────────────────────────────────────────────
@@ -292,6 +296,10 @@ const resources = {
       "footer.faq": "FAQ",
       "footer.contact": "Contact",
       "footer.becomeDistributor": "Devenir Distributeur",
+      "footer.appointment": "Prendre Rendez-vous",
+      "nav.appointment": "Prendre Rendez-vous",
+      "appointment.title": "Prendre Rendez-vous",
+      "appointment.subtitle": "Planifiez une consultation personnelle avec notre équipe",
       // ── WhatsApp ─────────────────────────────────────────────────
       "whatsapp.defaultMessage": "Bonjour Songtai Life, je voudrais en savoir plus !",
       // ── About ────────────────────────────────────────────────────
