@@ -8,6 +8,7 @@ import { SkeletonTable } from "../shared/Skeleton";
 import EmptyState from "../shared/EmptyState";
 import MediaUploader from "../../MediaUploader";
 import VideoUploader from "../../VideoUploader";
+import { extractYouTubeId, getYouTubeThumbnail } from "../../../lib/youtube";
 
 interface Product {
   id: string; slug: string; nameEn: string; nameFr: string;
@@ -16,6 +17,7 @@ interface Product {
   isFeatured: boolean; featuredOrder: number;
   images: string[]; categoryId: string | null; stock: number;
   videoUrlEn?: string; videoUrlFr?: string;
+  videoSourceEn?: "upload" | "youtube"; videoSourceFr?: "upload" | "youtube";
   videoThumbnailEn?: string; videoThumbnailFr?: string;
   videoDurationSeconds?: number;
   videoTitleEn?: string; videoTitleFr?: string;
@@ -26,7 +28,8 @@ const BLANK: Partial<Product> = {
   nameEn: "", nameFr: "", slug: "", descriptionEn: "", descriptionFr: "",
   priceXaf: 0, strikePriceXaf: null, pvPoints: 0, isActive: true,
   isFeatured: false, featuredOrder: 0, images: [], stock: 100,
-  videoUrlEn: "", videoUrlFr: "", videoThumbnailEn: "", videoThumbnailFr: "",
+  videoUrlEn: "", videoUrlFr: "", videoSourceEn: "upload", videoSourceFr: "upload",
+  videoThumbnailEn: "", videoThumbnailFr: "",
   videoDurationSeconds: undefined, videoTitleEn: "", videoTitleFr: "",
   videoDescriptionEn: "", videoDescriptionFr: "",
 };
@@ -59,6 +62,8 @@ export default function ProductsPage() {
       isFeatured: p.is_featured ?? false, featuredOrder: p.featured_order ?? 0,
       images: p.images ?? [], categoryId: p.category_id ?? null, stock: p.stock ?? 0,
       videoUrlEn: p.video_url_en ?? "", videoUrlFr: p.video_url_fr ?? "",
+      videoSourceEn: (p.video_source_en === "youtube" ? "youtube" : "upload"),
+      videoSourceFr: (p.video_source_fr === "youtube" ? "youtube" : "upload"),
       videoThumbnailEn: p.video_thumbnail_en ?? "", videoThumbnailFr: p.video_thumbnail_fr ?? "",
       videoDurationSeconds: p.video_duration_seconds ?? undefined,
       videoTitleEn: p.video_title_en ?? "", videoTitleFr: p.video_title_fr ?? "",
@@ -86,7 +91,16 @@ export default function ProductsPage() {
   };
 
   const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    if (form.videoSourceEn === "youtube" && form.videoUrlEn && !extractYouTubeId(form.videoUrlEn)) {
+      alert("The English video URL doesn't look like a valid YouTube link. Fix it before saving.");
+      return;
+    }
+    if (form.videoSourceFr === "youtube" && form.videoUrlFr && !extractYouTubeId(form.videoUrlFr)) {
+      alert("The French video URL doesn't look like a valid YouTube link. Fix it before saving.");
+      return;
+    }
+    setSaving(true);
     const payload = {
       slug: (form.slug || `prod-${Date.now()}`),
       name_en: form.nameEn, name_fr: form.nameFr || null,
@@ -98,6 +112,7 @@ export default function ProductsPage() {
       is_featured: form.isFeatured ?? false, featured_order: Number(form.featuredOrder ?? 0),
       category_id: form.categoryId || null,
       video_url_en: form.videoUrlEn || null, video_url_fr: form.videoUrlFr || null,
+      video_source_en: form.videoSourceEn || "upload", video_source_fr: form.videoSourceFr || "upload",
       video_thumbnail_en: form.videoThumbnailEn || null, video_thumbnail_fr: form.videoThumbnailFr || null,
       video_duration_seconds: form.videoDurationSeconds ?? null,
       video_title_en: form.videoTitleEn || null, video_title_fr: form.videoTitleFr || null,
@@ -375,34 +390,118 @@ export default function ProductsPage() {
               </p>
             )}
 
-            {/* Video uploader */}
-            <VideoUploader
-              folder={editing?.id ?? `draft-${Date.now()}`}
-              locale={videoTab}
-              currentVideoUrl={videoTab === "en" ? form.videoUrlEn || "" : form.videoUrlFr || ""}
-              currentThumbnailUrl={videoTab === "en" ? form.videoThumbnailEn || "" : form.videoThumbnailFr || ""}
-              onUploaded={(videoUrl, thumbnailUrl, durationSeconds) => {
-                if (videoTab === "en") {
-                  setForm(prev => ({
-                    ...prev,
-                    videoUrlEn: videoUrl,
-                    videoThumbnailEn: thumbnailUrl || prev.videoThumbnailEn,
-                    videoDurationSeconds: durationSeconds || prev.videoDurationSeconds,
-                  }));
-                } else {
-                  setForm(prev => ({
-                    ...prev,
-                    videoUrlFr: videoUrl,
-                    videoThumbnailFr: thumbnailUrl || prev.videoThumbnailFr,
-                    videoDurationSeconds: durationSeconds || prev.videoDurationSeconds,
-                  }));
-                }
-              }}
-              onRemoved={() => {
-                if (videoTab === "en") setForm(prev => ({ ...prev, videoUrlEn: "", videoThumbnailEn: "" }));
-                else setForm(prev => ({ ...prev, videoUrlFr: "", videoThumbnailFr: "" }));
-              }}
-            />
+            {/* Source toggle: uploaded file vs YouTube link — mutually exclusive per locale */}
+            <div className="flex gap-1 bg-stone-950 p-1 rounded-xl border border-stone-850/60 w-fit">
+              {(["upload", "youtube"] as const).map(src => {
+                const current = videoTab === "en" ? (form.videoSourceEn ?? "upload") : (form.videoSourceFr ?? "upload");
+                return (
+                  <button
+                    key={src}
+                    type="button"
+                    onClick={() => {
+                      // Switching source clears the other source's saved URL for this locale
+                      // so only one video (upload OR YouTube) is ever active per locale.
+                      if (videoTab === "en") {
+                        setForm(prev => ({ ...prev, videoSourceEn: src, videoUrlEn: "", videoThumbnailEn: "" }));
+                      } else {
+                        setForm(prev => ({ ...prev, videoSourceFr: src, videoUrlFr: "", videoThumbnailFr: "" }));
+                      }
+                    }}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all capitalize ${
+                      current === src
+                        ? "bg-[#0A7D32]/15 border border-[#0A7D32]/30 text-emerald-400"
+                        : "text-stone-400 hover:text-white"
+                    }`}
+                  >
+                    {src === "upload" ? "Upload file" : "YouTube link"}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-stone-500">
+              Only one video plays per language — switching source replaces whatever was set before.
+            </p>
+
+            {/* Video uploader (file-based) */}
+            {(videoTab === "en" ? form.videoSourceEn : form.videoSourceFr) !== "youtube" && (
+              <VideoUploader
+                folder={editing?.id ?? `draft-${Date.now()}`}
+                locale={videoTab}
+                currentVideoUrl={videoTab === "en" ? form.videoUrlEn || "" : form.videoUrlFr || ""}
+                currentThumbnailUrl={videoTab === "en" ? form.videoThumbnailEn || "" : form.videoThumbnailFr || ""}
+                onUploaded={(videoUrl, thumbnailUrl, durationSeconds) => {
+                  if (videoTab === "en") {
+                    setForm(prev => ({
+                      ...prev,
+                      videoUrlEn: videoUrl,
+                      videoThumbnailEn: thumbnailUrl || prev.videoThumbnailEn,
+                      videoDurationSeconds: durationSeconds || prev.videoDurationSeconds,
+                    }));
+                  } else {
+                    setForm(prev => ({
+                      ...prev,
+                      videoUrlFr: videoUrl,
+                      videoThumbnailFr: thumbnailUrl || prev.videoThumbnailFr,
+                      videoDurationSeconds: durationSeconds || prev.videoDurationSeconds,
+                    }));
+                  }
+                }}
+                onRemoved={() => {
+                  if (videoTab === "en") setForm(prev => ({ ...prev, videoUrlEn: "", videoThumbnailEn: "" }));
+                  else setForm(prev => ({ ...prev, videoUrlFr: "", videoThumbnailFr: "" }));
+                }}
+              />
+            )}
+
+            {/* YouTube URL input */}
+            {(videoTab === "en" ? form.videoSourceEn : form.videoSourceFr) === "youtube" && (() => {
+              const url = (videoTab === "en" ? form.videoUrlEn : form.videoUrlFr) || "";
+              const id = extractYouTubeId(url);
+              const invalid = url.trim().length > 0 && !id;
+              return (
+                <div className="space-y-2">
+                  <input
+                    value={url}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (videoTab === "en") {
+                        setForm(prev => ({ ...prev, videoUrlEn: val, videoThumbnailEn: getYouTubeThumbnail(val) || prev.videoThumbnailEn }));
+                      } else {
+                        setForm(prev => ({ ...prev, videoUrlFr: val, videoThumbnailFr: getYouTubeThumbnail(val) || prev.videoThumbnailFr }));
+                      }
+                    }}
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    className={`w-full px-3 py-2 bg-stone-800 border rounded-xl text-white text-xs focus:outline-none ${
+                      invalid ? "border-red-700 focus:border-red-500" : "border-stone-700 focus:border-[#0A7D32]"
+                    }`}
+                  />
+                  {invalid && (
+                    <p className="text-[10px] text-red-400">Doesn't look like a valid YouTube URL.</p>
+                  )}
+                  {id && (
+                    <div className="rounded-xl overflow-hidden border border-emerald-800/40 bg-stone-950 w-40">
+                      <img src={getYouTubeThumbnail(id) ?? ""} alt="YouTube thumbnail preview" className="w-full aspect-video object-cover" />
+                    </div>
+                  )}
+                  <div className="max-w-[140px]">
+                    <label className="text-stone-500 text-[10px] block mb-1 uppercase tracking-wider">Duration (mm:ss)</label>
+                    <input
+                      placeholder="4:32"
+                      defaultValue={
+                        form.videoDurationSeconds
+                          ? `${Math.floor(form.videoDurationSeconds / 60)}:${String(form.videoDurationSeconds % 60).padStart(2, "0")}`
+                          : ""
+                      }
+                      onBlur={e => {
+                        const m = e.target.value.trim().match(/^(\d+):([0-5]?\d)$/);
+                        if (m) f("videoDurationSeconds", Number(m[1]) * 60 + Number(m[2]));
+                      }}
+                      className="w-full px-3 py-1.5 bg-stone-800 border border-stone-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#0A7D32]"
+                    />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Thumbnail manual replacement */}
             <div>

@@ -1230,7 +1230,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
     try {
       const [{ data: products }, { data: posts }, { data: events }] = await Promise.all([
         db
-          ? db.from("products").select("slug, updated_at, video_url_en, video_url_fr, video_thumbnail_en, video_thumbnail_fr, video_duration_seconds, video_title_en, video_title_fr, video_description_en, video_description_fr, name_en").eq("is_active", true)
+          ? db.from("products").select("slug, updated_at, video_url_en, video_url_fr, video_source_en, video_source_fr, video_thumbnail_en, video_thumbnail_fr, video_duration_seconds, video_title_en, video_title_fr, video_description_en, video_description_fr, name_en").eq("is_active", true)
           : { data: [] },
         db
           ? db.from("blog_posts").select("slug, published_at").eq("status", "published")
@@ -1251,20 +1251,55 @@ Answer concisely, helpfully, and professionally. Support both English and French
         { loc: `${base}/?section=faq`,         priority: "0.7", changefreq: "monthly" },
         { loc: `${base}/?section=contact`,     priority: "0.6", changefreq: "yearly" },
         { loc: `${base}/?section=media`,       priority: "0.6", changefreq: "monthly" },
+        { loc: `${base}/?section=videos`,      priority: "0.7", changefreq: "weekly" },
       ];
+
+      const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+      const youtubeIdFromUrl = (input: string | null): string | null => {
+        if (!input) return null;
+        const trimmed = input.trim();
+        if (!trimmed) return null;
+        if (YOUTUBE_ID_RE.test(trimmed)) return trimmed;
+        let url: URL;
+        try { url = new URL(trimmed); } catch { return null; }
+        const host = url.hostname.replace(/^www\./, "").replace(/^m\./, "");
+        if (!/(^|\.)youtube\.com$|(^|\.)youtube-nocookie\.com$|^youtu\.be$/.test(host)) return null;
+        let candidate: string | null = null;
+        if (host === "youtu.be") {
+          candidate = url.pathname.split("/").filter(Boolean)[0] ?? null;
+        } else if (url.pathname === "/watch") {
+          candidate = url.searchParams.get("v");
+        } else {
+          const parts = url.pathname.split("/").filter(Boolean);
+          const idx = parts.findIndex(p => p === "embed" || p === "shorts" || p === "live");
+          if (idx !== -1 && parts[idx + 1]) candidate = parts[idx + 1];
+        }
+        return candidate && YOUTUBE_ID_RE.test(candidate) ? candidate : null;
+      };
 
       const productUrls = (products ?? []).map((p: any) => {
         const videoUrl = p.video_url_en || p.video_url_fr || null;
+        const videoSource = (p.video_url_en ? p.video_source_en : p.video_source_fr) === "youtube" ? "youtube" : "upload";
         const videoThumb = p.video_thumbnail_en || p.video_thumbnail_fr || null;
         const videoTitle = p.video_title_en || p.video_title_fr || p.name_en || "";
         const videoDesc = p.video_description_en || p.video_description_fr || "";
         const videoDuration = p.video_duration_seconds ?? null;
+        const youtubeId = videoSource === "youtube" ? youtubeIdFromUrl(videoUrl) : null;
         return {
           loc: `${base}/?section=products&slug=${p.slug}`,
           lastmod: p.updated_at ? new Date(p.updated_at).toISOString() : now,
           priority: "0.7",
           changefreq: "weekly",
-          video: videoUrl ? { url: videoUrl, thumb: videoThumb, title: videoTitle, desc: videoDesc, duration: videoDuration } : null,
+          video: videoUrl
+            ? {
+                url: youtubeId ? null : videoUrl,
+                playerLoc: youtubeId ? `https://www.youtube-nocookie.com/embed/${youtubeId}` : null,
+                thumb: videoThumb || (youtubeId ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : null),
+                title: videoTitle,
+                desc: videoDesc,
+                duration: videoDuration,
+              }
+            : null,
         };
       });
 
@@ -1313,7 +1348,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
             if (v.thumb) lines.push(`      <video:thumbnail_loc>${escXml(v.thumb)}</video:thumbnail_loc>`);
             lines.push(`      <video:title>${escXml(v.title)}</video:title>`);
             if (v.desc) lines.push(`      <video:description>${escXml(v.desc)}</video:description>`);
-            lines.push(`      <video:content_loc>${escXml(v.url)}</video:content_loc>`);
+            if (v.url) lines.push(`      <video:content_loc>${escXml(v.url)}</video:content_loc>`);
+            if (v.playerLoc) lines.push(`      <video:player_loc>${escXml(v.playerLoc)}</video:player_loc>`);
             if (v.duration) lines.push(`      <video:duration>${v.duration}</video:duration>`);
             lines.push(`      <video:publication_date>${u.lastmod}</video:publication_date>`);
             lines.push("    </video:video>");

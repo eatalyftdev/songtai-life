@@ -14,6 +14,7 @@ import Events from "./brand/Events";
 import Blog from "./brand/Blog";
 import Gallery from "./brand/Gallery";
 import MediaCenter from "./brand/MediaCenter";
+import VideoShowcase from "./brand/VideoShowcase";
 import FAQ from "./brand/FAQ";
 import Contact from "./brand/Contact";
 import BecomeDistributor from "./brand/BecomeDistributor";
@@ -30,7 +31,7 @@ interface BrandShowcaseProps {
 
 type BrandSubPage =
   | "home" | "about" | "products" | "opportunity" | "events"
-  | "blog" | "gallery" | "media" | "faq" | "contact" | "join" | "appointment";
+  | "blog" | "gallery" | "media" | "videos" | "faq" | "contact" | "join" | "appointment";
 
 const PAGE_SEO: Record<string, { titleKey: string; descKey: string }> = {
   home:        { titleKey: "hero.slogan",         descKey: "hero.sub" },
@@ -42,6 +43,7 @@ const PAGE_SEO: Record<string, { titleKey: string; descKey: string }> = {
   events:      { titleKey: "events.title",        descKey: "events.subtitle" },
   gallery:     { titleKey: "gallery.title",       descKey: "gallery.subtitle" },
   media:       { titleKey: "media.title",         descKey: "media.subtitle" },
+  videos:      { titleKey: "videos.title",        descKey: "videos.subtitle" },
   opportunity: { titleKey: "opportunity.title",   descKey: "opportunity.subtitle" },
   join:        { titleKey: "join.title",          descKey: "join.subtitle" },
   appointment: { titleKey: "appointment.title",   descKey: "appointment.subtitle" },
@@ -79,6 +81,9 @@ export default function BrandShowcase({
         {brandPage === "blog" && <Blog />}
         {brandPage === "gallery" && <Gallery />}
         {brandPage === "media" && <MediaCenter />}
+        {brandPage === "videos" && (
+          <VideoShowcase onNavigate={(page) => setBrandPage(page as BrandSubPage)} />
+        )}
         {brandPage === "faq" && <FAQ />}
         {brandPage === "contact" && <Contact addNotification={addNotification} />}
         {brandPage === "join" && (

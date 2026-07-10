@@ -13,6 +13,7 @@ const resources = {
       "nav.blog": "Wellness Hub",
       "nav.gallery": "Gallery",
       "nav.media": "Media Center",
+      "nav.videos": "Videos",
       "nav.faq": "FAQ",
       "nav.contact": "Contact",
       "nav.join": "Become a Distributor",
@@ -182,6 +183,8 @@ const resources = {
       "events.subtitle": "Leadership summits and community gatherings.",
       "events.register": "Register Now",
       "events.live": "Live Now",
+      "videos.title": "Product Videos",
+      "videos.subtitle": "Watch Songtai Life product videos — see how our wellness, beauty, and agriculture products are made and used.",
     }
   },
   fr: {
@@ -195,6 +198,7 @@ const resources = {
       "nav.blog": "Espace Bien-être",
       "nav.gallery": "Galerie",
       "nav.media": "Médiathèque",
+      "nav.videos": "Vidéos",
       "nav.faq": "FAQ",
       "nav.contact": "Contact",
       "nav.join": "Devenir Distributeur",
@@ -364,6 +368,8 @@ const resources = {
       "events.subtitle": "Sommets de leadership et rassemblements communautaires.",
       "events.register": "S'inscrire Maintenant",
       "events.live": "En Direct",
+      "videos.title": "Vidéos Produits",
+      "videos.subtitle": "Regardez les vidéos produits Songtai Life — découvrez comment nos produits de bien-être, beauté et agriculture sont fabriqués et utilisés.",
     }
   }
 };

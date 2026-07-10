@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { Search, ShoppingBag, ArrowLeft, CheckCircle2, ShieldAlert } from "lucide-react";
+import { Search, ShoppingBag, ArrowLeft, CheckCircle2, ShieldAlert, Play } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "../../lib/supabase";
 import { useTranslation } from "react-i18next";
 import SEO from "../SEO";
 import { PRODUCTS_SEED } from "../../data/mockData";
+import { extractYouTubeId, getYouTubeEmbedUrl, getYouTubeThumbnail } from "../../lib/youtube";
+import YouTubePlayer from "../YouTubePlayer";
 
 interface LiveProduct {
   id: string;
@@ -22,6 +24,8 @@ interface LiveProduct {
   createdAt?: string;
   videoUrlEn?: string;
   videoUrlFr?: string;
+  videoSourceEn?: "upload" | "youtube";
+  videoSourceFr?: "upload" | "youtube";
   videoThumbnailEn?: string;
   videoThumbnailFr?: string;
   videoDurationSeconds?: number;
@@ -52,6 +56,8 @@ function mapDbRow(row: any): LiveProduct {
     createdAt: row.created_at ?? undefined,
     videoUrlEn: row.video_url_en ?? undefined,
     videoUrlFr: row.video_url_fr ?? undefined,
+    videoSourceEn: row.video_source_en === "youtube" ? "youtube" : "upload",
+    videoSourceFr: row.video_source_fr === "youtube" ? "youtube" : "upload",
     videoThumbnailEn: row.video_thumbnail_en ?? undefined,
     videoThumbnailFr: row.video_thumbnail_fr ?? undefined,
     videoDurationSeconds: row.video_duration_seconds ?? undefined,
@@ -170,6 +176,11 @@ export default function Products({ onAddToCart }: ProductsProps) {
       ? (p.videoDescriptionFr || p.videoDescriptionEn || "")
       : (p.videoDescriptionEn || p.videoDescriptionFr || "");
     const videoFallback = locale === "fr" && !p.videoUrlFr && !!p.videoUrlEn;
+    const activeVideoSource: "upload" | "youtube" = (locale === "fr"
+      ? (p.videoUrlFr ? p.videoSourceFr : p.videoSourceEn)
+      : (p.videoUrlEn ? p.videoSourceEn : p.videoSourceFr)) || "upload";
+    const youTubeId = activeVideoSource === "youtube" ? extractYouTubeId(activeVideoUrl) : null;
+    const effectivePoster = videoPoster || (youTubeId ? getYouTubeThumbnail(youTubeId) : "") || "";
 
     const SITE_URL = typeof window !== "undefined" ? window.location.origin : "https://songtailife.cm";
     const isoDuration = p.videoDurationSeconds
@@ -181,11 +192,12 @@ export default function Products({ onAddToCart }: ProductsProps) {
       "@type": "VideoObject",
       name: videoTitle || `${name} — Product Video`,
       description: videoDesc || desc.slice(0, 200),
-      thumbnailUrl: videoPoster || p.images[0] || "",
+      thumbnailUrl: effectivePoster || p.images[0] || "",
       uploadDate: p.createdAt ?? new Date().toISOString(),
       ...(isoDuration ? { duration: isoDuration } : {}),
-      contentUrl: activeVideoUrl,
-      embedUrl: `${SITE_URL}/?section=products&slug=${p.slug}`,
+      ...(youTubeId
+        ? { embedUrl: getYouTubeEmbedUrl(youTubeId) ?? undefined }
+        : { contentUrl: activeVideoUrl, embedUrl: `${SITE_URL}/?section=products&slug=${p.slug}` }),
     } : undefined;
 
     return (
@@ -198,11 +210,17 @@ export default function Products({ onAddToCart }: ProductsProps) {
           breadcrumbs={[{ name: "Products", url: "/?page=products" }, { name, url: `/?page=products&slug=${p.slug}` }]}
           jsonLd={videoJsonLd}
         />
-        {activeVideoUrl && (
+        {activeVideoUrl && !youTubeId && (
           <Helmet>
             <meta property="og:video" content={activeVideoUrl} />
             <meta property="og:video:type" content="video/mp4" />
             {videoPoster && <meta property="og:video:secure_url" content={activeVideoUrl} />}
+          </Helmet>
+        )}
+        {youTubeId && (
+          <Helmet>
+            <meta property="og:video" content={getYouTubeEmbedUrl(youTubeId) ?? ""} />
+            <meta property="og:video:type" content="text/html" />
           </Helmet>
         )}
         {/* Soft radial backdrop */}
@@ -236,14 +254,18 @@ export default function Products({ onAddToCart }: ProductsProps) {
                   )}
                 </div>
               )}
-              <video
-                src={activeVideoUrl}
-                poster={videoPoster || undefined}
-                controls
-                preload="metadata"
-                playsInline
-                className="w-full rounded-xl bg-stone-950 max-h-[480px] object-contain"
-              />
+              {youTubeId ? (
+                <YouTubePlayer videoId={youTubeId} poster={effectivePoster} title={videoTitle || name} />
+              ) : (
+                <video
+                  src={activeVideoUrl}
+                  poster={videoPoster || undefined}
+                  controls
+                  preload="metadata"
+                  playsInline
+                  className="w-full rounded-xl bg-stone-950 max-h-[480px] object-contain"
+                />
+              )}
             </div>
           )}
 
@@ -397,6 +419,11 @@ export default function Products({ onAddToCart }: ProductsProps) {
                       <span className="absolute top-3 left-3 px-2.5 py-1 bg-stone-900/90 backdrop-blur-md text-[10px] font-bold text-[#C9A227] rounded-md border border-stone-850">
                         {p.pvPoints} PV
                       </span>
+                      {(locale === "fr" ? (p.videoUrlFr || p.videoUrlEn) : (p.videoUrlEn || p.videoUrlFr)) && (
+                        <span className="absolute top-3 right-3 w-7 h-7 rounded-full bg-stone-900/90 backdrop-blur-md border border-stone-850 flex items-center justify-center">
+                          <Play className="w-3 h-3 text-[#C9A227] fill-[#C9A227] ml-0.5" />
+                        </span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">

@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { id: "products", labelKey: "nav.products", hasMega: true },
   { id: "events",   labelKey: "nav.events" },
   { id: "blog",     labelKey: "nav.blog" },
+  { id: "videos",   labelKey: "nav.videos" },
   { id: "faq",      labelKey: "nav.faq" },
   { id: "contact",  labelKey: "nav.contact" },
 ];
