@@ -118,7 +118,7 @@ export default function Navbar({
     : "text-stone-300 hover:text-white hover:bg-stone-800/50";
   const mobileActive = theme === "light"
     ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
-    : "bg-[#0A7D32]/15 border border-[#0A7D32]/30 text-emerald-400";
+    : "bg-emerald-600/15 border border-emerald-600/30 text-emerald-400";
 
   return (
     <motion.nav
@@ -127,7 +127,7 @@ export default function Navbar({
         backdropFilter: scrolled ? "blur(24px)" : "blur(12px)",
       }}
       transition={{ duration: 0.3, ease: "easeInOut" }}
-      className={`sticky top-0 z-50 w-full border-b shadow-sm ${navBg}`}
+      className={`sticky top-0 z-50 w-full relative shadow-sm ${navBg}`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
         <div className="flex justify-between items-center h-full">
@@ -177,7 +177,7 @@ export default function Navbar({
                               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ${megaItem} text-left transition-colors group`}
                             >
                               <span className="text-lg">{CATEGORY_ICONS[cat.slug] ?? "🛍️"}</span>
-                              <p className={`text-sm font-semibold ${navText} group-hover:text-[#ecc246] transition-colors truncate`}>
+                              <p className={`text-sm font-semibold ${navText} group-hover:text-[color:var(--color-gold)] transition-colors truncate`}>
                                 {locale === "fr" && cat.nameFr ? cat.nameFr : cat.nameEn}
                               </p>
                             </button>
@@ -185,7 +185,7 @@ export default function Navbar({
                           <div className={`mt-3 pt-3 border-t ${theme === "light" ? "border-stone-200" : "border-stone-800"}`}>
                             <button
                               onClick={() => handleMenuClick("products")}
-                              className="w-full text-center text-xs font-bold text-[#ecc246] hover:text-[#dbb13b] transition-colors py-1"
+                              className="w-full text-center text-xs font-bold text-[color:var(--color-gold)] hover:opacity-75 transition-colors py-1"
                             >
                               {t("products.viewAll")} →
                             </button>
@@ -253,11 +253,11 @@ export default function Navbar({
             {/* Shopping Cart */}
             <button
               onClick={openCart}
-              className={`relative p-1.5 ${theme === "light" ? "text-stone-600 hover:text-[#ecc246] hover:bg-stone-100/80" : "text-stone-300 hover:text-[#ecc246] hover:bg-stone-800/50"} rounded-full transition-all duration-300 cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center`}
+              className={`relative p-1.5 ${theme === "light" ? "text-stone-600 hover:text-[color:var(--color-gold)] hover:bg-stone-100/80" : "text-stone-300 hover:text-[color:var(--color-gold)] hover:bg-stone-800/50"} rounded-full transition-all duration-300 cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center`}
             >
               <ShoppingBag className="w-[18px] h-[18px]" />
               {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-[#ecc246] text-stone-900 text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 bg-[color:var(--color-gold)] text-stone-900 text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               )}
@@ -266,7 +266,7 @@ export default function Navbar({
             {/* Become a Distributor CTA */}
             <button
               onClick={() => handleMenuClick("opportunity")}
-              className="hidden xl:flex items-center px-3 py-1.5 bg-[#ecc246] hover:bg-[#dbb13b] text-stone-900 rounded-full text-xs font-black transition-all cursor-pointer shadow-md min-h-[36px] whitespace-nowrap"
+              className="hidden xl:flex items-center px-3 py-1.5 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-900 rounded-full text-xs font-black transition-all cursor-pointer shadow-md min-h-[36px] whitespace-nowrap"
             >
               {t("nav.join")}
             </button>
@@ -338,7 +338,7 @@ export default function Navbar({
               </button>
               <button
                 onClick={() => handleMenuClick("opportunity")}
-                className="flex-1 py-3 bg-[#ecc246] hover:bg-[#dbb13b] text-stone-900 rounded-xl text-sm font-black transition-all cursor-pointer text-center min-h-[48px]"
+                className="flex-1 py-3 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-900 rounded-xl text-sm font-black transition-all cursor-pointer text-center min-h-[48px]"
               >
                 {t("nav.join")}
               </button>
@@ -346,6 +346,8 @@ export default function Navbar({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Signature rule — the S-mark ribbon gradient, used once as the nav's bottom edge */}
+      <div className="signature-rule absolute bottom-0 left-0 right-0" aria-hidden="true" />
     </motion.nav>
   );
 }

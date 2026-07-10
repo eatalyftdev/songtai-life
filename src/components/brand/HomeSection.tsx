@@ -333,7 +333,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
   // ── Theme-aware class helpers ───────────────────────────────────────────
   const cardBg       = theme === "light" ? "bg-white border-stone-200"                            : "bg-stone-900/20 border-stone-850/70";
   const sectionBg    = theme === "light" ? "bg-stone-50 border-y border-stone-200"                : "bg-stone-900/35 border-y border-stone-900/60";
-  const storiesBg    = theme === "light" ? "bg-emerald-50/60"                                     : "bg-[#0A7D32]/5";
+  const storiesBg    = theme === "light" ? "bg-emerald-50/60"                                     : "bg-emerald-600/5";
   const cardHover    = theme === "light" ? "hover:border-emerald-300 hover:bg-emerald-50/60"       : "hover:border-emerald-950/60 hover:bg-stone-900/40";
   const textPrimary  = theme === "light" ? "text-stone-900"  : "text-white";
   const textMuted    = theme === "light" ? "text-stone-500"  : "text-stone-400";
@@ -344,8 +344,9 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
     ? "bg-white border-stone-200 text-stone-600 hover:text-stone-900 hover:bg-stone-50"
     : "bg-stone-900 border-stone-800 text-stone-300 hover:text-white";
   const timelineCircle = theme === "light" ? "bg-white border-stone-300" : "bg-stone-950 border-stone-800";
-  const accentGold = theme === "light" ? "text-[#92751C]" : "text-[#C9A227]";
-  const accentGreen = theme === "light" ? "text-[#0A7D32]" : "text-emerald-400";
+  // CSS vars --text-accent-gold / --text-accent-green handle both modes automatically
+  const accentGold  = "text-[color:var(--text-accent-gold)]";
+  const accentGreen = "text-[color:var(--text-accent-green)]";
 
   // Hero headline split into words for stagger animation
   const heroWords = heroHeadline.split(" ");
@@ -356,8 +357,8 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
       {/* ── SECTION 1: HERO ──────────────────────────────────────────── */}
       <section className="relative min-h-[100svh] flex items-center justify-center pt-20 sm:pt-24 px-4 overflow-hidden">
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-[10%] left-[20%] w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] rounded-full bg-[#0A7D32]/10 blur-[80px] sm:blur-[120px] animate-float-1" />
-          <div className="absolute bottom-[15%] right-[10%] w-[250px] sm:w-[500px] h-[250px] sm:h-[500px] rounded-full bg-[#C9A227]/10 blur-[60px] sm:blur-[100px] animate-float-2" />
+          <div className="absolute top-[10%] left-[20%] w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] rounded-full bg-emerald-600/10 blur-[80px] sm:blur-[120px] animate-float-1" />
+          <div className="absolute bottom-[15%] right-[10%] w-[250px] sm:w-[500px] h-[250px] sm:h-[500px] rounded-full bg-amber-500/10 blur-[60px] sm:blur-[100px] animate-float-2" />
         </div>
 
         <svg className="absolute inset-0 w-full h-full stroke-stone-900/40 pointer-events-none hidden sm:block" xmlns="http://www.w3.org/2000/svg">
@@ -373,7 +374,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className={`inline-flex items-center gap-2 px-3 py-1 bg-[#0A7D32]/10 border border-[#0A7D32]/30 rounded-full text-xs font-semibold ${accentGreen}`}
+              className={`inline-flex items-center gap-2 px-3 py-1 bg-emerald-600/10 border border-emerald-600/30 rounded-full text-xs font-semibold ${accentGreen}`}
             >
               <Sparkles className={`w-3.5 h-3.5 ${accentGold} flex-shrink-0`} />
               <span>{t("home.badge")}</span>
@@ -381,7 +382,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
 
             {/* Word-level staggered headline */}
             <h1
-              className={`text-[2rem] leading-[1.1] tracking-[-0.02em] sm:text-5xl sm:leading-[1.05] sm:tracking-[-0.03em] lg:text-7xl lg:leading-[1.0] font-extrabold ${textPrimary}`}
+              className={`text-[2rem] leading-[1.1] tracking-[-0.02em] sm:text-5xl sm:leading-[1.05] sm:tracking-[-0.03em] lg:text-7xl lg:leading-[1.0] font-extrabold font-display ${textPrimary}`}
               aria-label={heroHeadline}
             >
               {heroWords.map((word, i) => (
@@ -418,7 +419,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
             >
               <button
                 onClick={() => onNavigate("join")}
-                className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-sm rounded-2xl transition-all duration-200 shadow-lg hover:shadow-emerald-950/40 hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-2 group border border-transparent min-h-[48px]"
+                className="px-6 sm:px-8 py-3.5 sm:py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-2xl transition-all duration-200 shadow-lg hover:shadow-emerald-950/40 hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-2 group border border-transparent min-h-[48px] keep-white"
               >
                 <span>{heroCta1}</span>
                 <ArrowRight className={`w-4 h-4 ${accentGold} transition-transform duration-200 group-hover:translate-x-1 flex-shrink-0`} />
@@ -446,7 +447,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         <div className="absolute bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 hidden sm:flex flex-col items-center gap-1.5 opacity-50">
           <span className={`text-[9px] uppercase tracking-widest ${textDim} font-bold`}>{t("home.scroll")}</span>
           <div className="w-1.5 h-6 bg-stone-800 rounded-full overflow-hidden">
-            <div className={`w-full h-2 bg-[#C9A227] rounded-full animate-bounce mt-1`} />
+            <div className="w-full h-2 rounded-full animate-bounce mt-1" style={{ background: "var(--color-gold)" }} />
           </div>
         </div>
       </section>
@@ -456,7 +457,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
           <div className="lg:col-span-6 space-y-5">
             <span className={`text-xs uppercase tracking-widest ${accentGold} font-bold`}>{t("home.intro.label")}</span>
-            <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold ${textPrimary} leading-tight`}>
+            <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display ${textPrimary} leading-tight`}>
               {t("home.intro.heading")}
             </h2>
             <p className={`${textMuted} text-sm leading-relaxed`}>
@@ -492,7 +493,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         <div className={`flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 sm:gap-6 border-b ${borderColor} pb-6`}>
           <div>
             <span className={`text-xs uppercase tracking-widest ${accentGold} font-bold`}>{t("home.products.label")}</span>
-            <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold ${textPrimary} mt-1`}>{t("home.products.heading")}</h2>
+            <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display ${textPrimary} mt-1`}>{t("home.products.heading")}</h2>
             <p className={`${textDim} text-xs mt-1`}>{t("home.products.sub")}</p>
           </div>
 
@@ -502,7 +503,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                 key={cat.key}
                 onClick={() => setActiveCategory(cat.key)}
                 className={`px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[36px] flex-shrink-0 ${
-                  activeCategory === cat.key ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                  activeCategory === cat.key ? "bg-emerald-600 text-white keep-white" : "text-stone-500 hover:text-stone-300"
                 }`}
               >
                 {cat.label}
@@ -525,7 +526,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     loading="lazy"
                   />
-                  <span className="absolute top-3 left-3 px-2 py-1 bg-stone-900/80 backdrop-blur-md text-[10px] font-bold text-[#C9A227] rounded-md border border-stone-800">
+                  <span className="absolute top-3 left-3 px-2 py-1 bg-stone-900/80 backdrop-blur-md text-[10px] font-bold text-[color:var(--color-gold)] rounded-md border border-stone-800">
                     {p.pvPoints} PV
                   </span>
                 </div>
@@ -540,7 +541,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                 <span className={`text-sm font-extrabold ${textPrimary}`}>{p.priceXaf.toLocaleString()} XAF</span>
                 <button
                   onClick={() => onAddToCart(p)}
-                  className="px-3 sm:px-4 py-2 bg-[#0A7D32]/10 hover:bg-[#0A7D32] border border-[#0A7D32]/30 text-emerald-400 hover:text-white text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer min-h-[36px]"
+                  className="px-3 sm:px-4 py-2 bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-600/30 text-emerald-400 hover:text-white text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer min-h-[36px]"
                 >
                   {t("products.addToCart")}
                 </button>
@@ -555,7 +556,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 sm:space-y-16">
           <div className="max-w-xl">
             <span className={`text-xs uppercase tracking-widest ${accentGold} font-bold`}>{t("home.opp.label")}</span>
-            <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold ${textPrimary} mt-1`}>{t("home.opp.heading")}</h2>
+            <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display ${textPrimary} mt-1`}>{t("home.opp.heading")}</h2>
             <p className={`${textMuted} text-sm mt-2 leading-relaxed`}>{t("home.opp.body")}</p>
           </div>
 
@@ -591,7 +592,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 sm:gap-6">
           {BENEFIT_CARDS.map(({ icon, title, desc }, idx) => (
             <div key={idx} className={`${cardBg} border p-6 sm:p-8 rounded-[24px] sm:rounded-[28px] space-y-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg`}>
-              <div className={`p-3 bg-[#0A7D32]/10 border border-[#0A7D32]/20 ${accentGold} rounded-xl w-fit`}>
+              <div className={`p-3 bg-emerald-600/10 border border-emerald-600/20 ${accentGold} rounded-xl w-fit`}>
                 <DynIcon name={icon} className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <h4 className={`font-extrabold ${textPrimary} text-base sm:text-lg`}>{title}</h4>
@@ -615,7 +616,8 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                   key={idx}
                   onClick={() => setCurrentTestimonialIdx(idx)}
                   className={`h-3 rounded-full transition-all duration-200 min-w-[12px] cursor-pointer ${
-                    currentTestimonialIdx === idx ? "bg-[#C9A227] w-6" : `${theme === "light" ? "bg-stone-300" : "bg-stone-800"} w-3`
+                    currentTestimonialIdx === idx ? "w-6" : `${theme === "light" ? "bg-stone-300" : "bg-stone-800"} w-3`}
+                  style={currentTestimonialIdx === idx ? { background: "var(--color-gold)" } : undefined
                   }`}
                 />
               ))}
@@ -691,7 +693,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                         <Calendar className="w-8 h-8 text-stone-700" />
                       </div>
                     )}
-                    <div className="absolute top-4 left-4 px-3 py-1 bg-stone-950/90 backdrop-blur-md border border-[#C9A227]/40 text-[#C9A227] font-mono text-[10px] font-bold rounded-full flex items-center gap-1">
+                    <div className="absolute top-4 left-4 px-3 py-1 bg-stone-950/90 backdrop-blur-md border border-amber-500/40 text-[color:var(--color-gold)] font-mono text-[10px] font-bold rounded-full flex items-center gap-1">
                       <Clock className="w-3 h-3 flex-shrink-0" />
                       <span>{countdowns[ev.id] || "..."}</span>
                     </div>
@@ -853,7 +855,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
 
       {/* ── SECTION 10: NEWSLETTER ───────────────────────────────────── */}
       <section className={`relative py-16 sm:py-20 ${theme === "light" ? "bg-stone-100 border-y border-stone-200" : "bg-stone-900 border-y border-stone-850/60"} overflow-hidden`}>
-        <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-[#C9A227]/10 blur-3xl rounded-full pointer-events-none" />
+        <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-amber-500/10 blur-3xl rounded-full pointer-events-none" />
         <div className="max-w-4xl mx-auto px-4 text-center space-y-5 sm:space-y-6 relative z-10">
           <h2 className={`text-xl sm:text-2xl lg:text-3xl font-extrabold ${textPrimary}`}>{newsletterHeadline}</h2>
           <p className={`${textMuted} text-xs sm:text-sm max-w-xl mx-auto leading-relaxed`}>{newsletterBody}</p>
@@ -873,11 +875,11 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                   placeholder={t("newsletter.placeholder")}
                   value={newsletterEmail}
                   onChange={e => setNewsletterEmail(e.target.value)}
-                  className={`flex-grow px-4 py-3 ${theme === "light" ? "bg-white border-stone-300 text-stone-900 placeholder-stone-400" : "bg-stone-950 border-stone-850 text-white placeholder-stone-700"} border focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl outline-none text-xs min-h-[48px] transition-colors duration-150`}
+                  className={`flex-grow px-4 py-3 ${theme === "light" ? "bg-white border-stone-300 text-stone-900 placeholder-stone-400" : "bg-stone-950 border-stone-850 text-white placeholder-stone-700"} border focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-xl outline-none text-xs min-h-[48px] transition-colors duration-150`}
                 />
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl transition-all duration-200 hover:scale-[1.02] cursor-pointer whitespace-nowrap min-h-[48px]"
+                  className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all duration-200 hover:scale-[1.02] cursor-pointer whitespace-nowrap min-h-[48px] keep-white"
                 >
                   {t("newsletter.button")}
                 </button>
@@ -888,7 +890,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
               >
-                <Check className="w-4 h-4 text-[#C9A227]" />
+                <Check className="w-4 h-4 text-[color:var(--color-gold)]" />
                 <span>{t("newsletter.success")}</span>
               </motion.div>
             )}

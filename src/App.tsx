@@ -347,12 +347,12 @@ function AppContent() {
               n.type === "success" 
                 ? "bg-emerald-950/90 border-emerald-900/40 text-emerald-300"
                 : n.type === "gold"
-                ? "bg-stone-900/90 border-[#ecc246]/30 text-[#ecc246]"
+                ? "bg-stone-900/90 border-[color:var(--color-gold)]/30 text-[color:var(--color-gold)]"
                 : "bg-stone-900/90 border-stone-800 text-stone-200"
             }`}
           >
             {n.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />}
-            {n.type === "gold" && <Sparkles className="w-5 h-5 text-[#ecc246] flex-shrink-0" />}
+            {n.type === "gold" && <Sparkles className="w-5 h-5 text-[color:var(--color-gold)] flex-shrink-0" />}
             {n.type === "info" && <AlertCircle className="w-5 h-5 text-stone-400 flex-shrink-0" />}
             
             <p className="text-xs font-semibold leading-relaxed">{n.message}</p>
@@ -381,7 +381,7 @@ function AppContent() {
               {/* Drawer Header */}
               <div className="p-6 bg-stone-950 border-b border-stone-850 flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-[#ecc246]" />
+                  <ShoppingBag className="w-5 h-5 text-[color:var(--color-gold)]" />
                   <h3 className="font-sans font-bold text-lg text-white">Sovereign Cart</h3>
                 </div>
                 <button 
@@ -436,7 +436,7 @@ function AppContent() {
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between text-stone-400">
                       <span>Total Volume Points</span>
-                      <span className="font-bold text-[#ecc246]">{cartTotalPV} PV</span>
+                      <span className="font-bold text-[color:var(--color-gold)]">{cartTotalPV} PV</span>
                     </div>
                     <div className="flex justify-between text-stone-400">
                       <span>Subtotal</span>
@@ -456,7 +456,7 @@ function AppContent() {
                       setCheckoutDeliveryAddress("");
                       setCheckoutDeliveryNotes("");
                     }}
-                    className="w-full py-4 bg-[#006224] hover:bg-[#00531d] text-white rounded-2xl font-bold tracking-wide shadow-xl shadow-emerald-950/40 text-xs sm:text-sm cursor-pointer"
+                    className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold tracking-wide shadow-xl shadow-emerald-950/40 text-xs sm:text-sm cursor-pointer keep-white"
                   >
                     Checkout with MeSomb Mobile Money
                   </button>
@@ -476,7 +476,7 @@ function AppContent() {
           <div className="bg-stone-900 border border-stone-850 rounded-[32px] max-w-md w-full p-6 relative z-10 space-y-6">
             <div className="flex justify-between items-center pb-4 border-b border-stone-850">
               <div className="flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-[#ecc246]" />
+                <Smartphone className="w-5 h-5 text-[color:var(--color-gold)]" />
                 <h4 className="font-sans font-bold text-white text-base">MeSomb Mobile Money Checkout</h4>
               </div>
               <button 
@@ -504,7 +504,7 @@ function AppContent() {
                     value={checkoutName}
                     onChange={(e) => setCheckoutName(e.target.value)}
                     placeholder="e.g. Awa Fonkam"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
                   />
                 </div>
 
@@ -518,7 +518,7 @@ function AppContent() {
                     value={checkoutDeliveryAddress}
                     onChange={(e) => setCheckoutDeliveryAddress(e.target.value)}
                     placeholder="Street, Neighbourhood, City&#10;e.g. Rue Joseph Mballa Elounden, Bastos, Yaoundé"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm resize-none"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-xl text-white placeholder-stone-700 outline-none text-sm resize-none"
                   />
                 </div>
 
@@ -529,13 +529,13 @@ function AppContent() {
                     value={checkoutDeliveryNotes}
                     onChange={(e) => setCheckoutDeliveryNotes(e.target.value)}
                     placeholder="e.g. Call on arrival, Green gate"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[#006224] hover:bg-[#00531d] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 keep-white"
                 >
                   Continue to Payment <ChevronRight className="w-4 h-4" />
                 </button>
@@ -583,7 +583,7 @@ function AppContent() {
                     value={checkoutPhone}
                     onChange={(e) => setCheckoutPhone(e.target.value)}
                     placeholder="+237 6xx xxx xxx"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
                   />
                 </div>
 
@@ -600,7 +600,7 @@ function AppContent() {
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[#006224] hover:bg-[#00531d] text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer keep-white"
                 >
                   Initiate Secure Collect
                 </button>
@@ -610,7 +610,7 @@ function AppContent() {
             {/* STEP 2: Enter PIN */}
             {checkoutStep === "pin" && (
               <form onSubmit={handleVerifyPin} className="space-y-4 text-center">
-                <p className="text-[#ecc246] text-xs font-semibold">
+                <p className="text-[color:var(--color-gold)] text-xs font-semibold">
                   Push verification sent to your handset. Please enter your mock 4-digit PIN code to authorize.
                 </p>
 
@@ -624,14 +624,14 @@ function AppContent() {
                       value={checkoutPin}
                       onChange={(e) => setCheckoutPin(e.target.value)}
                       placeholder="• • • •"
-                      className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#006224] focus:ring-1 focus:ring-[#006224] rounded-xl text-white placeholder-stone-700 outline-none text-center font-bold text-lg tracking-widest"
+                      className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 rounded-xl text-white placeholder-stone-700 outline-none text-center font-bold text-lg tracking-widest"
                     />
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[#ecc246] hover:bg-[#dbb13b] text-stone-950 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md"
+                  className="w-full py-3.5 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-950 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md"
                 >
                   Confirm Authorization PIN
                 </button>
@@ -641,7 +641,7 @@ function AppContent() {
             {/* STEP 3: Processing */}
             {checkoutStep === "processing" && (
               <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
-                <span className="w-10 h-10 border-4 border-[#ecc246] border-t-transparent rounded-full animate-spin" />
+                <span className="w-10 h-10 border-4 border-[color:var(--color-gold)] border-t-transparent rounded-full animate-spin" />
                 <div>
                   <h5 className="font-bold text-white text-sm">Validating Mobile Ledger...</h5>
                   <p className="text-[10px] text-stone-500 uppercase mt-1">Calling MeSomb transaction verification webhooks</p>
@@ -652,7 +652,7 @@ function AppContent() {
             {/* STEP 4: Success */}
             {checkoutStep === "success" && (
               <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="p-3 bg-emerald-950/40 border border-emerald-900/50 rounded-full text-[#ecc246]">
+                <div className="p-3 bg-emerald-950/40 border border-emerald-900/50 rounded-full text-[color:var(--color-gold)]">
                   <ShieldCheck className="w-10 h-10" />
                 </div>
                 <div>
@@ -666,7 +666,7 @@ function AppContent() {
                     setCartOpen(false);
                     navigate("/distributor/dashboard");
                   }}
-                  className="px-6 py-2.5 bg-[#006224] hover:bg-[#00531d] text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer keep-white"
                 >
                   View My Distributor Dashboard
                 </button>

@@ -79,7 +79,7 @@ export default function Footer({ setBrandPage, openPrivacyPolicy, theme }: Foote
   const headingCls = theme === "light" ? "text-stone-700" : "text-stone-300";
   const borderCls = theme === "light" ? "border-stone-200" : "border-stone-900";
   const bgCls = theme === "light" ? "bg-stone-100" : "bg-stone-950";
-  const linkHover = "hover:text-[#C9A227] transition-colors duration-200 cursor-pointer";
+  const linkHover = "hover:text-[color:var(--color-gold)] transition-colors duration-200 cursor-pointer";
 
   return (
     <footer className={`${bgCls} border-t ${borderCls}`}>
@@ -142,7 +142,7 @@ export default function Footer({ setBrandPage, openPrivacyPolicy, theme }: Foote
             {contact.email && (
               <p>
                 <span className={`block text-[10px] font-bold uppercase tracking-wider ${textDim} mb-0.5`}>Email</span>
-                <a href={`mailto:${contact.email}`} className={`text-[#C9A227] font-semibold ${linkHover}`}>{contact.email}</a>
+                <a href={`mailto:${contact.email}`} className={`text-[color:var(--color-gold)] font-semibold ${linkHover}`}>{contact.email}</a>
               </p>
             )}
             {(contact.address_en || contact.address_fr) && (
@@ -177,7 +177,7 @@ export default function Footer({ setBrandPage, openPrivacyPolicy, theme }: Foote
                     rel="noopener noreferrer"
                     whileHover={{ scale: 1.12, y: -2 }}
                     transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                    className={`flex items-center justify-center w-9 h-9 rounded-xl border transition-colors ${theme === "light" ? "border-stone-300 bg-white text-stone-600 hover:border-[#C9A227] hover:text-[#C9A227]" : "border-stone-800 bg-stone-900/50 text-stone-400 hover:border-[#C9A227] hover:text-[#C9A227]"}`}
+                    className={`flex items-center justify-center w-9 h-9 rounded-xl border transition-colors ${theme === "light" ? "border-stone-300 bg-white text-stone-600 hover:border-[color:var(--color-gold)] hover:text-[color:var(--color-gold)]" : "border-stone-800 bg-stone-900/50 text-stone-400 hover:border-[color:var(--color-gold)] hover:text-[color:var(--color-gold)]"}`}
                     title={platform}
                   >
                     {SOCIAL_ICONS[platform]}
