@@ -1,0 +1,91 @@
+# Claude Code Build Prompt — Songtai Life: Product Video Showcase + Admin Video Manager
+
+Paste this into Claude Code inside the `songtai-life` repo.
+
+---
+
+## 0. Skill activation (mandatory first step)
+
+Activate relevant skills from the `jeffallan/claude-skills` framework (github.com/jeffallan/claude-skills) before coding — at minimum **Frontend/Mobile**, **Backend**, **API/Architecture**, **Security** (admin auth/RLS on write), and **Quality/Testing**. State which skills you're activating before you start.
+
+---
+
+## 1. Context — no migration needed
+
+The `products` table in Supabase project `auyjxchghtetxpiyecds` already has these columns, currently all `null` for every product:
+
+```
+video_url_en          text
+video_url_fr          text
+video_title_en        text
+video_title_fr        text
+video_description_en  text
+video_description_fr  text
+video_thumbnail_en    text
+video_thumbnail_fr    text
+video_duration_seconds integer
+```
+
+`video_url_en`/`video_url_fr` will hold raw YouTube URLs pasted by an admin (any common format: `youtube.com/watch?v=...`, `youtu.be/...`, `youtube.com/embed/...`, or a bare 11-char video ID) — don't assume a single format, normalize it.
+
+Do not invent or seed placeholder video URLs. All 7 products currently have no videos — build against that empty state and let the admin panel populate them.
+
+## 2. Shared utility — YouTube URL handling
+
+Build one shared helper (e.g. `lib/youtube.ts`) used by both the public site and admin panel:
+
+- `extractYouTubeId(url: string): string | null` — parses any of the formats above and returns the 11-character video ID, or `null` if invalid
+- `getYouTubeEmbedUrl(id: string): string` → `https://www.youtube-nocookie.com/embed/${id}?rel=0` (use the `-nocookie` privacy-enhanced domain)
+- `getYouTubeThumbnail(id: string): string` → `https://img.youtube.com/vi/${id}/hqdefault.jpg` — used as a fallback whenever `video_thumbnail_en/fr` is empty, so the admin doesn't have to manually upload a thumbnail for every video
+- Validate on both admin save (reject unparseable input with a clear error) and on render (never render an iframe from an unvalidated string)
+
+## 3. Public page 1 — Product Video Showcase (`/videos` or `/videos-produits`)
+
+A grid page listing every **active product that has a video for the current locale** (`is_active = true AND video_url_en IS NOT NULL` for EN, same pattern with `_fr`). If a product has a video in only one language, it should still appear when that locale is active, but not the other.
+
+Each card:
+- Thumbnail: `video_thumbnail_en/fr` if set, otherwise the auto-derived YouTube thumbnail from the helper above
+- Play icon overlay
+- Localized `video_title_en/fr` (fallback to product `name_en/fr` if the video title is blank)
+- Duration badge from `video_duration_seconds`, formatted `mm:ss`
+- Clicking a card opens a lightbox/modal with the embedded `youtube-nocookie.com` iframe, lazy-loaded (don't inject the iframe into the DOM until the modal opens, to avoid loading YouTube's JS on every page visit)
+- Below/beside the video in the modal: `video_description_en/fr`, and a link to the full product detail page
+
+Empty state: if no products currently have videos for the active locale, show a clean "Coming soon" state — not a blank page.
+
+## 4. Public page 2 — Product detail "watch more" (`/products/[slug]`)
+
+On the existing (or to-be-built, per the earlier About/Products prompt) product detail page:
+- If `video_url_en/fr` (matching the active locale) is set, add a "Watch Video" section/button that opens the same lightbox component from the showcase page (reuse the component, don't duplicate it)
+- If not set, don't show the section at all — no broken/empty video blocks
+- On the products grid/listing page, add a small play-icon badge on any product card that has a video for the active locale, so users know before they click through
+
+## 5. Admin panel — Video Manager
+
+Add a "Videos" tab/section to the existing admin panel (check the existing admin routing/auth pattern in the repo and match it — don't build a separate auth system).
+
+Per-product edit view, add a form section:
+- **English video**: URL input (validated live via `extractYouTubeId`, showing a thumbnail preview + duration field the moment a valid ID is detected), title, description
+- **French video**: same fields, independent of the English ones
+- Auto-detected thumbnail preview shown next to an optional manual `video_thumbnail_en/fr` override field (if the admin wants a custom thumbnail instead of YouTube's auto one)
+- Duration: allow manual entry in `mm:ss`, store as `video_duration_seconds` in the DB
+- Save button disabled until URL fields are either empty or valid
+- Clear "Remove video" action per language that nulls out all six fields for that language (url, title, description, thumbnail — mapped to `_en` or `_fr` suffix)
+
+Also add a top-level "Videos" list view in the admin (all products in one table: product name, has-EN-video ✅/—, has-FR-video ✅/—, duration, last updated) so Zayne can see coverage across the whole catalog at a glance without opening each product individually.
+
+## 6. Non-negotiables
+- Never trust raw admin input directly into an iframe `src` — always pass it through `extractYouTubeId` → `getYouTubeEmbedUrl` server- or client-side before rendering
+- RLS: video fields are edited only through the authenticated admin route; the public site only ever reads
+- Respect the existing locale-switching pattern already used elsewhere in the site — don't introduce a second locale mechanism
+- Lazy-load all YouTube iframes (no autoplay, no iframe in DOM until user opens it) for page performance
+
+## 7. QA checklist before deploy
+- [ ] Paste a `youtube.com/watch?v=...`, a `youtu.be/...`, and a raw 11-char ID into the admin form — confirm all three parse correctly
+- [ ] Paste an invalid URL — confirm the save button stays disabled and an error shows
+- [ ] Confirm showcase page shows "Coming soon" empty state right now (since all 7 products have no videos yet)
+- [ ] Add one test video via admin, confirm it appears on `/videos`, the product card badge, and the product detail modal — in both locales independently
+- [ ] Remove the test video, confirm it disappears cleanly everywhere
+- [ ] Run existing test suite / linter, then deploy to the existing Vercel project (`songtai-life`) — do not create a new project
+
+Report back the live URL and deployment ID once QA passes.
