@@ -11,3 +11,4 @@
 - [Product video feature](product-video-feature.md) — TUS resumable uploads to product-videos bucket; auto thumbnail via canvas; VideoObject JSON-LD; video sitemap namespace; bilingual with locale fallback.
 - [Vercel lockfile registry fix](vercel-lockfile-registry-fix.md) — any local `npm install` re-bakes internal firewall URLs into package-lock.json, breaking Vercel builds; run `npm run fix:lockfile` before pushing.
 - [Supabase pooler connection quirks](supabase-pooler-connection-quirks.md) — session pooler (5432) can reject a password transaction pooler (6543) accepts; verify project identity via actual table names, not recalled refs.
+- [Product video — YouTube link support](product-video-youtube-feature.md) — dual video source (upload vs YouTube) per locale, mutually exclusive; SPA has no real URL deep-linking despite sitemap.
