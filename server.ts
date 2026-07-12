@@ -732,8 +732,32 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ received: true });
   }));
 
-  // In-memory rate limiter for resend-notification (per user, not IP)
+  // ── In-memory rate limiters (Phase 8 security hardening) ──────────────────
+  // payout: max 5 per user per 60 min
+  const payoutAttempts = new Map<string, { count: number; resetAt: number }>();
+  // add-downline: max 10 per user per 60 min (each call creates an auth user)
+  const downlineAttempts = new Map<string, { count: number; resetAt: number }>();
+  // resend-notification: max 10 per user per 15 min
   const resendAttempts = new Map<string, { count: number; resetAt: number }>();
+
+  function checkRateLimit(
+    map: Map<string, { count: number; resetAt: number }>,
+    key: string,
+    maxCount: number,
+    windowMs: number
+  ): { limited: boolean; retryAfterMs: number } {
+    const now = Date.now();
+    const bucket = map.get(key);
+    if (bucket && now < bucket.resetAt) {
+      if (bucket.count >= maxCount) {
+        return { limited: true, retryAfterMs: bucket.resetAt - now };
+      }
+      bucket.count++;
+      return { limited: false, retryAfterMs: 0 };
+    }
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    return { limited: false, retryAfterMs: 0 };
+  }
 
   // Resend WhatsApp notification for a paid order (admin-only)
   app.post("/api/payment/resend-notification", requireDb(async (db, req, res) => {
@@ -836,6 +860,12 @@ Answer concisely, helpfully, and professionally. Support both English and French
       return res.status(401).json({ error: "Authorization required." });
     }
     const userId = sessionUser.claims.sub;
+
+    // Rate limit: max 5 payout requests per user per hour
+    const rl = checkRateLimit(payoutAttempts, userId, 5, 60 * 60 * 1000);
+    if (rl.limited) {
+      return res.status(429).json({ error: `Too many payout requests. Retry in ${Math.ceil(rl.retryAfterMs / 60000)} minute(s).` });
+    }
 
     const { amountXaf, phone, provider } = req.body;
     if (!amountXaf || !phone || !provider) {
@@ -965,6 +995,12 @@ Answer concisely, helpfully, and professionally. Support both English and French
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) {
       return res.status(401).json({ error: "Authorization required." });
+    }
+
+    // Rate limit: max 10 new downline registrations per user per hour
+    const rl = checkRateLimit(downlineAttempts, sessionUser.claims.sub, 10, 60 * 60 * 1000);
+    if (rl.limited) {
+      return res.status(429).json({ error: `Too many member-add requests. Retry in ${Math.ceil(rl.retryAfterMs / 60000)} minute(s).` });
     }
 
     const { memberName, sponsorCode } = req.body;

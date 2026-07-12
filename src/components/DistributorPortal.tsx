@@ -4,9 +4,20 @@ import { supabase } from "../lib/supabase";
 import {
   Users, Wallet, Award, ArrowUpRight, ArrowDownLeft, Send, Sparkles, Plus,
   Trash2, FileCheck2, UserPlus, UploadCloud, Smartphone, CreditCard,
-  CheckCircle2, ShieldAlert, BadgeInfo, Copy, Check, ZoomIn, ZoomOut, Move, ShoppingBag
+  CheckCircle2, ShieldAlert, BadgeInfo, Copy, Check, ZoomIn, ZoomOut,
+  ShoppingBag, TrendingUp, ChevronDown, ChevronRight, Star, LogOut,
+  Shield, QrCode, ExternalLink
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
+} from "recharts";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { StatCard } from "./ui/StatCard";
+import { Card } from "./ui/Card";
+import { Input } from "./ui/Input";
 
 interface Transaction {
   id: string;
@@ -24,6 +35,128 @@ interface Order {
   status: string;
 }
 
+const RANK_ORDER = ["bronze", "silver", "gold", "platinum", "diamond"] as const;
+type RankName = typeof RANK_ORDER[number];
+
+const RANK_MILESTONES: Record<RankName, { pv: number; label: string }> = {
+  bronze:   { pv: 0,    label: "Bronze" },
+  silver:   { pv: 300,  label: "Silver" },
+  gold:     { pv: 1000, label: "Gold" },
+  platinum: { pv: 3000, label: "Platinum" },
+  diamond:  { pv: 8000, label: "Diamond" },
+};
+
+function RankProgressBar({ currentRank, currentPv }: { currentRank: string; currentPv: number }) {
+  const rankIdx = RANK_ORDER.indexOf(currentRank as RankName);
+  const nextRank = rankIdx < RANK_ORDER.length - 1 ? RANK_ORDER[rankIdx + 1] : null;
+  const currentMilestone = RANK_MILESTONES[currentRank as RankName] ?? RANK_MILESTONES.bronze;
+  const nextMilestone = nextRank ? RANK_MILESTONES[nextRank] : null;
+
+  const progress = nextMilestone
+    ? Math.min(((currentPv - currentMilestone.pv) / (nextMilestone.pv - currentMilestone.pv)) * 100, 100)
+    : 100;
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[color:var(--color-muted)] text-xs font-semibold uppercase tracking-wide">Rank Progression</p>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="rank" rank={currentRank}>{currentRank}</Badge>
+            {nextRank && (
+              <>
+                <ChevronRight className="w-3 h-3 text-[color:var(--color-muted)]" />
+                <Badge variant="rank" rank={nextRank}>{nextRank}</Badge>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-[color:var(--color-gold)] font-black text-lg">{currentPv.toLocaleString()}</p>
+          <p className="text-[color:var(--color-muted)] text-[10px]">
+            {nextMilestone ? `/ ${nextMilestone.pv.toLocaleString()} PV` : "Max Rank ✓"}
+          </p>
+        </div>
+      </div>
+      <div className="h-2 rounded-full bg-[color:var(--color-border)] overflow-hidden">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-[color:var(--color-primary)] to-[color:var(--color-gold)] transition-all duration-700"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+      {nextMilestone && (
+        <p className="text-[color:var(--color-muted)] text-[10px] mt-1.5">
+          {(nextMilestone.pv - currentPv).toLocaleString()} PV to {nextMilestone.label}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function KycBanner({ kycStatus, onGoToKyc }: { kycStatus: string; onGoToKyc: () => void }) {
+  if (kycStatus === "verified") {
+    return (
+      <div className="p-4 bg-emerald-950/30 border border-emerald-900/40 rounded-2xl flex items-center gap-3 text-xs">
+        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <div className="flex-1">
+          <strong className="text-[color:var(--color-fg)] font-bold block">Profile Fully Verified</strong>
+          <p className="text-[color:var(--color-muted)]">Compliant with CEMAC & Cameroon Law No. 2010/012.</p>
+        </div>
+        <Badge variant="success">Compliant</Badge>
+      </div>
+    );
+  }
+  if (kycStatus === "pending") {
+    return (
+      <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3 text-xs">
+        <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0 animate-pulse" />
+        <div className="flex-1">
+          <strong className="text-[color:var(--color-fg)] font-bold block">Verification In Progress</strong>
+          <p className="text-[color:var(--color-muted)]">Our compliance team is auditing your documents.</p>
+        </div>
+        <Badge variant="warning">Under Review</Badge>
+      </div>
+    );
+  }
+  if (kycStatus === "rejected") {
+    return (
+      <div className="p-4 bg-red-950/40 border border-red-900/50 rounded-2xl flex items-center gap-3 text-xs">
+        <ShieldAlert className="w-4 h-4 text-red-500 flex-shrink-0" />
+        <div className="flex-1">
+          <strong className="text-[color:var(--color-fg)] font-bold block">Document Rejected</strong>
+          <p className="text-[color:var(--color-muted)]">Upload a high-resolution ID document to retry.</p>
+        </div>
+        <Button variant="danger" size="sm" onClick={onGoToKyc}>Re-upload</Button>
+      </div>
+    );
+  }
+  return (
+    <div className="p-4 bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-2xl flex items-center gap-3 text-xs">
+      <BadgeInfo className="w-4 h-4 text-[color:var(--color-primary)] flex-shrink-0" />
+      <div className="flex-1">
+        <strong className="text-[color:var(--color-fg)] font-bold block">KYC Verification Required</strong>
+        <p className="text-[color:var(--color-muted)]">Upload your national ID to unlock full withdrawal privileges.</p>
+      </div>
+      <Button variant="primary" size="sm" onClick={onGoToKyc}>Verify Now</Button>
+    </div>
+  );
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-3 text-xs shadow-xl">
+      <p className="text-[color:var(--color-muted)] mb-1">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} className="font-bold" style={{ color: p.color }}>
+          {p.name}: {typeof p.value === "number" ? p.value.toLocaleString() : p.value}
+          {p.name === "Commission" ? " XAF" : ""}
+        </p>
+      ))}
+    </div>
+  );
+};
+
 export default function DistributorPortal({ addNotification }: { addNotification: any }) {
   const { user, userProfile, distributorProfile, wallet, logout } = useAuth();
 
@@ -32,11 +165,11 @@ export default function DistributorPortal({ addNotification }: { addNotification
   const [payoutPhone, setPayoutPhone] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
   const [payoutLoading, setPayoutLoading] = useState(false);
-  const [sponsorReferralCode, setSponsorReferralCode] = useState("");
   const [newMemberName, setNewMemberName] = useState("");
   const [kycFile, setKycFile] = useState<File | null>(null);
   const [kycLoading, setKycLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -46,16 +179,14 @@ export default function DistributorPortal({ addNotification }: { addNotification
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [treeViewMode, setTreeViewMode] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // Initial data fetch + realtime subscriptions
   useEffect(() => {
     if (!user || !distributorProfile) return;
-
     const sponsorCode = distributorProfile.distributorCode;
     const userId = user.id;
 
-    // --- Initial Fetches ---
     const loadData = async () => {
       const [downlineRes, txRes, commissionsRes] = await Promise.all([
         supabase.from("distributors").select("*").eq("sponsor_id", sponsorCode),
@@ -65,210 +196,111 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
       if (downlineRes.data) {
         setDownlineList(downlineRes.data.map((d) => ({
-          uid: d.id,
-          distributorCode: d.distributor_code,
-          rank: d.rank,
-          sponsorId: d.sponsor_id,
+          uid: d.id, distributorCode: d.distributor_code,
+          rank: d.rank, sponsorId: d.sponsor_id,
         })));
       }
-
       if (txRes.data) {
         setTransactions(txRes.data.map((t) => ({
-          id: t.id,
-          type: t.type,
-          amountXaf: t.amount_xaf,
-          description: t.description,
-          createdAt: t.created_at,
+          id: t.id, type: t.type, amountXaf: t.amount_xaf,
+          description: t.description, createdAt: t.created_at,
         })));
       }
-
       if (commissionsRes.data) {
         setOrders(commissionsRes.data.map((c) => ({
-          id: c.id,
-          amountXaf: c.amount_xaf ?? 55000,
+          id: c.id, amountXaf: c.amount_xaf ?? 55000,
           pvPoints: c.level === 0 ? 100 : 50,
-          status: "processed",
-          createdAt: c.created_at,
+          status: "processed", createdAt: c.created_at,
         })));
       }
     };
 
     loadData();
 
-    // --- Realtime Channels ---
     const channel = supabase
       .channel(`portal-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "distributors", filter: `sponsor_id=eq.${sponsorCode}` },
+      .on("postgres_changes", { event: "*", schema: "public", table: "distributors", filter: `sponsor_id=eq.${sponsorCode}` },
         async () => {
           const { data } = await supabase.from("distributors").select("*").eq("sponsor_id", sponsorCode);
-          if (data) {
-            setDownlineList(data.map((d) => ({
-              uid: d.id,
-              distributorCode: d.distributor_code,
-              rank: d.rank,
-              sponsorId: d.sponsor_id,
-            })));
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "wallet_transactions", filter: `wallet_id=eq.${userId}` },
+          if (data) setDownlineList(data.map((d) => ({ uid: d.id, distributorCode: d.distributor_code, rank: d.rank, sponsorId: d.sponsor_id })));
+        })
+      .on("postgres_changes", { event: "*", schema: "public", table: "wallet_transactions", filter: `wallet_id=eq.${userId}` },
         async () => {
           const { data } = await supabase.from("wallet_transactions").select("*").eq("wallet_id", userId).order("created_at", { ascending: false });
-          if (data) {
-            setTransactions(data.map((t) => ({
-              id: t.id,
-              type: t.type,
-              amountXaf: t.amount_xaf,
-              description: t.description,
-              createdAt: t.created_at,
-            })));
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "commissions", filter: `distributor_id=eq.${userId}` },
+          if (data) setTransactions(data.map((t) => ({ id: t.id, type: t.type, amountXaf: t.amount_xaf, description: t.description, createdAt: t.created_at })));
+        })
+      .on("postgres_changes", { event: "*", schema: "public", table: "commissions", filter: `distributor_id=eq.${userId}` },
         async () => {
           const { data } = await supabase.from("commissions").select("*").eq("distributor_id", userId).order("created_at", { ascending: false });
-          if (data) {
-            setOrders(data.map((c) => ({
-              id: c.id,
-              amountXaf: c.amount_xaf ?? 55000,
-              pvPoints: c.level === 0 ? 100 : 50,
-              status: "processed",
-              createdAt: c.created_at,
-            })));
-          }
-        }
-      )
+          if (data) setOrders(data.map((c) => ({ id: c.id, amountXaf: c.amount_xaf ?? 55000, pvPoints: c.level === 0 ? 100 : 50, status: "processed", createdAt: c.created_at })));
+        })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, distributorProfile?.distributorCode]);
 
-  // Handle mobile money withdrawal cashouts
   const handlePayoutSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user || !wallet) return;
-
     const amountNum = parseInt(payoutAmount);
     if (isNaN(amountNum) || amountNum <= 0) return;
-
-    if (amountNum > wallet.balanceXaf) {
-      addNotification("Insufficient wallet balance for this withdrawal request.", "info");
-      return;
-    }
-
-    if (amountNum < 2000) {
-      addNotification("Minimum withdrawal limit is 2,000 XAF.", "info");
-      return;
-    }
-
+    if (amountNum > wallet.balanceXaf) { addNotification("Insufficient wallet balance.", "info"); return; }
+    if (amountNum < 2000) { addNotification("Minimum withdrawal is 2,000 XAF.", "info"); return; }
     setPayoutLoading(true);
-
     try {
-      // Route through authenticated server endpoint — prevents IDOR and wallet tampering
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) throw new Error("No active session token.");
-
+      if (!token) throw new Error("No active session.");
       const res = await fetch("/api/payment/payout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          amountXaf: amountNum,
-          phone: payoutPhone,
-          provider: payoutProvider,
-        }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ amountXaf: amountNum, phone: payoutPhone, provider: payoutProvider }),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Payout request failed.");
-
-      addNotification(`Cashout Request logged! ${amountNum.toLocaleString()} XAF pending MeSomb handshake.`, "success");
-      setPayoutAmount("");
-      setPayoutPhone("");
+      if (!res.ok) throw new Error(data.error || "Payout failed.");
+      addNotification(`Cashout of ${amountNum.toLocaleString()} XAF submitted!`, "success");
+      setPayoutAmount(""); setPayoutPhone("");
     } catch (err: any) {
-      console.error(err);
-      addNotification("Error logging withdrawal request.", "info");
-    } finally {
-      setPayoutLoading(false);
-    }
+      addNotification("Error submitting withdrawal.", "info");
+    } finally { setPayoutLoading(false); }
   };
 
-  // Sponsoring a new downline member
   const handleAddMember = async (e: FormEvent) => {
     e.preventDefault();
     if (!user || !distributorProfile || !newMemberName.trim()) return;
-
     try {
-      // Route through server endpoint — uses admin SDK to create a valid auth user
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) throw new Error("No active session token.");
-
+      if (!token) throw new Error("No session.");
       const res = await fetch("/api/distributor/add-downline", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          memberName: newMemberName,
-          sponsorCode: distributorProfile.distributorCode,
-        }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ memberName: newMemberName, sponsorCode: distributorProfile.distributorCode }),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to add downline member.");
-
-      addNotification(`New member ${newMemberName} added directly to your matrix tree! Code: ${data.distributorCode}`, "success");
+      if (!res.ok) throw new Error(data.error || "Failed.");
+      addNotification(`${newMemberName} added to your network! Code: ${data.distributorCode}`, "success");
       setNewMemberName("");
-    } catch (err: any) {
-      console.error(err);
-      addNotification("Error creating downline member.", "info");
-    }
+    } catch (err: any) { addNotification("Error adding member.", "info"); }
   };
 
-  // KYC Identity upload
   const handleKycUploadChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setKycFile(file);
-      setKycLoading(true);
-
+      setKycFile(file); setKycLoading(true);
       try {
         const docId = `kyc-${user?.id}`;
-        const { error: kycError } = await supabase.from("kyc_documents").upsert({
-          id: docId,
-          distributor_id: user?.id,
+        const { error } = await supabase.from("kyc_documents").upsert({
+          id: docId, distributor_id: user?.id,
           document_type: "National ID Card / Passport",
           file_url: `https://auyjxchghtetxpiyecds.supabase.co/storage/v1/object/public/kyc/${user?.id}/${file.name}`,
           status: "pending",
         });
-
-        if (kycError) throw kycError;
-
-        // Update KYC status on distributor record
-        await supabase
-          .from("distributors")
-          .update({ kyc_status: "pending" })
-          .eq("id", user?.id);
-
-        addNotification("Identity document uploaded. Pending Admin Audit review.", "success");
-      } catch (err: any) {
-        console.error(err);
-        addNotification("Verification upload failed.", "info");
-      } finally {
-        setKycLoading(false);
-      }
+        if (error) throw error;
+        await supabase.from("distributors").update({ kyc_status: "pending" }).eq("id", user?.id);
+        addNotification("Document uploaded. Pending admin review.", "success");
+      } catch { addNotification("Upload failed.", "info"); }
+      finally { setKycLoading(false); }
     }
   };
 
@@ -277,585 +309,599 @@ export default function DistributorPortal({ addNotification }: { addNotification
     const link = `https://songtailife.cm/join?ref=${distributorProfile.distributorCode}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
-    addNotification("Referral Link copied to clipboard!", "success");
+    addNotification("Referral link copied!", "success");
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleMouseDown = (e: MouseEvent) => {
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - panX, y: e.clientY - panY };
-  };
+  const handleMouseDown = (e: MouseEvent) => { setIsDragging(true); dragStart.current = { x: e.clientX - panX, y: e.clientY - panY }; };
+  const handleMouseMove = (e: MouseEvent) => { if (!isDragging) return; setPanX(e.clientX - dragStart.current.x); setPanY(e.clientY - dragStart.current.y); };
+  const handleMouseUp = () => setIsDragging(false);
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
-    setPanX(e.clientX - dragStart.current.x);
-    setPanY(e.clientY - dragStart.current.y);
-  };
+  const commissions = transactions.filter(t => t.type === "commission");
+  const totalEarned = commissions.reduce((s, t) => s + t.amountXaf, 0);
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  const chartData = (() => {
+    const months: Record<string, { name: string; Commission: number; Members: number }> = {};
+    commissions.forEach(t => {
+      const d = new Date(t.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const name = d.toLocaleString("default", { month: "short" });
+      if (!months[key]) months[key] = { name, Commission: 0, Members: 0 };
+      months[key].Commission += t.amountXaf;
+    });
+    downlineList.forEach(m => {
+      const d = new Date();
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (months[key]) months[key].Members += 1;
+    });
+    return Object.values(months).slice(-6);
+  })();
+
+  const currentPv = distributorProfile ? (orders.reduce((s, o) => s + (o.pvPoints || 0), 0)) : 0;
+
+  const TABS = [
+    { id: "dashboard", label: "Dashboard", icon: <TrendingUp className="w-4 h-4" /> },
+    { id: "genealogy", label: "My Team", icon: <Users className="w-4 h-4" /> },
+    { id: "wallet",    label: "Wallet", icon: <Wallet className="w-4 h-4" /> },
+    { id: "orders",    label: "Purchases", icon: <ShoppingBag className="w-4 h-4" /> },
+    { id: "referral",  label: "Referral", icon: <Sparkles className="w-4 h-4" /> },
+    { id: "kyc",       label: "KYC", icon: <FileCheck2 className="w-4 h-4" /> },
+  ];
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 py-12 font-sans relative select-none text-left">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+    <div className="min-h-screen bg-[color:var(--color-bg)] text-[color:var(--color-fg)] font-sans select-none antialiased">
 
-        {/* Portal Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-stone-850">
-          <div>
-            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Luminous Network Management</span>
-            <h1 className="font-sans font-extrabold text-3xl text-white mt-1">Distributor Operations</h1>
-            <p className="text-stone-400 text-sm mt-1">Configure compliance settings, monitor commission balances, and track matrix downline structures.</p>
+      {/* ── Top header bar ─────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-30 bg-[color:var(--color-bg)]/95 backdrop-blur-md border-b border-[color:var(--color-border)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-[color:var(--color-primary)]/10 border border-[color:var(--color-primary)]/20 flex items-center justify-center flex-shrink-0">
+              <Star className="w-4 h-4 text-[color:var(--color-primary)]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-black text-[color:var(--color-fg)] truncate leading-none">
+                {userProfile?.email.split("@")[0] ?? "Distributor"}
+              </p>
+              <p className="text-[10px] text-[color:var(--color-muted)] mt-0.5 leading-none">
+                {distributorProfile?.distributorCode ?? "—"} · <span className="capitalize">{distributorProfile?.rank ?? "Bronze"}</span>
+              </p>
+            </div>
           </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={logout}
-              className="px-4 py-2 border border-stone-800 hover:border-red-900/40 text-stone-400 hover:text-red-400 text-xs font-semibold rounded-xl transition-all cursor-pointer bg-stone-900/35"
-            >
-              Sign Out
-            </button>
-          </div>
+          <Button variant="ghost" size="sm" icon={<LogOut className="w-3.5 h-3.5" />} onClick={logout}>
+            Sign out
+          </Button>
         </div>
+      </header>
 
-        {/* Floating KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Wallet Balance Card */}
-          <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left">
-            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-[color:var(--color-gold)]">
-              <Wallet className="w-5 h-5" />
-            </div>
-            <span className="text-stone-400 text-xs font-semibold uppercase">Wallet Balance</span>
-            <span className="block text-3xl font-black text-white mt-2">
-              {(wallet?.balanceXaf || 0).toLocaleString()} <span className="text-xs text-[color:var(--color-gold)] font-normal">XAF</span>
-            </span>
-            <div className="flex items-center gap-1.5 mt-4 text-[11px] text-[color:var(--color-gold)] font-bold">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              Sovereign Balance Ready
-            </div>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-          {/* Direct Downlines Card */}
-          <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left">
-            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-emerald-400">
-              <Users className="w-5 h-5" />
-            </div>
-            <span className="text-stone-400 text-xs font-semibold uppercase">Direct Downlines</span>
-            <span className="block text-3xl font-black text-white mt-2">
-              {downlineList.length} <span className="text-xs text-stone-400 font-normal">Members</span>
-            </span>
-            <div className="flex items-center gap-1 mt-4 text-[11px] text-stone-400">
-              <Plus className="w-3.5 h-3.5" />
-              Real-time unilevel placement
-            </div>
-          </div>
-
-          {/* Code Card */}
-          <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left">
-            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-[color:var(--color-gold)]">
-              <Award className="w-5 h-5" />
-            </div>
-            <span className="text-stone-400 text-xs font-semibold uppercase">Sponsor ID</span>
-            <span className="block text-2xl font-black text-white mt-2 font-mono">
-              {distributorProfile?.distributorCode || "PENDING"}
-            </span>
-            <div className="flex items-center gap-1 mt-4 text-[11px] text-emerald-400 font-semibold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[color:var(--color-gold)]" />
-              Sovereign Rank: {distributorProfile?.rank || "Bronze"}
-            </div>
-          </div>
-
-          {/* Compliance Status Card */}
-          <div
-            onClick={() => setActivePanel("kyc")}
-            className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left cursor-pointer hover:border-emerald-700/40 transition-all group"
-          >
-            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-[color:var(--color-gold)] group-hover:scale-110 transition-transform">
-              <FileCheck2 className="w-5 h-5" />
-            </div>
-            <span className="text-stone-400 text-xs font-semibold uppercase">KYC Status</span>
-            <span className="block text-xl font-extrabold mt-2 capitalize text-white">
-              {distributorProfile?.kycStatus === "verified" ? (
-                <span className="text-emerald-400 font-black flex items-center gap-1.5">
-                  <Check className="w-4 h-4 text-emerald-400 stroke-[3]" /> Verified
-                </span>
-              ) : distributorProfile?.kycStatus === "pending" ? (
-                <span className="text-amber-400 font-black flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /> Pending
-                </span>
-              ) : distributorProfile?.kycStatus === "rejected" ? (
-                <span className="text-red-400 font-black flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-red-400" /> Rejected
-                </span>
-              ) : (
-                <span className="text-stone-500 font-medium flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-stone-500" /> Unverified
-                </span>
-              )}
-            </span>
-            <div className="flex items-center gap-1 mt-4 text-[11px] text-stone-500 group-hover:text-stone-300 transition-colors">
-              {distributorProfile?.kycStatus === "rejected"
-                ? "Click to re-upload document"
-                : "Click to view compliance tab"}
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex gap-2.5 overflow-x-auto border-b border-stone-850/60 pb-3">
-          {[
-            { id: "dashboard", label: "Dashboard", icon: <Award className="w-4 h-4" /> },
-            { id: "genealogy", label: "Genealogy Matrix", icon: <Users className="w-4 h-4" /> },
-            { id: "wallet", label: "Wallet Ledger", icon: <Wallet className="w-4 h-4" /> },
-            { id: "orders", label: "Own purchases", icon: <ShoppingBag className="w-4 h-4" /> },
-            { id: "referral", label: "Referral Tools", icon: <Sparkles className="w-4 h-4" /> },
-            { id: "kyc", label: "Compliance (KYC)", icon: <FileCheck2 className="w-4 h-4" /> },
-          ].map((tab) => (
+        {/* ── Navigation tabs ────────────────────────────────────────────── */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActivePanel(tab.id as any)}
-              className={`flex items-center gap-2 px-4.5 py-3.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                activePanel === tab.id
-                  ? "bg-emerald-700/15 border border-emerald-700/50 text-emerald-400 font-extrabold shadow-lg"
-                  : "bg-stone-900 border border-stone-850/60 text-stone-400 hover:text-white"
-              }`}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex-shrink-0
+                ${activePanel === tab.id
+                  ? "bg-[color:var(--color-primary)]/10 border border-[color:var(--color-primary)]/40 text-[color:var(--color-primary)]"
+                  : "bg-[color:var(--color-surface)] border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:text-[color:var(--color-fg)]"
+                }`}
             >
               {tab.icon}
-              <span>{tab.label}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           ))}
         </div>
 
-        {/* 1. DASHBOARD VIEW */}
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 1 — DASHBOARD
+        ══════════════════════════════════════════════════════════════════ */}
         {activePanel === "dashboard" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 space-y-8">
-              <div className="p-8 bg-gradient-to-r from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] relative overflow-hidden">
-                <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-emerald-900/10 rounded-full blur-3xl pointer-events-none" />
-                <h3 className="font-sans font-black text-2xl text-white">Sovereign Growth, {userProfile?.email.split("@")[0]}</h3>
-                <p className="text-stone-400 text-sm mt-2 max-w-lg leading-relaxed">
-                  Your team volume overrides and commissions are calculating live using the unilevel integration logic.
-                </p>
+          <div className="space-y-6">
 
-                {distributorProfile?.kycStatus === "verified" ? (
-                  <div className="mt-6 p-4 bg-emerald-950/30 border border-emerald-900/40 rounded-2xl flex items-center justify-between gap-3 text-xs text-emerald-400">
-                    <div className="flex gap-3">
-                      <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
-                      <div>
-                        <strong className="block text-white font-bold mb-0.5">Sovereign Profile Fully Verified</strong>
-                        <p className="text-stone-400">Your profile is compliant with CEMAC and Cameroon cybersecurity mandates (Law No. 2010/012).</p>
-                      </div>
+            {/* KYC Banner */}
+            <KycBanner kycStatus={distributorProfile?.kycStatus ?? "none"} onGoToKyc={() => setActivePanel("kyc")} />
+
+            {/* KPI Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="Wallet Balance"
+                value={(wallet?.balanceXaf || 0).toLocaleString()}
+                unit="XAF"
+                icon={<Wallet className="w-4 h-4" />}
+                iconColor="text-[color:var(--color-gold)]"
+                sub="Available for withdrawal"
+              />
+              <StatCard
+                label="Total Earned"
+                value={totalEarned.toLocaleString()}
+                unit="XAF"
+                icon={<TrendingUp className="w-4 h-4" />}
+                iconColor="text-[color:var(--color-primary)]"
+                sub="Lifetime commissions"
+              />
+              <StatCard
+                label="Direct Downlines"
+                value={downlineList.length}
+                unit="Members"
+                icon={<Users className="w-4 h-4" />}
+                iconColor="text-emerald-400"
+                sub="Level 1 network"
+              />
+              <StatCard
+                label="KYC Status"
+                value={distributorProfile?.kycStatus === "verified" ? "✓ Verified" : distributorProfile?.kycStatus ?? "None"}
+                icon={<Shield className="w-4 h-4" />}
+                iconColor={distributorProfile?.kycStatus === "verified" ? "text-emerald-400" : "text-amber-400"}
+                onClick={() => setActivePanel("kyc")}
+                sub="Click to manage"
+              />
+            </div>
+
+            {/* Rank progress */}
+            <RankProgressBar currentRank={distributorProfile?.rank ?? "bronze"} currentPv={currentPv} />
+
+            {/* Charts row */}
+            {chartData.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card padding="lg">
+                  <h4 className="font-bold text-sm text-[color:var(--color-fg)] mb-4">Commission Earnings</h4>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="commGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: "var(--color-muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "var(--color-muted)", fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="Commission" stroke="var(--color-primary)" strokeWidth={2} fill="url(#commGrad)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </Card>
+
+                <Card padding="lg">
+                  <h4 className="font-bold text-sm text-[color:var(--color-fg)] mb-4">Team Growth</h4>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: "var(--color-muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "var(--color-muted)", fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="Members" fill="var(--color-gold)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              </div>
+            )}
+
+            {/* Bottom row: commissions list + add member */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Card padding="none" className="lg:col-span-2">
+                <div className="p-5 border-b border-[color:var(--color-border)] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[color:var(--color-primary)]" />
+                  <h4 className="font-bold text-sm text-[color:var(--color-fg)]">Recent Commissions</h4>
+                </div>
+                <div className="divide-y divide-[color:var(--color-border)]">
+                  {commissions.length === 0 ? (
+                    <div className="py-10 text-center text-[color:var(--color-muted)] text-xs">
+                      No commissions yet. Commissions accrue as your team purchases products.
                     </div>
-                    <span className="hidden sm:inline-block px-2.5 py-1 bg-emerald-950/60 border border-emerald-800 text-emerald-400 text-[10px] font-black uppercase rounded-lg">Compliant</span>
-                  </div>
-                ) : distributorProfile?.kycStatus === "pending" ? (
-                  <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-300">
-                    <div className="flex gap-3">
-                      <ShieldAlert className="w-5 h-5 flex-shrink-0 text-amber-400 animate-pulse" />
-                      <div>
-                        <strong className="block text-white font-bold mb-0.5">Verification In Progress</strong>
-                        <p className="text-stone-400">Our administrative compliance team is currently auditing your submitted document files.</p>
+                  ) : commissions.slice(0, 6).map(tx => (
+                    <div key={tx.id} className="px-5 py-4 flex justify-between items-center gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[color:var(--color-fg)] truncate">{tx.description}</p>
+                        <p className="text-[10px] text-[color:var(--color-muted)] font-mono mt-0.5 truncate">{tx.id}</p>
                       </div>
+                      <span className="font-black text-emerald-400 text-sm whitespace-nowrap flex items-center gap-0.5">
+                        <ArrowUpRight className="w-3.5 h-3.5" />{tx.amountXaf.toLocaleString()} XAF
+                      </span>
                     </div>
-                    <span className="hidden sm:inline-block px-2.5 py-1 bg-amber-950/60 border border-amber-800 text-amber-400 text-[10px] font-black uppercase rounded-lg">Under Review</span>
-                  </div>
-                ) : distributorProfile?.kycStatus === "rejected" ? (
-                  <div className="mt-6 p-4 bg-red-950/40 border border-red-900/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-red-400">
-                    <div className="flex gap-3">
-                      <ShieldAlert className="w-5 h-5 flex-shrink-0 text-red-500" />
-                      <div>
-                        <strong className="block text-white font-bold mb-0.5">KYC Document Rejected</strong>
-                        <p className="text-stone-400">Your submission was disapproved. Please upload a high-resolution identity document.</p>
-                      </div>
+                  ))}
+                </div>
+              </Card>
+
+              <Card padding="lg" className="space-y-4">
+                <div>
+                  <h4 className="font-bold text-sm text-[color:var(--color-fg)]">Sponsor a Member</h4>
+                  <p className="text-xs text-[color:var(--color-muted)] mt-1">Add a recruit directly to your downline. They immediately start generating commission overrides.</p>
+                </div>
+                <form onSubmit={handleAddMember} className="space-y-3">
+                  <Input
+                    label="Recruit's Full Name"
+                    placeholder="e.g. Samuel Eto'o"
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    required
+                  />
+                  <Button type="submit" variant="primary" fullWidth icon={<UserPlus className="w-4 h-4" />}>
+                    Add to My Network
+                  </Button>
+                </form>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 2 — TEAM / GENEALOGY (Phase 5)
+        ══════════════════════════════════════════════════════════════════ */}
+        {activePanel === "genealogy" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h3 className="font-bold text-lg text-[color:var(--color-fg)]">My Network</h3>
+                <p className="text-[color:var(--color-muted)] text-xs mt-0.5">{downlineList.length} direct downline{downlineList.length !== 1 ? "s" : ""}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant={!treeViewMode ? "primary" : "secondary"} size="sm" onClick={() => setTreeViewMode(false)}>
+                  List view
+                </Button>
+                <Button variant={treeViewMode ? "primary" : "secondary"} size="sm" onClick={() => setTreeViewMode(true)} className="hidden sm:flex">
+                  Tree view
+                </Button>
+              </div>
+            </div>
+
+            {!treeViewMode ? (
+              /* List view — default on mobile */
+              <Card padding="none">
+                {downlineList.length === 0 ? (
+                  <div className="py-16 flex flex-col items-center gap-3 text-center px-6">
+                    <div className="w-12 h-12 rounded-2xl bg-[color:var(--color-border)]/50 flex items-center justify-center">
+                      <Users className="w-6 h-6 text-[color:var(--color-muted)]" />
                     </div>
-                    <button
-                      onClick={() => setActivePanel("kyc")}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors flex-shrink-0 text-center"
-                    >
-                      Re-upload Document
-                    </button>
+                    <div>
+                      <p className="font-bold text-[color:var(--color-fg)] text-sm">No downlines yet</p>
+                      <p className="text-[color:var(--color-muted)] text-xs mt-1">Copy your referral link to start growing your team.</p>
+                    </div>
+                    <Button variant="primary" size="sm" onClick={() => setActivePanel("referral")}>Get Referral Link</Button>
                   </div>
                 ) : (
-                  <div className="mt-6 p-4 bg-stone-900/80 border border-stone-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-300">
-                    <div className="flex gap-3">
-                      <BadgeInfo className="w-5 h-5 flex-shrink-0 text-emerald-500" />
-                      <div>
-                        <strong className="block text-white font-bold mb-0.5">KYC Verification Required</strong>
-                        <p className="text-stone-400">Upload your national CNI card or Passport to unlock full unilevel withdrawal privileges.</p>
+                  <div className="divide-y divide-[color:var(--color-border)]">
+                    {downlineList.map((member, i) => (
+                      <div key={member.uid} className="px-5 py-4 flex items-center gap-4">
+                        <div className="w-9 h-9 rounded-xl bg-[color:var(--color-border)]/50 flex items-center justify-center flex-shrink-0 text-xs font-black text-[color:var(--color-muted)]">
+                          {i + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono font-bold text-sm text-[color:var(--color-fg)]">{member.distributorCode}</p>
+                          <p className="text-[10px] text-[color:var(--color-muted)] mt-0.5">Level 1 — Direct</p>
+                        </div>
+                        <Badge variant="rank" rank={member.rank ?? "bronze"}>{member.rank ?? "bronze"}</Badge>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => setActivePanel("kyc")}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors flex-shrink-0 text-center"
-                    >
-                      Verify Now
-                    </button>
+                    ))}
                   </div>
                 )}
-              </div>
-
-              {/* Recent Commissions */}
-              <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-6">
-                <h4 className="font-sans font-bold text-lg text-white mb-6 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-emerald-400" /> Recent Volume Commission Overrides
-                </h4>
-                <div className="divide-y divide-stone-850/60">
-                  {transactions.filter(t => t.type === "commission").length === 0 ? (
-                    <div className="py-12 text-center text-stone-500 text-xs">
-                      No volume overrides processed yet. Commissions accumulate as your team buys products!
+              </Card>
+            ) : (
+              /* Tree view — opt-in on desktop */
+              <Card padding="none" className="overflow-hidden">
+                <div className="flex gap-2 p-3 border-b border-[color:var(--color-border)]">
+                  <Button variant="secondary" size="sm" icon={<ZoomIn className="w-3.5 h-3.5" />} onClick={() => setZoom(p => Math.min(p + 0.15, 2))}>+</Button>
+                  <Button variant="secondary" size="sm" icon={<ZoomOut className="w-3.5 h-3.5" />} onClick={() => setZoom(p => Math.max(p - 0.15, 0.4))}>−</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setPanX(0); setPanY(0); setZoom(1); }}>Reset</Button>
+                </div>
+                <div
+                  onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+                  className="relative w-full min-h-[420px] bg-[color:var(--color-bg)] overflow-hidden cursor-grab active:cursor-grabbing"
+                >
+                  <div style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})`, transformOrigin: "center 80px", transition: isDragging ? "none" : "transform 0.15s ease" }} className="absolute inset-0 flex items-start justify-center pt-8">
+                    <svg width="600" height="380" className="overflow-visible">
+                      {downlineList.map((node, index) => {
+                        const total = downlineList.length;
+                        const spacing = Math.max(120, 600 / (total + 1));
+                        const endX = 300 + (index - (total - 1) / 2) * spacing;
+                        return (
+                          <path key={node.uid}
+                            d={`M 300 80 C 300 ${160}, ${endX} ${160}, ${endX} 220`}
+                            stroke="var(--color-primary)" strokeWidth="1.5" fill="none" opacity="0.4"
+                          />
+                        );
+                      })}
+                      <g transform="translate(300,50)">
+                        <rect x="-70" y="-24" width="140" height="48" rx="12" fill="var(--color-primary)" fillOpacity="0.12" stroke="var(--color-primary)" strokeWidth="1.5" />
+                        <text x="0" y="-4" textAnchor="middle" fill="var(--color-fg)" fontSize="10" fontWeight="bold">You</text>
+                        <text x="0" y="12" textAnchor="middle" fill="var(--color-gold)" fontSize="9" fontFamily="monospace">{distributorProfile?.distributorCode}</text>
+                      </g>
+                      {downlineList.map((node, index) => {
+                        const total = downlineList.length;
+                        const spacing = Math.max(120, 600 / (total + 1));
+                        const endX = 300 + (index - (total - 1) / 2) * spacing;
+                        return (
+                          <g key={node.uid} transform={`translate(${endX},230)`}>
+                            <rect x="-60" y="-22" width="120" height="44" rx="10" fill="var(--color-surface)" stroke="var(--color-border)" strokeWidth="1" />
+                            <text x="0" y="-4" textAnchor="middle" fill="var(--color-fg)" fontSize="9" fontFamily="monospace" fontWeight="bold">{node.distributorCode}</text>
+                            <text x="0" y="10" textAnchor="middle" fill="var(--color-muted)" fontSize="8" fontWeight="bold" textTransform="capitalize">{node.rank ?? "bronze"}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
+                  {downlineList.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <p className="text-[color:var(--color-muted)] text-sm">No downlines to display.</p>
                     </div>
-                  ) : (
-                    transactions.filter(t => t.type === "commission").map(tx => (
-                      <div key={tx.id} className="py-4 flex justify-between items-center text-xs">
-                        <div>
-                          <span className="font-bold text-white block">{tx.description}</span>
-                          <span className="text-stone-500 font-mono block mt-0.5">Reference ID: {tx.id}</span>
-                        </div>
-                        <span className="font-extrabold text-emerald-400 text-sm">
-                          + {tx.amountXaf.toLocaleString()} XAF
-                        </span>
-                      </div>
-                    ))
                   )}
                 </div>
-              </div>
-            </div>
-
-            {/* Sponsor Member Form */}
-            <div className="lg:col-span-4">
-              <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] p-6 space-y-6">
-                <h4 className="font-sans font-bold text-lg text-white">Sponsor Downline Member</h4>
-                <p className="text-stone-400 text-xs leading-relaxed">
-                  Register a recruit directly to your team matrix structure. They will generate commissions into your active ledger instantly.
-                </p>
-                <form onSubmit={handleAddMember} className="space-y-4">
-                  <div>
-                    <label className="text-stone-400 text-xs block mb-1.5 font-bold">Recruit's Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={newMemberName}
-                      onChange={(e) => setNewMemberName(e.target.value)}
-                      placeholder="e.g. Samuel Eto'o"
-                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <UserPlus className="w-4 h-4 text-[color:var(--color-gold)]" />
-                    Register Directly Under Me
-                  </button>
-                </form>
-              </div>
-            </div>
+              </Card>
+            )}
           </div>
         )}
 
-        {/* 2. GENEALOGY MATRIX TREE VIEW */}
-        {activePanel === "genealogy" && (
-          <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-6 flex flex-col">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 border-b border-stone-850/60 pb-4">
-              <div>
-                <h3 className="font-sans font-bold text-lg text-white">Unilevel Genealogy Map</h3>
-                <p className="text-stone-500 text-xs mt-0.5">Zoom (+ / -) and drag to pan across your network structure.</p>
-              </div>
-              <div className="flex gap-2.5">
-                <button onClick={() => { setZoom(prev => Math.min(prev + 0.1, 1.5)) }} className="p-2.5 bg-stone-950 border border-stone-850 rounded-lg hover:border-emerald-500 text-stone-400 hover:text-white cursor-pointer"><ZoomIn className="w-4 h-4" /></button>
-                <button onClick={() => { setZoom(prev => Math.max(prev - 0.1, 0.5)) }} className="p-2.5 bg-stone-950 border border-stone-850 rounded-lg hover:border-emerald-500 text-stone-400 hover:text-white cursor-pointer"><ZoomOut className="w-4 h-4" /></button>
-                <button onClick={() => { setPanX(0); setPanY(0); setZoom(1); }} className="px-3.5 py-2.5 bg-stone-950 border border-stone-850 rounded-lg text-xs font-bold text-stone-400 hover:text-white cursor-pointer">Reset View</button>
-              </div>
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 3 — WALLET
+        ══════════════════════════════════════════════════════════════════ */}
+        {activePanel === "wallet" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-4">
+              {/* Balance card with trust signals */}
+              <Card variant="highlight" padding="lg" className="flex flex-col sm:flex-row sm:items-center gap-6">
+                <div className="flex-1">
+                  <p className="text-[color:var(--color-muted)] text-xs font-semibold uppercase">Available Balance</p>
+                  <p className="text-4xl font-black text-[color:var(--color-fg)] mt-1">{(wallet?.balanceXaf || 0).toLocaleString()}</p>
+                  <p className="text-[color:var(--color-gold)] text-xs font-bold mt-0.5">XAF · CFA Franc</p>
+                </div>
+                <div className="flex flex-col gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>MeSomb verified gateway</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[color:var(--color-muted)]">
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Payouts process in 1–3 hours</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[color:var(--color-muted)]">
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>MTN MoMo · Orange Money</span>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Transaction history */}
+              <Card padding="none">
+                <div className="p-5 border-b border-[color:var(--color-border)] flex items-center justify-between">
+                  <h4 className="font-bold text-sm text-[color:var(--color-fg)]">Transaction History</h4>
+                  <Badge variant="default">{transactions.length} records</Badge>
+                </div>
+                {transactions.length === 0 ? (
+                  <div className="py-12 text-center text-[color:var(--color-muted)] text-xs">No transactions yet.</div>
+                ) : (
+                  <div className="divide-y divide-[color:var(--color-border)]">
+                    {transactions.map(tx => (
+                      <div key={tx.id} className="px-5 py-4 flex items-center gap-4">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${tx.type === "commission" ? "bg-emerald-900/30" : "bg-red-900/20"}`}>
+                          {tx.type === "commission"
+                            ? <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+                            : <ArrowDownLeft className="w-4 h-4 text-red-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[color:var(--color-fg)] truncate">{tx.description}</p>
+                          <p className="text-[10px] text-[color:var(--color-muted)] font-mono mt-0.5 truncate">{tx.id}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-black text-sm ${tx.type === "commission" ? "text-emerald-400" : "text-red-400"}`}>
+                            {tx.type === "commission" ? "+" : "−"}{tx.amountXaf.toLocaleString()}
+                          </p>
+                          <p className="text-[10px] text-[color:var(--color-muted)]">XAF</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
             </div>
 
-            <div
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              className="relative w-full min-h-[460px] bg-stone-950 rounded-2xl border border-stone-850/60 overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center"
-            >
-              <div
-                style={{
-                  transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-                  transformOrigin: "center center",
-                  transition: isDragging ? "none" : "transform 0.1s ease-out"
-                }}
-                className="absolute"
-              >
-                <svg width="600" height="400" className="overflow-visible">
-                  {downlineList.map((node, index) => {
-                    const startX = 300;
-                    const startY = 80;
-                    const total = downlineList.length;
-                    const spacing = 150;
-                    const endX = 300 + (index - (total - 1) / 2) * spacing;
-                    const endY = 250;
-                    return (
-                      <path
-                        key={node.uid}
-                        d={`M ${startX} ${startY} C ${startX} ${(startY + endY) / 2}, ${endX} ${(startY + endY) / 2}, ${endX} ${endY}`}
-                        stroke="#016934"
-                        strokeWidth="2.5"
-                        fill="none"
-                        opacity="0.6"
-                      />
-                    );
-                  })}
+            {/* Withdrawal form */}
+            <Card padding="lg" className="space-y-5 h-fit">
+              <div>
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">MeSomb Gateway</span>
+                <h3 className="font-bold text-base text-[color:var(--color-fg)] mt-1">Request Cashout</h3>
+                <p className="text-xs text-[color:var(--color-muted)] mt-1">Minimum 2,000 XAF. Payouts sent within 1–3 hours.</p>
+              </div>
+              <form onSubmit={handlePayoutSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {(["mtn_momo", "orange_money"] as const).map(prov => (
+                    <button
+                      key={prov} type="button"
+                      onClick={() => setPayoutProvider(prov)}
+                      className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${payoutProvider === prov
+                        ? prov === "mtn_momo" ? "bg-yellow-500/10 border-yellow-500 text-yellow-400" : "bg-orange-500/10 border-orange-500 text-orange-400"
+                        : "bg-[color:var(--color-bg)] border-[color:var(--color-border)] text-[color:var(--color-muted)]"
+                      }`}
+                    >{prov === "mtn_momo" ? "MTN MoMo" : "Orange Money"}</button>
+                  ))}
+                </div>
+                <Input
+                  label="Phone Number"
+                  type="tel"
+                  placeholder="+237 6xx xxx xxx"
+                  value={payoutPhone}
+                  onChange={e => setPayoutPhone(e.target.value)}
+                  icon={<Smartphone className="w-4 h-4" />}
+                  required
+                />
+                <Input
+                  label="Amount (XAF)"
+                  type="number"
+                  placeholder="e.g. 5000"
+                  value={payoutAmount}
+                  onChange={e => setPayoutAmount(e.target.value)}
+                  icon={<CreditCard className="w-4 h-4" />}
+                  hint={`Max: ${(wallet?.balanceXaf ?? 0).toLocaleString()} XAF`}
+                  required
+                />
+                <Button type="submit" variant="primary" fullWidth loading={payoutLoading} icon={<Send className="w-4 h-4" />}>
+                  Request Withdrawal
+                </Button>
+              </form>
+            </Card>
+          </div>
+        )}
 
-                  <g transform="translate(300, 80)">
-                    <rect x="-90" y="-30" width="180" height="60" rx="14" fill="#016934" fillOpacity="0.1" stroke="#016934" strokeWidth="2" />
-                    <text x="0" y="-8" textAnchor="middle" fill="#white" fontSize="11" fontWeight="bold">You (Sovereign Root)</text>
-                    <text x="0" y="8" textAnchor="middle" fill="#ecc246" fontSize="9" fontWeight="bold">{distributorProfile?.distributorCode}</text>
-                    <text x="0" y="20" textAnchor="middle" fill="#888" fontSize="8" fontWeight="bold">Rank: {distributorProfile?.rank}</text>
-                  </g>
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 4 — ORDERS
+        ══════════════════════════════════════════════════════════════════ */}
+        {activePanel === "orders" && (
+          <Card padding="none">
+            <div className="p-5 border-b border-[color:var(--color-border)] flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-[color:var(--color-primary)]" />
+              <h4 className="font-bold text-sm text-[color:var(--color-fg)]">Purchase History</h4>
+            </div>
+            {orders.length === 0 ? (
+              <div className="py-16 text-center text-[color:var(--color-muted)] text-xs">
+                No purchases yet. Browse the store to place your first order.
+              </div>
+            ) : (
+              <div className="divide-y divide-[color:var(--color-border)]">
+                {orders.map(ord => (
+                  <div key={ord.id} className="px-5 py-4 flex items-center gap-4 flex-wrap">
+                    <p className="font-mono text-[11px] text-[color:var(--color-muted)] flex-1 truncate">{ord.id}</p>
+                    <p className="font-bold text-sm text-[color:var(--color-fg)]">{ord.amountXaf.toLocaleString()} <span className="text-[10px] font-normal text-[color:var(--color-muted)]">XAF</span></p>
+                    <Badge variant="gold">+{ord.pvPoints} PV</Badge>
+                    <Badge variant="success">Processed</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
-                  {downlineList.map((node, index) => {
-                    const total = downlineList.length;
-                    const spacing = 150;
-                    const endX = 300 + (index - (total - 1) / 2) * spacing;
-                    const endY = 250;
-                    return (
-                      <g key={node.uid} transform={`translate(${endX}, ${endY})`}>
-                        <rect x="-80" y="-30" width="160" height="60" rx="12" fill="#1c1917" stroke="#ecc246" strokeWidth="1.5" strokeOpacity="0.7" />
-                        <text x="0" y="-8" textAnchor="middle" fill="#white" fontSize="10" fontWeight="bold">Downline Recruit</text>
-                        <text x="0" y="8" textAnchor="middle" fill="#ecc246" fontSize="9" fontWeight="bold" fontFamily="monospace">{node.distributorCode}</text>
-                        <text x="0" y="20" textAnchor="middle" fill="#777" fontSize="8" fontWeight="bold">Rank: Bronze</text>
-                      </g>
-                    );
-                  })}
-                </svg>
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 5 — REFERRAL TOOLS
+        ══════════════════════════════════════════════════════════════════ */}
+        {activePanel === "referral" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card padding="lg" className="space-y-5">
+              <div>
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Recruitment Link</span>
+                <h3 className="font-bold text-base text-[color:var(--color-fg)] mt-1">Share Your Referral ID</h3>
+                <p className="text-xs text-[color:var(--color-muted)] mt-1.5 leading-relaxed">
+                  Earn 10% on every direct sale your recruits make. Overrides continue up 5 levels.
+                </p>
               </div>
 
-              {downlineList.length === 0 && (
-                <div className="absolute inset-0 bg-stone-950/85 flex flex-col items-center justify-center p-6 text-center space-y-3">
-                  <Users className="w-10 h-10 text-stone-700" />
-                  <div>
-                    <h5 className="font-bold text-white text-sm">No downlines registered yet</h5>
-                    <p className="text-stone-500 text-xs mt-1">Copy your referral credentials to initiate your unilevel network matrix!</p>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-[color:var(--color-muted)] mb-1.5">Your Distributor Code</p>
+                  <div className="p-3.5 bg-[color:var(--color-bg)] rounded-xl border border-[color:var(--color-border)] flex items-center justify-between gap-3">
+                    <span className="font-mono font-bold text-[color:var(--color-fg)]">{distributorProfile?.distributorCode ?? "—"}</span>
+                    <Button variant="ghost" size="sm" icon={copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />} onClick={copyReferralLink}>
+                      {copied ? "Copied!" : "Copy link"}
+                    </Button>
                   </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-[color:var(--color-muted)] mb-1.5">Referral URL</p>
+                  <div className="p-3.5 bg-[color:var(--color-bg)] rounded-xl border border-[color:var(--color-border)] flex items-center gap-2">
+                    <ExternalLink className="w-3.5 h-3.5 text-[color:var(--color-muted)] flex-shrink-0" />
+                    <span className="text-[11px] text-[color:var(--color-muted)] truncate">
+                      songtailife.cm/join?ref={distributorProfile?.distributorCode ?? "…"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Commission rate table */}
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[color:var(--color-muted)] mb-2">Your Override Rates</p>
+                <div className="space-y-1.5">
+                  {[["Level 1 (direct)", "10%"], ["Level 2", "5%"], ["Level 3", "3%"], ["Level 4", "2%"], ["Level 5", "1%"]].map(([lvl, rate]) => (
+                    <div key={lvl} className="flex justify-between items-center text-xs">
+                      <span className="text-[color:var(--color-muted)]">{lvl}</span>
+                      <Badge variant="gold">{rate}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            <Card padding="lg" className="flex flex-col items-center gap-5">
+              <div className="text-center">
+                <h3 className="font-bold text-base text-[color:var(--color-fg)]">QR Code</h3>
+                <p className="text-xs text-[color:var(--color-muted)] mt-1">Let recruits scan this at events</p>
+              </div>
+              {distributorProfile?.distributorCode && (
+                <div className="p-4 bg-white rounded-2xl shadow-lg">
+                  <QRCodeSVG
+                    value={`https://songtailife.cm/join?ref=${distributorProfile.distributorCode}`}
+                    size={160}
+                    bgColor="#FFFFFF"
+                    fgColor="#016934"
+                  />
                 </div>
               )}
-            </div>
+              <p className="text-[10px] text-[color:var(--color-muted)] text-center">
+                Scans link to: songtailife.cm/join?ref={distributorProfile?.distributorCode}
+              </p>
+            </Card>
           </div>
         )}
 
-        {/* 3. WALLET LEDGER VIEW */}
-        {activePanel === "wallet" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 bg-stone-900/40 border border-stone-850 rounded-[32px] p-6">
-              <h3 className="font-sans font-bold text-lg text-white mb-6 flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-emerald-400" /> MeSomb Transaction Ledger
-              </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-stone-400">
-                  <thead className="text-[10px] uppercase bg-stone-950 border-b border-stone-850/80 text-stone-500 font-bold">
-                    <tr>
-                      <th className="px-6 py-4">Transaction ID</th>
-                      <th className="px-6 py-4">Type</th>
-                      <th className="px-6 py-4">Description</th>
-                      <th className="px-6 py-4">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-850/60">
-                    {transactions.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-stone-500 text-xs">
-                          No transactions completed on this unilevel profile.
-                        </td>
-                      </tr>
-                    ) : (
-                      transactions.map((tx) => (
-                        <tr key={tx.id} className="hover:bg-stone-900/20 transition-all">
-                          <td className="px-6 py-4 font-mono text-[10px] font-semibold text-stone-500">{tx.id}</td>
-                          <td className="px-6 py-4 uppercase font-bold">
-                            {tx.type === "commission" ? (
-                              <span className="text-[color:var(--color-gold)] flex items-center gap-1">
-                                <ArrowUpRight className="w-3.5 h-3.5" /> Earned
-                              </span>
-                            ) : (
-                              <span className="text-red-400 flex items-center gap-1">
-                                <ArrowDownLeft className="w-3.5 h-3.5" /> Payout
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-white text-xs font-medium">{tx.description}</td>
-                          <td className={`px-6 py-4 font-extrabold text-xs ${tx.type === "commission" ? "text-emerald-400" : "text-stone-300"}`}>
-                            {tx.type === "commission" ? "+" : "-"} {tx.amountXaf.toLocaleString()} XAF
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Withdrawal Form */}
-            <div className="lg:col-span-4 bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] p-6">
-              <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">MeSomb Gateway</span>
-              <h3 className="font-sans font-bold text-lg text-white mt-1">Request Mobile Money Cashout</h3>
-              <form onSubmit={handlePayoutSubmit} className="mt-6 space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setPayoutProvider("mtn_momo")} className={`p-3.5 rounded-xl border text-xs font-bold transition-all ${payoutProvider === "mtn_momo" ? "bg-yellow-500/10 border-yellow-500 text-yellow-500" : "bg-stone-950 border-stone-850 text-stone-400"}`}>MTN MoMo</button>
-                  <button type="button" onClick={() => setPayoutProvider("orange_money")} className={`p-3.5 rounded-xl border text-xs font-bold transition-all ${payoutProvider === "orange_money" ? "bg-orange-500/10 border-orange-500 text-orange-500" : "bg-stone-950 border-stone-850 text-stone-400"}`}>Orange Money</button>
-                </div>
-                <div>
-                  <label className="text-stone-400 text-xs block mb-1.5 font-bold">Cameroon Phone Number</label>
-                  <div className="relative">
-                    <Smartphone className="absolute left-3.5 top-3.5 w-4 h-4 text-stone-600" />
-                    <input type="tel" required value={payoutPhone} onChange={(e) => setPayoutPhone(e.target.value)} placeholder="+237 6xx xxx xxx" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-stone-400 text-xs block mb-1.5 font-bold">Cashout Amount (XAF)</label>
-                  <div className="relative">
-                    <CreditCard className="absolute left-3.5 top-3.5 w-4 h-4 text-stone-600" />
-                    <input type="number" required value={payoutAmount} onChange={(e) => setPayoutAmount(e.target.value)} placeholder="e.g. 5000" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
-                  </div>
-                </div>
-                <button type="submit" disabled={payoutLoading} className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                  {payoutLoading ? (
-                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <><Send className="w-4 h-4 text-[color:var(--color-gold)]" /><span>Initiate MeSomb Cashout</span></>
-                  )}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* 4. ORDERS HISTORY VIEW */}
-        {activePanel === "orders" && (
-          <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-6">
-            <h3 className="font-sans font-bold text-lg text-white mb-6 flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-emerald-400" /> My Purchases History
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-stone-400">
-                <thead className="text-[10px] uppercase bg-stone-950 border-b border-stone-850/80 text-stone-500 font-bold">
-                  <tr>
-                    <th className="px-6 py-4">Order Reference</th>
-                    <th className="px-6 py-4">Total Amount (XAF)</th>
-                    <th className="px-6 py-4">PV Points Awarded</th>
-                    <th className="px-6 py-4">Compliance Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-850/60">
-                  {orders.length === 0 ? (
-                    <tr><td colSpan={4} className="px-6 py-12 text-center text-stone-500 text-xs">No purchases registered yet. Shop products on the store!</td></tr>
-                  ) : (
-                    orders.map((ord) => (
-                      <tr key={ord.id} className="hover:bg-stone-900/20 transition-all">
-                        <td className="px-6 py-4 font-mono text-[10px] text-white">{ord.id}</td>
-                        <td className="px-6 py-4 font-bold text-white">{ord.amountXaf.toLocaleString()} XAF</td>
-                        <td className="px-6 py-4 text-[color:var(--color-gold)] font-bold">+{ord.pvPoints} PV</td>
-                        <td className="px-6 py-4"><span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 rounded-full text-[9px] uppercase font-bold">Processed</span></td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* 5. REFERRAL TOOLS VIEW */}
-        {activePanel === "referral" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-8 flex flex-col justify-between space-y-6 text-left">
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 6 — KYC / COMPLIANCE
+        ══════════════════════════════════════════════════════════════════ */}
+        {activePanel === "kyc" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card padding="lg" className="space-y-5">
               <div>
-                <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Unilevel Recruitment Link</span>
-                <h3 className="font-sans font-bold text-xl text-white mt-1">Share Your Referral ID</h3>
-                <p className="text-stone-400 text-xs leading-relaxed mt-2">
-                  Recruiters gain 10% on direct sales volume plus team matrix overriding overrides.
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Identity Verification</span>
+                <h3 className="font-bold text-base text-[color:var(--color-fg)] mt-1">KYC Compliance</h3>
+                <p className="text-xs text-[color:var(--color-muted)] mt-1.5 leading-relaxed">
+                  Upload a clear scan of your national ID card or international passport to unlock full withdrawal privileges.
                 </p>
               </div>
-              <div className="space-y-4">
+
+              <div className="p-4 bg-[color:var(--color-bg)] border border-[color:var(--color-border)] rounded-xl space-y-2 text-xs">
+                <p className="font-bold text-[color:var(--color-fg)]">Current Status</p>
+                <div className="flex items-center gap-2">
+                  {distributorProfile?.kycStatus === "verified" && <Badge variant="success" dot>Verified</Badge>}
+                  {distributorProfile?.kycStatus === "pending" && <Badge variant="warning" dot>Under Review</Badge>}
+                  {distributorProfile?.kycStatus === "rejected" && <Badge variant="danger" dot>Rejected</Badge>}
+                  {(!distributorProfile?.kycStatus || distributorProfile.kycStatus === "none") && <Badge variant="default" dot>Not submitted</Badge>}
+                </div>
+              </div>
+
+              {distributorProfile?.kycStatus !== "verified" && (
                 <div>
-                  <label className="text-stone-500 text-[10px] font-bold uppercase block mb-1">My Distributor Code</label>
-                  <div className="p-4 bg-stone-950 rounded-xl border border-stone-850 flex justify-between items-center font-mono text-sm font-bold text-white">
-                    <span>{distributorProfile?.distributorCode}</span>
-                    <button onClick={copyReferralLink} className="p-1.5 hover:bg-stone-900 rounded-lg text-[color:var(--color-gold)] cursor-pointer">
-                      {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-stone-500 text-[10px] font-bold uppercase block mb-1">Referral Registration URL</label>
-                  <div className="p-4 bg-stone-950 rounded-xl border border-stone-850 flex justify-between items-center text-xs text-stone-300">
-                    <span className="truncate mr-3">songtailife.cm/join?ref={distributorProfile?.distributorCode}</span>
-                    <button onClick={copyReferralLink} className="p-1.5 hover:bg-stone-900 rounded-lg text-[color:var(--color-gold)] cursor-pointer">
-                      {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-stone-900 border border-stone-850 rounded-[32px] p-8 flex flex-col items-center justify-center text-center space-y-4">
-              <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Luminous QR Code</span>
-              <div className="p-4 bg-white/5 rounded-3xl border border-stone-800">
-                <QRCodeSVG
-                  value={`https://songtailife.cm/join?ref=${distributorProfile?.distributorCode}`}
-                  size={160}
-                  fgColor="var(--color-gold)"
-                  bgColor="transparent"
-                />
-              </div>
-              <div>
-                <h5 className="font-bold text-white text-xs mt-2">Instant Scan Recruitment</h5>
-                <p className="text-stone-500 text-[10px] mt-1">Let recruits scan this vector asset to initiate placement directly under your tree.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 6. KYC COMPLIANCE VIEW */}
-        {activePanel === "kyc" && (
-          <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-8 max-w-2xl mx-auto text-left space-y-6">
-            <div>
-              <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">CEMAC Health & Network Compliance</span>
-              <h3 className="font-sans font-bold text-xl text-white mt-1">Verify Identity Document</h3>
-              <p className="text-stone-400 text-xs leading-relaxed mt-1.5">
-                Upload your Cameroon CNI card or National Passport. Verified users unlock maximum MeSomb unilevel payout privileges.
-              </p>
-            </div>
-
-            <div className="border border-stone-850 bg-stone-950 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4 relative">
-              {distributorProfile?.kycStatus === "verified" ? (
-                <div className="space-y-2">
-                  <Check className="w-12 h-12 text-[color:var(--color-gold)] mx-auto p-2 bg-emerald-700/10 rounded-full" />
-                  <h4 className="font-bold text-white text-sm">Compliance Completed Successfully</h4>
-                  <p className="text-stone-500 text-xs">Your passport has been validated by corporate operations.</p>
-                </div>
-              ) : distributorProfile?.kycStatus === "pending" ? (
-                <div className="space-y-2">
-                  <span className="w-10 h-10 border-4 border-[color:var(--color-gold)] border-t-transparent rounded-full animate-spin inline-block mx-auto" />
-                  <h4 className="font-bold text-white text-sm">Identity Auditing In Progress</h4>
-                  <p className="text-stone-500 text-xs">Operations team is verifying document parameters. Expect 24 hour SLA.</p>
-                </div>
-              ) : (
-                <div className="w-full space-y-4">
-                  {distributorProfile?.kycStatus === "rejected" && (
-                    <div className="p-4 bg-red-950/25 border border-red-900/50 rounded-xl text-xs text-red-400 text-left flex gap-3">
-                      <ShieldAlert className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
-                      <div>
-                        <strong className="block text-white font-bold mb-0.5">Verification Disapproved</strong>
-                        Your previously uploaded document was rejected. Please upload a high-resolution, clear copy.
-                      </div>
+                  <p className="text-xs font-bold text-[color:var(--color-muted)] mb-2">Upload Document</p>
+                  <label className={`flex flex-col items-center gap-3 p-6 border-2 border-dashed rounded-2xl cursor-pointer transition-all
+                    ${kycLoading ? "opacity-50 pointer-events-none" : "border-[color:var(--color-border)] hover:border-[color:var(--color-primary)]/60 hover:bg-[color:var(--color-primary)]/5"}`}>
+                    <UploadCloud className="w-8 h-8 text-[color:var(--color-muted)]" />
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-[color:var(--color-fg)]">
+                        {kycLoading ? "Uploading…" : kycFile ? kycFile.name : "Click to upload"}
+                      </p>
+                      <p className="text-xs text-[color:var(--color-muted)] mt-0.5">National ID, Passport — JPG/PNG/PDF max 5MB</p>
                     </div>
-                  )}
-                  <label className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-stone-800 hover:border-emerald-700/40 rounded-2xl cursor-pointer transition-all">
-                    <UploadCloud className="w-10 h-10 text-stone-500 mb-2" />
-                    <span className="text-xs font-bold text-white block">Upload identity card / passport document</span>
-                    <span className="text-[10px] text-stone-600 block mt-1">Accepts PNG, JPG or PDF up to 10MB</span>
-                    <input type="file" onChange={handleKycUploadChange} className="hidden" />
+                    <input type="file" className="hidden" accept=".jpg,.jpeg,.png,.pdf" onChange={handleKycUploadChange} disabled={kycLoading} />
                   </label>
                 </div>
               )}
-            </div>
+            </Card>
+
+            <Card padding="lg" className="space-y-4">
+              <h4 className="font-bold text-sm text-[color:var(--color-fg)]">Why KYC?</h4>
+              {[
+                ["CEMAC Compliance", "Required by the Central African Economic and Monetary Community for financial operations."],
+                ["Cameroon Law 2010/012", "Cybersecurity and data protection compliance mandated by national law."],
+                ["Wallet Withdrawals", "Verified profiles unlock full cashout privileges via MTN MoMo & Orange Money."],
+                ["Network Trust", "Your downline sees your verified status — it builds trust in your leadership."],
+              ].map(([title, desc]) => (
+                <div key={title} className="flex gap-3 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-[color:var(--color-primary)] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-[color:var(--color-fg)]">{title}</p>
+                    <p className="text-[color:var(--color-muted)] mt-0.5">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </Card>
           </div>
         )}
 

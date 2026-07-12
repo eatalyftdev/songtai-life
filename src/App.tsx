@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Product } from "./types";
@@ -10,37 +10,50 @@ import TechSpecBrowser from "./components/TechSpecBrowser";
 import FloatingAI from "./components/FloatingAI";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { DistributorLogin, DistributorSignup, AdminLogin } from "./components/auth/AuthViews";
-import AdminLayout from "./components/admin/layout/AdminLayout";
-import DashboardPage from "./components/admin/pages/DashboardPage";
-import ProductsPage from "./components/admin/pages/ProductsPage";
-import OrdersPage from "./components/admin/pages/OrdersPage";
-import DistributorsPage from "./components/admin/pages/DistributorsPage";
-import WalletsPage from "./components/admin/pages/WalletsPage";
-import CommissionsPage from "./components/admin/pages/CommissionsPage";
-import BlogPage from "./components/admin/pages/BlogPage";
-import EventsPage from "./components/admin/pages/EventsPage";
-import TestimonialsPage from "./components/admin/pages/TestimonialsPage";
-import GalleryPage from "./components/admin/pages/GalleryPage";
-import FAQPage from "./components/admin/pages/FAQPage";
-import ProductCategoriesPage from "./components/admin/pages/ProductCategoriesPage";
-import AppointmentsPage from "./components/admin/pages/AppointmentsPage";
-import ContactsPage from "./components/admin/pages/ContactsPage";
-import NewsletterPage from "./components/admin/pages/NewsletterPage";
-import MediaPage from "./components/admin/pages/MediaPage";
-import SettingsPage from "./components/admin/pages/SettingsPage";
-import AuditPage from "./components/admin/pages/AuditPage";
-import HeroCarouselPage from "./components/admin/pages/HeroCarouselPage";
-import HomepagePage from "./components/admin/pages/HomepagePage";
-import OurStoryPage from "./components/admin/pages/OurStoryPage";
-import ContactInfoPage from "./components/admin/pages/ContactInfoPage";
-import WellnessHubCMSPage from "./components/admin/pages/WellnessHubCMSPage";
-import BecomeDistributorCMSPage from "./components/admin/pages/BecomeDistributorCMSPage";
-import PaymentConfigPage from "./components/admin/pages/PaymentConfigPage";
-import AISettingsPage from "./components/admin/pages/AISettingsPage";
-import PageEditsPage from "./components/admin/pages/PageEditsPage";
 import { runCommissionEngine } from "./lib/commissionEngine";
 import WhatsAppWidget from "./components/WhatsAppWidget";
 import Analytics from "./components/Analytics";
+
+// ── Phase 7: Admin pages lazy-loaded to reduce main bundle size ──────────────
+const AdminLayout              = lazy(() => import("./components/admin/layout/AdminLayout"));
+const DashboardPage            = lazy(() => import("./components/admin/pages/DashboardPage"));
+const ProductsPage             = lazy(() => import("./components/admin/pages/ProductsPage"));
+const OrdersPage               = lazy(() => import("./components/admin/pages/OrdersPage"));
+const DistributorsPage         = lazy(() => import("./components/admin/pages/DistributorsPage"));
+const WalletsPage              = lazy(() => import("./components/admin/pages/WalletsPage"));
+const CommissionsPage          = lazy(() => import("./components/admin/pages/CommissionsPage"));
+const BlogPage                 = lazy(() => import("./components/admin/pages/BlogPage"));
+const EventsPage               = lazy(() => import("./components/admin/pages/EventsPage"));
+const TestimonialsPage         = lazy(() => import("./components/admin/pages/TestimonialsPage"));
+const GalleryPage              = lazy(() => import("./components/admin/pages/GalleryPage"));
+const FAQPage                  = lazy(() => import("./components/admin/pages/FAQPage"));
+const ProductCategoriesPage    = lazy(() => import("./components/admin/pages/ProductCategoriesPage"));
+const AppointmentsPage         = lazy(() => import("./components/admin/pages/AppointmentsPage"));
+const ContactsPage             = lazy(() => import("./components/admin/pages/ContactsPage"));
+const NewsletterPage           = lazy(() => import("./components/admin/pages/NewsletterPage"));
+const MediaPage                = lazy(() => import("./components/admin/pages/MediaPage"));
+const SettingsPage             = lazy(() => import("./components/admin/pages/SettingsPage"));
+const AuditPage                = lazy(() => import("./components/admin/pages/AuditPage"));
+const HeroCarouselPage         = lazy(() => import("./components/admin/pages/HeroCarouselPage"));
+const HomepagePage             = lazy(() => import("./components/admin/pages/HomepagePage"));
+const OurStoryPage             = lazy(() => import("./components/admin/pages/OurStoryPage"));
+const ContactInfoPage          = lazy(() => import("./components/admin/pages/ContactInfoPage"));
+const WellnessHubCMSPage       = lazy(() => import("./components/admin/pages/WellnessHubCMSPage"));
+const BecomeDistributorCMSPage = lazy(() => import("./components/admin/pages/BecomeDistributorCMSPage"));
+const PaymentConfigPage        = lazy(() => import("./components/admin/pages/PaymentConfigPage"));
+const AISettingsPage           = lazy(() => import("./components/admin/pages/AISettingsPage"));
+const PageEditsPage            = lazy(() => import("./components/admin/pages/PageEditsPage"));
+
+function AdminFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex flex-col items-center gap-3 text-[color:var(--color-muted)]">
+        <span className="w-8 h-8 border-2 border-[color:var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-semibold">Loading admin panel…</p>
+      </div>
+    </div>
+  );
+}
 
 import { 
   ShoppingBag, X, Plus, Minus, Trash2, ShieldCheck, 
@@ -294,40 +307,42 @@ function AppContent() {
             </ProtectedRoute>
           } />
 
-          {/* Protected Admin Dashboard — nested sub-routes */}
+          {/* Protected Admin Dashboard — nested sub-routes, all lazy-loaded */}
           <Route path="/admin" element={
             <ProtectedRoute allowedRoles={["admin", "superadmin", "content_editor"]} fallbackPath="/admin/login" addNotification={addNotification}>
-              <AdminLayout theme={theme} toggleTheme={toggleTheme} />
+              <Suspense fallback={<AdminFallback />}>
+                <AdminLayout theme={theme} toggleTheme={toggleTheme} />
+              </Suspense>
             </ProtectedRoute>
           }>
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard"    element={<DashboardPage />} />
-            <Route path="products"     element={<ProductsPage />} />
-            <Route path="orders"       element={<OrdersPage />} />
-            <Route path="distributors" element={<DistributorsPage />} />
-            <Route path="wallets"      element={<WalletsPage />} />
-            <Route path="commissions"  element={<CommissionsPage />} />
-            <Route path="blog"         element={<BlogPage />} />
-            <Route path="events"       element={<EventsPage />} />
-            <Route path="testimonials" element={<TestimonialsPage />} />
-            <Route path="homepage"             element={<HomepagePage />} />
-            <Route path="our-story"            element={<OurStoryPage />} />
-            <Route path="contact-page"         element={<ContactInfoPage />} />
-            <Route path="wellness-hub"         element={<WellnessHubCMSPage />} />
-            <Route path="become-distributor"   element={<BecomeDistributorCMSPage />} />
-            <Route path="payment-config"       element={<PaymentConfigPage />} />
-            <Route path="ai-settings"          element={<AISettingsPage />} />
-            <Route path="pages"                element={<PageEditsPage />} />
-            <Route path="hero-carousel"        element={<HeroCarouselPage />} />
-            <Route path="gallery"              element={<GalleryPage />} />
-            <Route path="faq"                 element={<FAQPage />} />
-            <Route path="products/categories" element={<ProductCategoriesPage />} />
-            <Route path="appointments"        element={<AppointmentsPage />} />
-            <Route path="contacts"     element={<ContactsPage />} />
-            <Route path="newsletter"   element={<NewsletterPage />} />
-            <Route path="media"        element={<MediaPage />} />
-            <Route path="settings"     element={<SettingsPage />} />
-            <Route path="audit"        element={<AuditPage />} />
+            <Route path="dashboard"    element={<Suspense fallback={<AdminFallback />}><DashboardPage /></Suspense>} />
+            <Route path="products"     element={<Suspense fallback={<AdminFallback />}><ProductsPage /></Suspense>} />
+            <Route path="orders"       element={<Suspense fallback={<AdminFallback />}><OrdersPage /></Suspense>} />
+            <Route path="distributors" element={<Suspense fallback={<AdminFallback />}><DistributorsPage /></Suspense>} />
+            <Route path="wallets"      element={<Suspense fallback={<AdminFallback />}><WalletsPage /></Suspense>} />
+            <Route path="commissions"  element={<Suspense fallback={<AdminFallback />}><CommissionsPage /></Suspense>} />
+            <Route path="blog"         element={<Suspense fallback={<AdminFallback />}><BlogPage /></Suspense>} />
+            <Route path="events"       element={<Suspense fallback={<AdminFallback />}><EventsPage /></Suspense>} />
+            <Route path="testimonials" element={<Suspense fallback={<AdminFallback />}><TestimonialsPage /></Suspense>} />
+            <Route path="homepage"             element={<Suspense fallback={<AdminFallback />}><HomepagePage /></Suspense>} />
+            <Route path="our-story"            element={<Suspense fallback={<AdminFallback />}><OurStoryPage /></Suspense>} />
+            <Route path="contact-page"         element={<Suspense fallback={<AdminFallback />}><ContactInfoPage /></Suspense>} />
+            <Route path="wellness-hub"         element={<Suspense fallback={<AdminFallback />}><WellnessHubCMSPage /></Suspense>} />
+            <Route path="become-distributor"   element={<Suspense fallback={<AdminFallback />}><BecomeDistributorCMSPage /></Suspense>} />
+            <Route path="payment-config"       element={<Suspense fallback={<AdminFallback />}><PaymentConfigPage /></Suspense>} />
+            <Route path="ai-settings"          element={<Suspense fallback={<AdminFallback />}><AISettingsPage /></Suspense>} />
+            <Route path="pages"                element={<Suspense fallback={<AdminFallback />}><PageEditsPage /></Suspense>} />
+            <Route path="hero-carousel"        element={<Suspense fallback={<AdminFallback />}><HeroCarouselPage /></Suspense>} />
+            <Route path="gallery"              element={<Suspense fallback={<AdminFallback />}><GalleryPage /></Suspense>} />
+            <Route path="faq"                  element={<Suspense fallback={<AdminFallback />}><FAQPage /></Suspense>} />
+            <Route path="products/categories"  element={<Suspense fallback={<AdminFallback />}><ProductCategoriesPage /></Suspense>} />
+            <Route path="appointments"         element={<Suspense fallback={<AdminFallback />}><AppointmentsPage /></Suspense>} />
+            <Route path="contacts"     element={<Suspense fallback={<AdminFallback />}><ContactsPage /></Suspense>} />
+            <Route path="newsletter"   element={<Suspense fallback={<AdminFallback />}><NewsletterPage /></Suspense>} />
+            <Route path="media"        element={<Suspense fallback={<AdminFallback />}><MediaPage /></Suspense>} />
+            <Route path="settings"     element={<Suspense fallback={<AdminFallback />}><SettingsPage /></Suspense>} />
+            <Route path="audit"        element={<Suspense fallback={<AdminFallback />}><AuditPage /></Suspense>} />
           </Route>
 
           {/* Tech Spec Browser */}
