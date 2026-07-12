@@ -1,0 +1,216 @@
+# Songtai Life — Premium MLM Platform Redesign
+### Replit Agent Prompt Series (sequential, one phase per Agent session)
+
+---
+
+## HOW TO USE THIS
+
+Do **not** paste the whole thing into Replit Agent at once — that's how you get a shallow, half-finished pass across every screen instead of a deep one.
+
+Feed these **one prompt block at a time**, in order. Wait for each phase to fully complete (and review its output) before starting the next. Every block below is self-contained and copy-pasteable as-is.
+
+Every single prompt starts with the same mandatory preamble — don't skip it, even if it feels redundant:
+
+```
+Before making any changes:
+1. Read ARCHITECTURE.md in full.
+2. State which skill(s) from the 66-skill guide (jeffallan/claude-skills,
+   github.com/jeffallan/claude-skills) you are activating for this task,
+   and why.
+3. Confirm the existing design token system (Green #016934, Vermillion
+   #E7380D, light/dark mode) before proposing any new colors — extend it,
+   don't replace it.
+Only then proceed with the task below.
+```
+
+---
+
+## PHASE 0 — Baseline Audit (run this first, always)
+
+**Skills to activate:** Quality/Testing, Frontend/Mobile, Security
+
+```
+[paste mandatory preamble]
+
+TASK: Audit the current Songtai Life codebase (Next.js/React + Supabase).
+Do NOT change any code yet.
+
+Produce a written report covering, for THIS codebase specifically
+(not generic MLM platforms):
+- UI inconsistencies across pages that currently exist
+- Broken or missing responsive behavior at 375px, 768px, 1280px
+- Any pages missing EN/FR content parity
+- Loading states / empty states that are missing
+- Accessibility issues (contrast, missing alt text, keyboard nav)
+- Duplicate components or logic
+- Any security gaps (input validation, RLS policy gaps, exposed keys)
+- Current Lighthouse scores if measurable in this environment
+
+Output as a markdown report with a prioritized list (High/Medium/Low)
+of fixes. Stop after the report — do not start fixing yet.
+```
+
+---
+
+## PHASE 1 — Design System Foundation
+
+**Skills to activate:** Frontend/Mobile, UI Design
+
+```
+[paste mandatory preamble]
+
+TASK: Based on the Phase 0 audit, formalize a single design token file
+(colors, spacing, typography scale, radii, shadows, motion durations)
+extending the existing Green/Vermillion palette into full light/dark
+mode. Apply it to buttons, cards, inputs, and nav first as a proof of
+consistency — not the whole app yet. Show before/after on 2-3 key
+components.
+```
+
+---
+
+## PHASE 2 — Distributor Dashboard Redesign
+
+**Skills to activate:** Frontend/Mobile, API/Architecture, Data/ML (for charts)
+
+```
+[paste mandatory preamble]
+
+TASK: Redesign the distributor dashboard using the Phase 1 design
+system. Include: personal sales overview, team growth, commission
+breakdown, wallet balance, rank progression tracker, recent
+transactions, and quick actions. Use real data from Supabase, not
+placeholders. Interactive charts (recharts or similar) for
+sales/team growth only — keep the rest as clean stat cards, not
+over-charted. Mobile-first: build and test the 375px layout before
+the desktop layout.
+```
+
+---
+
+## PHASE 3 — Registration, Login & Onboarding Flow
+
+**Skills to activate:** Frontend/Mobile, Security, Backend
+
+```
+[paste mandatory preamble]
+
+TASK: Redesign registration (with sponsor/upline selection), login,
+forgot-password, and first-run onboarding. Add proper loading states,
+inline validation, and empty/error states. Keep the existing auth
+pattern (do not change the underlying auth architecture) — this is a
+UI/UX and validation pass only.
+```
+
+---
+
+## PHASE 4 — Product Catalog, Product Pages & Checkout
+
+**Skills to activate:** Frontend/Mobile, API/Architecture
+
+```
+[paste mandatory preamble]
+
+TASK: Redesign the product catalog, individual product pages, and
+checkout flow. Include product video showcase integration where
+applicable. Ensure XAF pricing and MTN MoMo / Orange Money (MeSomb)
+payment options are clearly presented at checkout. EN/FR parity is
+mandatory on every product page.
+```
+
+---
+
+## PHASE 5 — Team/Downline Visualization
+
+**Skills to activate:** Frontend/Mobile, Data/ML
+
+```
+[paste mandatory preamble]
+
+TASK: Build/redesign the team structure visualization (tree or list
+view depending on Songtai's actual compensation structure — confirm
+structure type from ARCHITECTURE.md or database schema before
+building). Include search, filtering by rank, and performance
+indicators per member. Must work on mobile without horizontal scroll
+hacks — consider a collapsible list view as the default on small
+screens, with tree view as an opt-in.
+```
+
+---
+
+## PHASE 6 — Content Pages (About, FAQ, Blog)
+
+**Skills to activate:** Frontend/Mobile, SEO
+
+```
+[paste mandatory preamble]
+
+TASK: Finish the About/Our Story, FAQ, and Blog pages using the seeded
+bilingual Supabase content. Add JSON-LD structured data (Organization,
+FAQ, Article schemas), Open Graph tags, and canonical URLs. Confirm
+metadata is generated per-locale (EN/FR), not just once.
+```
+
+---
+
+## PHASE 7 — Performance & SEO Pass
+
+**Skills to activate:** DevOps, SEO, Frontend/Mobile
+
+```
+[paste mandatory preamble]
+
+TASK: Run a Lighthouse audit on the current build. Fix issues to push
+toward 90+ (treat 100 as aspirational, not a hard blocker) on
+Performance, Accessibility, Best Practices, and SEO. Focus on: image
+optimization, font loading strategy, code splitting, and removing
+unused JS. Report before/after scores.
+```
+
+---
+
+## PHASE 8 — Security Hardening
+
+**Skills to activate:** Security, Backend
+
+```
+[paste mandatory preamble]
+
+TASK: Review RLS policies on all 7 seeded Supabase tables, add rate
+limiting on auth and payment endpoints, verify CSP headers, confirm
+webhook HMAC-SHA256 verification is still intact after any refactors
+in prior phases. Report findings before changing anything security-
+critical — this touches money and auth, so confirm with me before
+merging.
+```
+
+---
+
+## APPENDIX — Distilled Best-Practice Reference
+### (use as design inspiration, not a scraping task for the agent)
+
+Modern MLM/direct-selling platforms that do this well (Atomy, QNET,
+Amway's newer regional sites) tend to share these patterns — reference
+these principles when redesigning, rather than asking the agent to
+browse the live sites:
+
+- **Dashboard first, catalog second** — distributors log in to see
+  their numbers, not a shopping page.
+- **Progressive disclosure on the comp plan** — rank/commission logic
+  is explained in layers (simple summary → detailed breakdown), not
+  dumped as one dense table.
+- **Trust signals near money actions** — verified payout badges,
+  clear withdrawal timelines, visible support contact near
+  checkout/wallet screens.
+- **SaaS-grade dashboards** (Stripe/Linear-style): generous whitespace,
+  one primary stat per card, muted secondary data, restrained color
+  use reserved for status/alerts only.
+
+---
+
+## Notes
+- This assumes the MLM platform in question is **Songtai Life Cameroon**
+  (songtai-life.vercel.app, Supabase project `auyjxchghtetxpiyecds`).
+  Say so if this was meant for a different project.
+- Phases are ordered by dependency (design system before dashboard,
+  dashboard before content pages) — don't reorder without reason.
