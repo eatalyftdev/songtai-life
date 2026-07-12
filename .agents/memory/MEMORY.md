@@ -13,3 +13,4 @@
 - [Supabase pooler connection quirks](supabase-pooler-connection-quirks.md) — session pooler (5432) can reject a password transaction pooler (6543) accepts; verify project identity via actual table names, not recalled refs.
 - [Product video — YouTube link support](product-video-youtube-feature.md) — dual video source (upload vs YouTube) per locale, mutually exclusive; SPA has no real URL deep-linking despite sitemap.
 - [Theme system architecture](theme-system.md) — brand-matched light/dark tokens; Fraunces display font; signature gradient rule; stone+emerald palette remap pattern; gold CSS var usage.
+- [MLM anti-pattern audit rules](mlm-anti-pattern-audit.md) — no fake-people stock photos, carousels need visible pause controls, no native alert(), certs belong in footer sitewide.

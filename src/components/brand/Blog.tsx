@@ -109,7 +109,7 @@ export default function Blog() {
           <article className="space-y-8">
             {/* Meta */}
             <div className="space-y-4">
-              <span className="text-xs uppercase font-bold text-[#C9A227] bg-[#C9A227]/10 px-3 py-1 border border-[#C9A227]/20 rounded-full w-fit inline-block">
+              <span className="text-xs uppercase font-bold text-[color:var(--color-gold)] bg-[color:var(--color-gold)]/10 px-3 py-1 border border-[color:var(--color-gold)]/20 rounded-full w-fit inline-block">
                 {post.category}
               </span>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white leading-tight tracking-tight">
@@ -119,7 +119,7 @@ export default function Blog() {
               <div className="flex flex-wrap items-center gap-6 text-xs text-stone-500 font-medium pt-2">
                 {post.author && (
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#0A7D32]/20 border border-emerald-500/20 flex items-center justify-center text-[#C9A227]">
+                    <div className="w-6 h-6 rounded-full bg-emerald-600/20 border border-emerald-500/20 flex items-center justify-center text-[color:var(--color-gold)]">
                       <User className="w-3 h-3" />
                     </div>
                     <span>{post.author}</span>
@@ -152,7 +152,7 @@ export default function Blog() {
                   return <h3 key={idx} className="text-xl font-bold text-white mt-8 mb-2 first:mt-0">{chunk.replace("### ", "")}</h3>;
                 }
                 if (chunk.startsWith("#### ")) {
-                  return <h4 key={idx} className="text-base font-bold text-[#C9A227] mt-6 mb-2">{chunk.replace("#### ", "")}</h4>;
+                  return <h4 key={idx} className="text-base font-bold text-[color:var(--color-gold)] mt-6 mb-2">{chunk.replace("#### ", "")}</h4>;
                 }
                 if (chunk.startsWith("- ") || chunk.startsWith("1. ")) {
                   return (
@@ -184,7 +184,7 @@ export default function Blog() {
         {/* Title / Filter */}
         <div className="border-b border-stone-900 pb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div className="space-y-1.5">
-            <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Science & News</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Science & News</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Wellness Hub & Science</h1>
             <p className="text-stone-400 text-xs">Botanical research reviews, entrepreneurship diaries, and MLM expansion strategies.</p>
           </div>
@@ -198,7 +198,7 @@ export default function Blog() {
                   setSelectedPost(null);
                 }}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeCategory === cat ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                  activeCategory === cat ? "bg-emerald-600 text-white keep-white" : "text-stone-500 hover:text-stone-300"
                 }`}
               >
                 {cat}
@@ -232,7 +232,7 @@ export default function Blog() {
                     )}
                   </div>
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-[#C9A227] uppercase tracking-wider">{post.category}</span>
+                    <span className="text-[10px] font-bold text-[color:var(--color-gold)] uppercase tracking-wider">{post.category}</span>
                     <h4 className="font-extrabold text-base text-white group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">{getTitle(post)}</h4>
                     <p className="text-stone-400 text-xs line-clamp-2 leading-relaxed">{post.excerpt}</p>
                   </div>

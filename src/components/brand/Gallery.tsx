@@ -82,7 +82,7 @@ export default function Gallery() {
         {/* Title */}
         <div className="border-b border-stone-900 pb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div className="space-y-1.5">
-            <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Visual Archives</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Visual Archives</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Media & Press Gallery</h1>
             <p className="text-stone-400 text-xs">High-definition records of summits, organic farm harvests, and active regional awards.</p>
           </div>
@@ -92,7 +92,7 @@ export default function Gallery() {
             <button
               onClick={() => setActiveAlbum("All")}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeAlbum === "All" ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                activeAlbum === "All" ? "bg-emerald-600 text-white keep-white" : "text-stone-500 hover:text-stone-300"
               }`}
             >
               {locale === "fr" ? "Tout" : "All"}
@@ -102,7 +102,7 @@ export default function Gallery() {
                 key={alb.key}
                 onClick={() => setActiveAlbum(alb.key)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeAlbum === alb.key ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                  activeAlbum === alb.key ? "bg-emerald-600 text-white keep-white" : "text-stone-500 hover:text-stone-300"
                 }`}
               >
                 {alb.label}
@@ -171,7 +171,7 @@ export default function Gallery() {
                   <p className="text-white text-sm text-center max-w-xl">{lightboxImg.caption}</p>
                 )}
                 {lightboxImg.album && (
-                  <span className="text-[#C9A227] text-[10px] uppercase font-bold tracking-widest">{lightboxImg.album}</span>
+                  <span className="text-[color:var(--color-gold)] text-[10px] uppercase font-bold tracking-widest">{lightboxImg.album}</span>
                 )}
                 <button onClick={() => setLightboxImg(null)}
                   className="absolute top-0 right-0 p-2 bg-stone-900/80 rounded-xl text-white hover:bg-stone-900 cursor-pointer">
