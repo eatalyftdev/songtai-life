@@ -13,8 +13,9 @@ const RANK_STYLES: Record<string, string> = {
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
   rank?: string;
-  children: ReactNode;
+  children?: ReactNode;
   dot?: boolean;
+  className?: string;
 }
 
 export function Badge({ variant = "default", rank, children, dot = false, className = "", ...props }: BadgeProps) {

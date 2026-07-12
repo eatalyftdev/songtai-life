@@ -1,12 +1,34 @@
-import { InputHTMLAttributes, ReactNode, useState } from "react";
+import { ChangeEventHandler, FocusEventHandler, ReactNode, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface InputProps {
   label?: string;
   hint?: string;
   error?: string;
   icon?: ReactNode;
   iconRight?: ReactNode;
+  className?: string;
+  type?: string;
+  placeholder?: string;
+  value?: string | number;
+  defaultValue?: string | number;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
+  onFocus?: FocusEventHandler<HTMLInputElement>;
+  required?: boolean;
+  disabled?: boolean;
+  readOnly?: boolean;
+  maxLength?: number;
+  minLength?: number;
+  min?: string | number;
+  max?: string | number;
+  step?: string | number;
+  autoComplete?: string;
+  autoFocus?: boolean;
+  id?: string;
+  name?: string;
+  pattern?: string;
+  tabIndex?: number;
 }
 
 export function Input({
@@ -16,7 +38,7 @@ export function Input({
   icon,
   iconRight,
   className = "",
-  type,
+  type = "text",
   ...props
 }: InputProps) {
   const [showPwd, setShowPwd] = useState(false);

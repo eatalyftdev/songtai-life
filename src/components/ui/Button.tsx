@@ -1,4 +1,4 @@
-import { ButtonHTMLAttributes, ReactNode } from "react";
+import { ButtonHTMLAttributes, MouseEventHandler, ReactNode } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost" | "danger" | "gold";
@@ -7,6 +7,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   iconRight?: ReactNode;
   fullWidth?: boolean;
+  children?: ReactNode;
+  className?: string;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  type?: "button" | "submit" | "reset";
+  disabled?: boolean;
 }
 
 export function Button({
@@ -19,7 +24,9 @@ export function Button({
   children,
   className = "",
   disabled,
-  ...props
+  onClick,
+  type = "button",
+  ...rest
 }: ButtonProps) {
   const base =
     "inline-flex items-center justify-center gap-2 font-bold rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[color:var(--color-primary)] cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none";
@@ -44,9 +51,11 @@ export function Button({
 
   return (
     <button
-      className={`${base} ${variants[variant]} ${sizes[size]} ${fullWidth ? "w-full" : ""} ${className}`}
+      type={type}
+      onClick={onClick}
       disabled={disabled || loading}
-      {...props}
+      className={`${base} ${variants[variant]} ${sizes[size]} ${fullWidth ? "w-full" : ""} ${className}`}
+      {...rest}
     >
       {loading ? (
         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />

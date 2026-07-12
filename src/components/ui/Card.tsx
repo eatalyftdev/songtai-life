@@ -3,7 +3,8 @@ import { HTMLAttributes, ReactNode } from "react";
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: "default" | "bordered" | "glass" | "highlight";
   padding?: "none" | "sm" | "md" | "lg";
-  children: ReactNode;
+  children?: ReactNode;
+  className?: string;
 }
 
 export function Card({
@@ -36,17 +37,17 @@ export function Card({
   );
 }
 
-export function CardHeader({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function CardHeader({ children, className = "" }: { children?: ReactNode; className?: string }) {
   return <div className={`mb-4 ${className}`}>{children}</div>;
 }
 
-export function CardTitle({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function CardTitle({ children, className = "" }: { children?: ReactNode; className?: string }) {
   return (
     <h3 className={`font-bold text-sm text-[color:var(--color-fg)] ${className}`}>{children}</h3>
   );
 }
 
-export function CardDescription({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function CardDescription({ children, className = "" }: { children?: ReactNode; className?: string }) {
   return (
     <p className={`text-xs text-[color:var(--color-muted)] mt-0.5 ${className}`}>{children}</p>
   );
