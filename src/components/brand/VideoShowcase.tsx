@@ -109,11 +109,11 @@ export default function VideoShowcase({ onNavigate }: VideoShowcaseProps) {
         breadcrumbs={[{ name: "Videos", url: "/?section=videos" }]}
         jsonLd={videoListJsonLd}
       />
-      <div className="absolute top-[10%] right-[5%] w-[450px] h-[450px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-[10%] right-[5%] w-[450px] h-[450px] rounded-full bg-emerald-700/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 relative z-10">
         <div className="border-b border-stone-900 pb-6 space-y-1.5">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Watch & Learn</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Watch & Learn</span>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Product Videos</h1>
           <p className="text-stone-400 text-xs">See our botanical products in action — sourcing, formulation, and real results.</p>
         </div>
@@ -146,8 +146,8 @@ export default function VideoShowcase({ onNavigate }: VideoShowcaseProps) {
                     </div>
                   )}
                   <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition-colors">
-                    <span className="w-12 h-12 rounded-full bg-[#0A7D32]/90 text-white flex items-center justify-center shadow-lg">
-                      <Play className="w-5 h-5 text-[#C9A227] fill-[#C9A227] ml-0.5" />
+                    <span className="w-12 h-12 rounded-full bg-emerald-700/90 text-white flex items-center justify-center shadow-lg">
+                      <Play className="w-5 h-5 text-[color:var(--color-gold)] fill-[color:var(--color-gold)] ml-0.5" />
                     </span>
                   </div>
                   {v.durationSeconds ? (

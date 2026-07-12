@@ -128,7 +128,7 @@ export default function TechSpecBrowser() {
         
         {/* Specification Header */}
         <div className="pb-6 border-b border-stone-850 text-left">
-          <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">System Blueprint</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">System Blueprint</span>
           <h1 className="font-sans font-extrabold text-3xl text-white mt-1">Technical Specification</h1>
           <p className="text-stone-400 text-sm mt-1">Browsable system architectures, entity relations schemas, and REST endpoints sandbox.</p>
         </div>
@@ -145,7 +145,7 @@ export default function TechSpecBrowser() {
                 onClick={() => setActiveChapterId(ch.id)}
                 className={`w-full text-left px-4 py-2.5 rounded-xl font-sans text-xs font-semibold transition-all flex items-center gap-2 ${
                   activeChapterId === ch.id
-                    ? "bg-[#006224] text-white shadow-md shadow-emerald-900/30"
+                    ? "bg-emerald-700 text-white shadow-md shadow-emerald-900/30"
                     : "text-stone-400 hover:text-white hover:bg-stone-850/40"
                 }`}
               >
@@ -160,7 +160,7 @@ export default function TechSpecBrowser() {
             <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-950/10 blur-3xl rounded-full" />
             
             <div className="space-y-6">
-              <span className="text-[10px] uppercase font-bold text-[#ecc246] px-2.5 py-1 bg-[#ecc246]/10 border border-[#ecc246]/20 rounded-full">
+              <span className="text-[10px] uppercase font-bold text-[color:var(--color-gold)] px-2.5 py-1 bg-[color:var(--color-gold)]/10 border border-[color:var(--color-gold)]/20 rounded-full">
                 Decoupled Monolith Blueprint
               </span>
               <h2 className="font-sans font-extrabold text-3xl text-white mt-4">{activeChapter.title}</h2>
@@ -184,7 +184,7 @@ export default function TechSpecBrowser() {
                 <span className="px-2.5 py-1 bg-stone-900 border border-stone-850 text-emerald-400 text-[10px] font-bold rounded-md">
                   Active Security Checked
                 </span>
-                <span className="px-2.5 py-1 bg-stone-900 border border-stone-850 text-[#ecc246] text-[10px] font-bold rounded-md">
+                <span className="px-2.5 py-1 bg-stone-900 border border-stone-850 text-[color:var(--color-gold)] text-[10px] font-bold rounded-md">
                   HMAC Verified
                 </span>
               </div>
@@ -198,7 +198,7 @@ export default function TechSpecBrowser() {
           <div className="border-b border-stone-850 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h3 className="font-sans font-bold text-lg text-white flex items-center gap-2">
-                <Database className="w-5 h-5 text-[#006224]" />
+                <Database className="w-5 h-5 text-emerald-700" />
                 Relational DB Schema ERD Explorer
               </h3>
               <p className="text-stone-400 text-xs mt-1">Click tables to inspect column constraints, relations, and auto-generated Prisma models.</p>
@@ -212,7 +212,7 @@ export default function TechSpecBrowser() {
                   onClick={() => setActiveTable(t.name)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     activeTable === t.name
-                      ? "bg-[#006224] text-white"
+                      ? "bg-emerald-700 text-white"
                       : "text-stone-500 hover:text-stone-300"
                   }`}
                 >
@@ -245,7 +245,7 @@ export default function TechSpecBrowser() {
                       <tr key={idx} className="hover:bg-stone-900/30">
                         <td className="px-4 py-3 font-mono font-bold text-white">{c.name}</td>
                         <td className="px-4 py-3 font-mono text-emerald-400">{c.type}</td>
-                        <td className="px-4 py-3 font-mono text-[#ecc246]">
+                        <td className="px-4 py-3 font-mono text-[color:var(--color-gold)]">
                           {c.constraints.join(", ") || "-"}
                         </td>
                         <td className="px-4 py-3 text-stone-400">{c.description}</td>
@@ -260,7 +260,7 @@ export default function TechSpecBrowser() {
             <div className="lg:col-span-5 flex flex-col justify-between bg-stone-950 rounded-2xl border border-stone-850 p-6">
               <div className="space-y-4">
                 <span className="text-[10px] text-stone-500 uppercase font-bold flex items-center gap-1">
-                  <Code className="w-3.5 h-3.5 text-[#ecc246]" />
+                  <Code className="w-3.5 h-3.5 text-[color:var(--color-gold)]" />
                   Prisma Model Definition
                 </span>
                 <pre className="text-xs font-mono text-emerald-400 leading-relaxed overflow-x-auto select-all">
@@ -280,7 +280,7 @@ export default function TechSpecBrowser() {
         <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-8 text-left">
           <div className="border-b border-stone-850 pb-4 mb-6">
             <h3 className="font-sans font-bold text-lg text-white flex items-center gap-2">
-              <Terminal className="w-5 h-5 text-[#ecc246]" />
+              <Terminal className="w-5 h-5 text-[color:var(--color-gold)]" />
               Rest API Sandbox / Controller Playground
             </h3>
             <p className="text-stone-400 text-xs mt-1">Simulate real-time NestJS endpoint requests and inspect JSON payloads.</p>
@@ -346,7 +346,7 @@ export default function TechSpecBrowser() {
                 type="button"
                 onClick={handleRunApi}
                 disabled={apiLoading}
-                className="w-full py-3 bg-[#006224] hover:bg-[#00531d] disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer mt-4"
+                className="w-full py-3 bg-[#006224] hover:bg-emerald-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer mt-4"
               >
                 {apiLoading ? (
                   <span className="flex items-center gap-2">
@@ -355,7 +355,7 @@ export default function TechSpecBrowser() {
                   </span>
                 ) : (
                   <>
-                    <Play className="w-4 h-4 fill-[#ecc246] text-[#ecc246]" />
+                    <Play className="w-4 h-4 fill-[color:var(--color-gold)] text-[color:var(--color-gold)]" />
                     Run Request
                   </>
                 )}
@@ -373,7 +373,7 @@ export default function TechSpecBrowser() {
                   NestJS Terminal Emulator
                 </span>
                 <span className="text-[10px] text-stone-400 font-mono flex items-center gap-1">
-                  <FileJson className="w-3 h-3 text-[#ecc246]" /> Response JSON
+                  <FileJson className="w-3 h-3 text-[color:var(--color-gold)]" /> Response JSON
                 </span>
               </div>
 

@@ -145,12 +145,12 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
         }}
       />
 
-      <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-[#0A7D32]/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-emerald-700/5 rounded-full blur-3xl pointer-events-none" />
 
       <div className="max-w-5xl mx-auto relative z-10">
         {/* Header */}
         <div className="mb-12 text-left max-w-xl">
-          <span className="text-xs text-[#ecc246] font-black uppercase tracking-widest">
+          <span className="text-xs text-[color:var(--color-gold)] font-black uppercase tracking-widest">
             {lang === "fr" ? "Consultation Gratuite" : "Free Consultation"}
           </span>
           <h1 className="text-4xl font-black text-white mt-2 tracking-tight">
@@ -189,7 +189,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
               </p>
               <button
                 onClick={resetForm}
-                className="px-6 py-3 bg-[#ecc246] hover:bg-[#dbb13b] text-stone-950 font-black text-xs rounded-xl transition-all cursor-pointer"
+                className="px-6 py-3 bg-[color:var(--color-gold)] hover:bg-[color:var(--color-gold)]/90 text-stone-950 font-black text-xs rounded-xl transition-all cursor-pointer"
               >
                 {lang === "fr" ? "Prendre un autre rendez-vous" : "Book Another Appointment"}
               </button>
@@ -213,7 +213,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                     onClick={() => setSelectedType(t)}
                     className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer ${
                       selectedType?.id === t.id
-                        ? "border-[#ecc246] bg-[#ecc246]/5"
+                        ? "border-[color:var(--color-gold)] bg-[color:var(--color-gold)]/5"
                         : "border-stone-800 bg-stone-900/40 hover:border-stone-700"
                     }`}
                   >
@@ -224,7 +224,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                         {localDesc(t) && <p className="text-[11px] text-stone-400 mt-1.5 leading-relaxed">{localDesc(t)}</p>}
                       </div>
                       <ChevronRight className={`w-4 h-4 flex-shrink-0 ml-2 transition-colors ${
-                        selectedType?.id === t.id ? "text-[#ecc246]" : "text-stone-600"
+                        selectedType?.id === t.id ? "text-[color:var(--color-gold)]" : "text-stone-600"
                       }`} />
                     </div>
                   </button>
@@ -253,7 +253,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                       min={todayStr()}
                       value={date}
                       onChange={e => setDate(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-sm text-white outline-none"
+                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-sm text-white outline-none"
                     />
                   </div>
                   <div>
@@ -265,7 +265,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                       required
                       value={time}
                       onChange={e => setTime(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-sm text-white outline-none"
+                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-sm text-white outline-none"
                     >
                       <option value="">-- select --</option>
                       {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -283,7 +283,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                     <input
                       type="text" required
                       value={name} onChange={e => setName(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-sm text-white outline-none"
+                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-sm text-white outline-none"
                     />
                   </div>
                   <div>
@@ -294,7 +294,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                     <input
                       type="email" required
                       value={email} onChange={e => setEmail(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-sm text-white outline-none"
+                      className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-sm text-white outline-none"
                     />
                   </div>
                 </div>
@@ -309,7 +309,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                     type="tel"
                     value={phone} onChange={e => setPhone(e.target.value)}
                     placeholder="+237 6XX XXX XXX"
-                    className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-sm text-white outline-none"
+                    className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-sm text-white outline-none"
                   />
                 </div>
 
@@ -323,7 +323,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                     rows={3}
                     value={message} onChange={e => setMessage(e.target.value)}
                     placeholder={lang === "fr" ? "Précisez votre demande…" : "Tell us what you'd like to discuss…"}
-                    className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-sm text-white outline-none resize-none"
+                    className="w-full px-3 py-2.5 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-sm text-white outline-none resize-none"
                   />
                 </div>
 
@@ -334,7 +334,7 @@ export default function AppointmentBooking({ addNotification }: AppointmentBooki
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-3.5 bg-[#ecc246] hover:bg-[#dbb13b] text-stone-950 font-black text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  className="w-full py-3.5 bg-[color:var(--color-gold)] hover:bg-[color:var(--color-gold)]/90 text-stone-950 font-black text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
                   {submitting
                     ? <span className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />

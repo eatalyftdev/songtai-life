@@ -132,7 +132,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
           {/* Section 2 */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-white font-bold text-sm">
-              <Lock className="w-4 h-4 text-[#ecc246]" />
+              <Lock className="w-4 h-4 text-[color:var(--color-gold)]" />
               <span>2. State-of-the-Art Cryptography & Secure Handshakes</span>
             </div>
             <p className="text-stone-400">
@@ -215,7 +215,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
               />
               <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
                 isChecked
-                  ? "bg-[#006224] border-[#006224] text-white"
+                  ? "bg-emerald-700 border-emerald-700 text-white"
                   : "border-stone-700 bg-stone-900 group-hover:border-stone-500"
               } ${hasAcceptedBefore ? "opacity-60 cursor-not-allowed" : ""}`}>
                 {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -241,7 +241,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, addNotification }:
                 disabled={!isChecked}
                 className={`px-6 py-2.5 rounded-xl text-white font-bold text-xs tracking-wide transition-all shadow-md cursor-pointer ${
                   isChecked
-                    ? "bg-[#006224] hover:bg-[#00531d] shadow-emerald-950/40"
+                    ? "bg-emerald-700 hover:bg-emerald-800 shadow-emerald-950/40"
                     : "bg-stone-800 text-stone-500 border border-stone-850 opacity-55 cursor-not-allowed"
                 }`}
               >

@@ -106,12 +106,12 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
-      <div className="absolute top-[20%] left-[10%] w-[550px] h-[550px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-[20%] left-[10%] w-[550px] h-[550px] rounded-full bg-emerald-700/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
         
         <div className="space-y-4 max-w-xl">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">{t(pageData.tagline_en, pageData.tagline_fr)}</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">{t(pageData.tagline_en, pageData.tagline_fr)}</span>
           <h1 className="text-4xl font-extrabold text-white tracking-tight leading-none">{t(pageData.headline_en, pageData.headline_fr)}</h1>
           <p className="text-stone-400 text-sm leading-relaxed">{t(pageData.intro_en, pageData.intro_fr)}</p>
         </div>
@@ -126,19 +126,19 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
                 <div className="space-y-1.5">
                   <label className="text-stone-400 text-[10px] uppercase font-bold">Your Full Name</label>
                   <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Samuel Eto'o"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none" />
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none" />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-stone-400 text-[10px] uppercase font-bold">Your Email Address</label>
                   <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. samuel@example.cm"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none" />
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none" />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-stone-400 text-[10px] uppercase font-bold">Cameroon Phone Number (MoMo / Orange)</label>
                   <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. +237 655 123 456"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none" />
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none" />
                 </div>
 
                 <div className="space-y-2">
@@ -146,7 +146,7 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {pageData.packs.map(p => (
                       <div key={p.key} onClick={() => setPack(p.key)}
-                        className={`p-4 rounded-xl border text-center cursor-pointer transition-all ${pack === p.key ? "bg-[#0A7D32]/10 border-[#0A7D32] text-emerald-400" : "bg-stone-950 border-stone-850 text-stone-400"}`}>
+                        className={`p-4 rounded-xl border text-center cursor-pointer transition-all ${pack === p.key ? "bg-emerald-700/10 border-emerald-700 text-emerald-400" : "bg-stone-950 border-stone-850 text-stone-400"}`}>
                         <span className="text-xs font-bold block">{t(p.label_en, p.label_fr)}</span>
                         <span className="text-[10px] block mt-1 font-mono">{p.price_xaf.toLocaleString()} XAF</span>
                       </div>
@@ -163,7 +163,7 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
                       { key: "credit", label: "Credit / Visa Card", icon: <CreditCard className="w-4 h-4" /> }
                     ].map(pm => (
                       <div key={pm.key} onClick={() => setPaymentMethod(pm.key)}
-                        className={`p-3 rounded-xl border text-center cursor-pointer flex items-center justify-center gap-2 transition-all text-xs ${paymentMethod === pm.key ? "bg-[#0A7D32]/10 border-[#0A7D32] text-emerald-400" : "bg-stone-950 border-stone-850 text-stone-400"}`}>
+                        className={`p-3 rounded-xl border text-center cursor-pointer flex items-center justify-center gap-2 transition-all text-xs ${paymentMethod === pm.key ? "bg-emerald-700/10 border-emerald-700 text-emerald-400" : "bg-stone-950 border-stone-850 text-stone-400"}`}>
                         {pm.icon}
                         <span className="font-bold">{pm.label}</span>
                       </div>
@@ -174,9 +174,9 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
 
               <div className="pt-4">
                 <button type="submit" disabled={isProcessing}
-                  className="w-full py-4 bg-[#0A7D32] hover:bg-[#086327] text-white text-xs sm:text-sm font-bold rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-transparent">
+                  className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-bold rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-transparent">
                   {isProcessing ? (
-                    <><Loader className="w-4 h-4 animate-spin text-[#C9A227]" /><span>Initiating Secure MeSomb Handshake...</span></>
+                    <><Loader className="w-4 h-4 animate-spin text-[color:var(--color-gold)]" /><span>Initiating Secure MeSomb Handshake...</span></>
                   ) : (
                     <span>Register & Settle {getPrice()}</span>
                   )}
@@ -197,7 +197,7 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
                 </div>
               </div>
               <div className="p-4 bg-stone-950 border border-stone-900 rounded-xl flex items-center gap-2 text-xs text-stone-500">
-                <Lock className="w-4 h-4 text-[#C9A227]" />
+                <Lock className="w-4 h-4 text-[color:var(--color-gold)]" />
                 <span>{t(pageData.security_note_en, pageData.security_note_fr)}</span>
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
 
         {step === "momo_verify" && (
           <div className="max-w-md mx-auto bg-stone-900 border border-stone-850 p-8 rounded-[32px] text-center space-y-6">
-            <Smartphone className="w-12 h-12 text-[#C9A227] mx-auto animate-bounce" />
+            <Smartphone className="w-12 h-12 text-[color:var(--color-gold)] mx-auto animate-bounce" />
             <div className="space-y-2">
               <h3 className="text-xl font-extrabold text-white">Verification Pending</h3>
               <p className="text-stone-400 text-xs sm:text-sm">
@@ -215,13 +215,13 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
               </p>
             </div>
             <div className="p-4 bg-stone-950 border border-stone-850 rounded-2xl text-stone-400 text-xs leading-relaxed">
-              Please check your phone, enter your <span className="text-[#C9A227] font-semibold">MTN/Orange Mobile Money PIN</span> inside the popup dialog box to authorize the node transfer, then click verification confirm below.
+              Please check your phone, enter your <span className="text-[color:var(--color-gold)] font-semibold">MTN/Orange Mobile Money PIN</span> inside the popup dialog box to authorize the node transfer, then click verification confirm below.
             </div>
             <div className="space-y-3">
               <button onClick={handleVerifyPin} disabled={isProcessing}
-                className="w-full py-3 bg-[#0A7D32] hover:bg-[#086327] text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2">
+                className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2">
                 {isProcessing ? (
-                  <><Loader className="w-4 h-4 animate-spin text-[#C9A227]" /><span>Confirming Mobile Transfer...</span></>
+                  <><Loader className="w-4 h-4 animate-spin text-[color:var(--color-gold)]" /><span>Confirming Mobile Transfer...</span></>
                 ) : (
                   <span>I Have Authorized payment on My Phone</span>
                 )}
@@ -235,12 +235,12 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
 
         {step === "success" && (
           <div className="max-w-md mx-auto bg-stone-900 border border-stone-800 p-8 rounded-[32px] text-center space-y-6">
-            <div className="w-16 h-16 rounded-full bg-emerald-950/80 border border-emerald-900 flex items-center justify-center mx-auto text-[#C9A227]">
-              <Sparkles className="w-8 h-8 fill-[#C9A227]" />
+            <div className="w-16 h-16 rounded-full bg-emerald-950/80 border border-emerald-900 flex items-center justify-center mx-auto text-[color:var(--color-gold)]">
+              <Sparkles className="w-8 h-8 fill-[color:var(--color-gold)]" />
             </div>
             <div className="space-y-2">
               <h3 className="text-2xl font-black text-white">Welcome, Ambassador!</h3>
-              <p className="text-[#C9A227] text-xs uppercase font-extrabold tracking-widest">
+              <p className="text-[color:var(--color-gold)] text-xs uppercase font-extrabold tracking-widest">
                 Active Node Credential: {pageData.success_credential_prefix}-{Math.floor(100000 + Math.random() * 900000)}
               </p>
               <p className="text-stone-400 text-xs leading-relaxed">
@@ -252,7 +252,7 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
             </div>
             <button
               onClick={() => { onNavigate("home"); setStep("form"); setName(""); setEmail(""); setPhone(""); }}
-              className="w-full py-3.5 bg-[#0A7D32] hover:bg-[#086327] text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+              className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
             >
               Return to Brand Homepage
             </button>

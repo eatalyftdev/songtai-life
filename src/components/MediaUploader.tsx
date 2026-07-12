@@ -175,7 +175,7 @@ export default function MediaUploader({
           onClick={() => inputRef.current?.click()}
           className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all select-none ${
             dragging
-              ? "border-[#ecc246] bg-[#ecc246]/5"
+              ? "border-[color:var(--color-gold)] bg-[color:var(--color-gold)]/5"
               : "border-stone-700 hover:border-stone-500 bg-stone-950/30"
           }`}
         >
@@ -216,7 +216,7 @@ export default function MediaUploader({
                 {fs.status === "uploading" && (
                   <div className="w-full h-1 bg-stone-800 rounded-full mt-1 overflow-hidden">
                     <div
-                      className="h-full bg-[#ecc246] rounded-full transition-all"
+                      className="h-full bg-[color:var(--color-gold)] rounded-full transition-all"
                       style={{ width: `${fs.progress}%` }}
                     />
                   </div>
@@ -239,7 +239,7 @@ export default function MediaUploader({
                 {fs.status === "done" && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                 {fs.status === "error" && <AlertCircle className="w-4 h-4 text-red-400" />}
                 {fs.status === "uploading" && (
-                  <span className="w-4 h-4 border-2 border-stone-700 border-t-[#ecc246] rounded-full animate-spin" />
+                  <span className="w-4 h-4 border-2 border-stone-700 border-t-[color:var(--color-gold)] rounded-full animate-spin" />
                 )}
                 <button type="button" onClick={() => removeFile(idx)} className="text-stone-600 hover:text-stone-300 cursor-pointer">
                   <X className="w-3.5 h-3.5" />

@@ -101,12 +101,12 @@ export default function Contact({ addNotification }: ContactProps) {
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
-      <div className="absolute top-[20%] right-[10%] w-[500px] h-[500px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-[20%] right-[10%] w-[500px] h-[500px] rounded-full bg-emerald-700/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16 relative z-10">
         
         <div className="space-y-4 max-w-xl">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">{t(info.tagline_en, info.tagline_fr)}</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">{t(info.tagline_en, info.tagline_fr)}</span>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">{t(info.headline_en, info.headline_fr)}</h1>
           <p className="text-stone-400 text-sm leading-relaxed">{t(info.intro_en, info.intro_fr)}</p>
         </div>
@@ -119,7 +119,7 @@ export default function Contact({ addNotification }: ContactProps) {
               
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-stone-900 border border-stone-800 text-[#C9A227] rounded-xl flex-shrink-0"><MapPin className="w-5 h-5" /></div>
+                  <div className="p-3 bg-stone-900 border border-stone-800 text-[color:var(--color-gold)] rounded-xl flex-shrink-0"><MapPin className="w-5 h-5" /></div>
                   <div>
                     <span className="text-[10px] text-stone-500 block font-bold uppercase">Yaoundé Office</span>
                     <p className="text-stone-300 text-xs sm:text-sm font-medium mt-0.5">{t(info.office_yaounde_en, info.office_yaounde_fr)}</p>
@@ -127,7 +127,7 @@ export default function Contact({ addNotification }: ContactProps) {
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-stone-900 border border-stone-800 text-[#C9A227] rounded-xl flex-shrink-0"><MapPin className="w-5 h-5" /></div>
+                  <div className="p-3 bg-stone-900 border border-stone-800 text-[color:var(--color-gold)] rounded-xl flex-shrink-0"><MapPin className="w-5 h-5" /></div>
                   <div>
                     <span className="text-[10px] text-stone-500 block font-bold uppercase">Douala Office</span>
                     <p className="text-stone-300 text-xs sm:text-sm font-medium mt-0.5">{t(info.office_douala_en, info.office_douala_fr)}</p>
@@ -154,7 +154,7 @@ export default function Contact({ addNotification }: ContactProps) {
               </div>
             </div>
 
-            <div className="p-5 bg-[#0A7D32]/10 border border-emerald-950 rounded-2xl space-y-3">
+            <div className="p-5 bg-emerald-700/10 border border-emerald-950 rounded-2xl space-y-3">
               <h4 className="font-extrabold text-white text-sm">Need Instant Assistance?</h4>
               <p className="text-stone-400 text-xs">In West Africa, rapid connectivity is everything. Chat instantly with our registration consultants via WhatsApp.</p>
               <button onClick={handleWhatsApp} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all">
@@ -168,7 +168,7 @@ export default function Contact({ addNotification }: ContactProps) {
             
             {submitted ? (
               <div className="p-8 bg-emerald-950/40 border border-emerald-900/40 text-emerald-400 text-xs font-semibold rounded-2xl flex flex-col items-center justify-center text-center gap-2 py-16">
-                <CheckCircle2 className="w-10 h-10 text-[#C9A227] mb-2" />
+                <CheckCircle2 className="w-10 h-10 text-[color:var(--color-gold)] mb-2" />
                 <h4 className="text-white text-base font-bold">Message Submitted Successfully</h4>
                 <p className="text-stone-400 max-w-xs mt-1 leading-relaxed">We have successfully logged your inquiry inside the Songtai queue. Our administrative officers will reach back shortly.</p>
               </div>
@@ -178,31 +178,31 @@ export default function Contact({ addNotification }: ContactProps) {
                   <div className="space-y-1.5">
                     <label className="text-stone-400 text-[10px] uppercase font-bold">Your Full Name</label>
                     <input type="text" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Jean-Pierre Nchoutou"
-                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none" />
+                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none" />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-stone-400 text-[10px] uppercase font-bold">Your Email Address</label>
                     <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="e.g. jean@example.cm"
-                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none" />
+                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-stone-400 text-[10px] uppercase font-bold">Inquiry Subject</label>
                   <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="e.g. Requesting Bulk Bio-Yield Max Agri-Fertilizer Sourcing"
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none" />
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none" />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-stone-400 text-[10px] uppercase font-bold">Your Message / Inquiry Details</label>
                   <textarea required rows={4} value={message} onChange={e => setMessage(e.target.value)}
                     placeholder="Describe your request in detail. Specify if you require office pickup or agency transport."
-                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] rounded-xl text-xs text-white outline-none resize-none" />
+                    className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 rounded-xl text-xs text-white outline-none resize-none" />
                 </div>
 
                 <div className="pt-2">
-                  <button type="submit" className="w-full py-4 bg-[#0A7D32] hover:bg-[#086327] text-white text-xs sm:text-sm font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                    <Send className="w-4 h-4 text-[#C9A227]" />
+                  <button type="submit" className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 text-white text-xs sm:text-sm font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                    <Send className="w-4 h-4 text-[color:var(--color-gold)]" />
                     <span>Send Secure Message</span>
                   </button>
                 </div>

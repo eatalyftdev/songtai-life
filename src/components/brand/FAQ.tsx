@@ -104,7 +104,7 @@ export default function FAQ() {
         {/* Header & Search */}
         <div className="space-y-6">
           <div className="space-y-1.5">
-            <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Self Service</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Self Service</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Frequently Asked Questions</h1>
             <p className="text-stone-400 text-xs">Instantly resolve questions regarding our products, rewards, or shipping nodes.</p>
           </div>
@@ -118,7 +118,7 @@ export default function FAQ() {
                 placeholder="Search our knowledge base..."
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); setExpandedId(null); }}
-                className="w-full pl-10 pr-4 py-2.5 bg-stone-900 border border-stone-850 rounded-xl text-xs text-white outline-none focus:border-[#0A7D32]"
+                className="w-full pl-10 pr-4 py-2.5 bg-stone-900 border border-stone-850 rounded-xl text-xs text-white outline-none focus:border-emerald-700"
               />
             </div>
 
@@ -128,7 +128,7 @@ export default function FAQ() {
                 <button
                   onClick={() => { setActiveCategory("All"); setExpandedId(null); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeCategory === "All" ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                    activeCategory === "All" ? "bg-emerald-700 text-white" : "text-stone-500 hover:text-stone-300"
                   }`}
                 >
                   {locale === "fr" ? "Tout" : "All"}
@@ -138,7 +138,7 @@ export default function FAQ() {
                     key={cat.id}
                     onClick={() => { setActiveCategory(cat.id); setExpandedId(null); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeCategory === cat.id ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                      activeCategory === cat.id ? "bg-emerald-700 text-white" : "text-stone-500 hover:text-stone-300"
                     }`}
                   >
                     {cat.label}
@@ -184,7 +184,7 @@ export default function FAQ() {
                     className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-stone-900/40 cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5 pr-4">
-                      <HelpCircle className="w-5 h-5 text-[#C9A227] flex-shrink-0" />
+                      <HelpCircle className="w-5 h-5 text-[color:var(--color-gold)] flex-shrink-0" />
                       <span className="font-extrabold text-white text-sm sm:text-base leading-snug">{question}</span>
                     </div>
                     {isOpen ? <ChevronUp className="w-4 h-4 text-stone-400" /> : <ChevronDown className="w-4 h-4 text-stone-400" />}

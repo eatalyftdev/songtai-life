@@ -108,7 +108,7 @@ export default function Events({ addNotification }: EventsProps) {
                 </div>
               )}
               {!isPast && (
-                <div className="absolute top-4 left-4 px-4 py-1.5 bg-stone-950/90 backdrop-blur-md border border-[#C9A227] text-[#C9A227] font-mono text-xs font-bold rounded-full flex items-center gap-1.5">
+                <div className="absolute top-4 left-4 px-4 py-1.5 bg-stone-950/90 backdrop-blur-md border border-[color:var(--color-gold)] text-[color:var(--color-gold)] font-mono text-xs font-bold rounded-full flex items-center gap-1.5">
                   <Clock className="w-4 h-4" />
                   <span>{countdowns[ev.id] || "Calculating..."}</span>
                 </div>
@@ -128,7 +128,7 @@ export default function Events({ addNotification }: EventsProps) {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-stone-900 text-xs text-stone-400">
               <div className="p-4 bg-stone-950 rounded-xl border border-stone-900 flex items-center gap-2.5">
-                <MapPin className="w-5 h-5 text-[#C9A227] flex-shrink-0" />
+                <MapPin className="w-5 h-5 text-[color:var(--color-gold)] flex-shrink-0" />
                 <div>
                   <span className="text-[10px] text-stone-500 block uppercase font-bold">Location</span>
                   <span className="text-white font-semibold">{ev.location || "TBD"}</span>
@@ -144,7 +144,7 @@ export default function Events({ addNotification }: EventsProps) {
               </div>
 
               <div className="p-4 bg-stone-950 rounded-xl border border-stone-900 flex items-center gap-2.5">
-                <Clock className="w-5 h-5 text-[#C9A227] flex-shrink-0" />
+                <Clock className="w-5 h-5 text-[color:var(--color-gold)] flex-shrink-0" />
                 <div>
                   <span className="text-[10px] text-stone-500 block uppercase font-bold">Event Time</span>
                   <span className="text-white font-semibold">
@@ -163,12 +163,12 @@ export default function Events({ addNotification }: EventsProps) {
                   className={`w-full py-4 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${
                     isRegistered
                       ? "bg-emerald-950/40 border border-emerald-900/30 text-emerald-400"
-                      : "bg-[#0A7D32] hover:bg-[#086327] text-white"
+                      : "bg-emerald-700 hover:bg-emerald-800 text-white"
                   }`}
                 >
                   {isRegistered ? (
                     <>
-                      <CheckCircle className="w-4 h-4 text-[#C9A227]" />
+                      <CheckCircle className="w-4 h-4 text-[color:var(--color-gold)]" />
                       <span>Registration Confirmed • Check Your Inbox</span>
                     </>
                   ) : (
@@ -190,7 +190,7 @@ export default function Events({ addNotification }: EventsProps) {
         {/* Title */}
         <div className="border-b border-stone-900 pb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div className="space-y-1.5">
-            <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Active Hub</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Active Hub</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Events & Summit Gatherings</h1>
             <p className="text-stone-400 text-xs">Join our physical brand networks and accelerate your distributor volume.</p>
           </div>
@@ -199,7 +199,7 @@ export default function Events({ addNotification }: EventsProps) {
             <button
               onClick={() => { setActiveTab("upcoming"); setSelectedEvent(null); }}
               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
-                activeTab === "upcoming" ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                activeTab === "upcoming" ? "bg-emerald-700 text-white" : "text-stone-500 hover:text-stone-300"
               }`}
             >
               Upcoming Summits
@@ -207,7 +207,7 @@ export default function Events({ addNotification }: EventsProps) {
             <button
               onClick={() => { setActiveTab("past"); setSelectedEvent(null); }}
               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
-                activeTab === "past" ? "bg-[#0A7D32] text-white" : "text-stone-500 hover:text-stone-300"
+                activeTab === "past" ? "bg-emerald-700 text-white" : "text-stone-500 hover:text-stone-300"
               }`}
             >
               Past Conventions
@@ -253,7 +253,7 @@ export default function Events({ addNotification }: EventsProps) {
                       </div>
                     )}
                     {activeTab === "upcoming" && (
-                      <div className="absolute top-4 left-4 px-3 py-1 bg-stone-950/90 backdrop-blur-md border border-[#C9A227]/40 text-[#C9A227] font-mono text-[10px] font-bold rounded-full flex items-center gap-1">
+                      <div className="absolute top-4 left-4 px-3 py-1 bg-stone-950/90 backdrop-blur-md border border-[color:var(--color-gold)]/40 text-[color:var(--color-gold)] font-mono text-[10px] font-bold rounded-full flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         <span>{countdowns[ev.id] || "Calculating..."}</span>
                       </div>

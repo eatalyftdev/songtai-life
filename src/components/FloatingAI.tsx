@@ -139,25 +139,25 @@ For complex questions about registration or payments, invite users to contact vi
     <>
       <button
         onClick={() => setOpen(v => !v)}
-        className="fixed bottom-28 right-4 z-40 flex items-center gap-2 px-4 py-3 bg-[#0A7D32] hover:bg-[#086327] text-white rounded-full shadow-2xl shadow-emerald-950/60 transition-all duration-300 group cursor-pointer border border-emerald-700/40"
+        className="fixed bottom-28 right-4 z-40 flex items-center gap-2 px-4 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full shadow-2xl shadow-emerald-950/60 transition-all duration-300 group cursor-pointer border border-emerald-700/40"
         aria-label="Ask AI"
       >
-        <Leaf className="w-4 h-4 text-[#ecc246]" />
+        <Leaf className="w-4 h-4 text-[color:var(--color-gold)]" />
         <span className="text-xs font-bold">Ask AI</span>
-        <Sparkles className="w-3 h-3 text-[#ecc246] animate-pulse" />
+        <Sparkles className="w-3 h-3 text-[color:var(--color-gold)] animate-pulse" />
       </button>
 
       {open && (
         <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[420px] bg-stone-900 border-l border-stone-800 shadow-2xl flex flex-col animate-slide-in text-left">
           <div className="flex justify-between items-center p-4 bg-stone-950 border-b border-stone-800">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-[#0A7D32]/20 border border-emerald-500/20 rounded-xl">
-                <Leaf className="w-4 h-4 text-[#ecc246]" />
+              <div className="p-2 bg-emerald-700/20 border border-emerald-500/20 rounded-xl">
+                <Leaf className="w-4 h-4 text-[color:var(--color-gold)]" />
               </div>
               <div>
                 <h4 className="font-bold text-white text-sm">Songtai AI Guide</h4>
                 <span className="text-[10px] text-stone-500 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-[#ecc246]" /> Wellness & Distributor Support
+                  <Sparkles className="w-3 h-3 text-[color:var(--color-gold)]" /> Wellness & Distributor Support
                 </span>
               </div>
             </div>
@@ -169,7 +169,7 @@ For complex questions about registration or payments, invite users to contact vi
           <div className="flex-grow p-4 overflow-y-auto space-y-4 bg-stone-950/40">
             {messages.map((m, idx) => (
               <div key={idx} className={`flex gap-3 max-w-[88%] ${m.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"}`}>
-                <div className={`p-2 rounded-xl h-fit flex-shrink-0 ${m.role === "user" ? "bg-stone-800 text-[#ecc246]" : "bg-[#0A7D32] text-white"}`}>
+                <div className={`p-2 rounded-xl h-fit flex-shrink-0 ${m.role === "user" ? "bg-stone-800 text-[color:var(--color-gold)]" : "bg-emerald-700 text-white"}`}>
                   {m.role === "user" ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                 </div>
                 <div className={`p-3.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-stone-800 text-stone-200" : "bg-stone-900 border border-stone-800 text-stone-300"}`}>
@@ -179,11 +179,11 @@ For complex questions about registration or payments, invite users to contact vi
             ))}
             {loading && (
               <div className="flex gap-3 max-w-[88%] mr-auto">
-                <div className="p-2 bg-[#0A7D32] text-white rounded-xl h-fit">
+                <div className="p-2 bg-emerald-700 text-white rounded-xl h-fit">
                   <Bot className="w-3.5 h-3.5 animate-bounce" />
                 </div>
                 <div className="p-3.5 bg-stone-900 border border-stone-800 rounded-2xl flex items-center gap-2">
-                  <span className="w-2 h-2 bg-[#ecc246] rounded-full animate-ping" />
+                  <span className="w-2 h-2 bg-[color:var(--color-gold)] rounded-full animate-ping" />
                   <span className="text-xs text-stone-500 font-mono">Thinking...</span>
                 </div>
               </div>
@@ -195,7 +195,7 @@ For complex questions about registration or payments, invite users to contact vi
             {PROMPTS.map((p, i) => (
               <button key={i} onClick={() => setInputText(p)}
                 className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-800 rounded-full text-[10px] text-stone-400 hover:text-white font-medium transition-all cursor-pointer flex items-center gap-1">
-                <HelpCircle className="w-3 h-3 text-[#ecc246]" />
+                <HelpCircle className="w-3 h-3 text-[color:var(--color-gold)]" />
                 {p}
               </button>
             ))}
@@ -207,11 +207,11 @@ For complex questions about registration or payments, invite users to contact vi
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               placeholder="Ask about products, wellness, distributorship..."
-              className="flex-grow px-4 py-3 bg-stone-900 border border-stone-800 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-600 text-xs outline-none"
+              className="flex-grow px-4 py-3 bg-stone-900 border border-stone-800 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-600 text-xs outline-none"
             />
             <button type="submit" disabled={loading || !inputText.trim()}
-              className="p-3 bg-[#0A7D32] hover:bg-[#086327] disabled:opacity-50 text-white rounded-xl transition-all cursor-pointer">
-              <Send className="w-4 h-4 text-[#ecc246]" />
+              className="p-3 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl transition-all cursor-pointer">
+              <Send className="w-4 h-4 text-[color:var(--color-gold)]" />
             </button>
           </form>
         </div>

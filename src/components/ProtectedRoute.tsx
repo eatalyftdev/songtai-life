@@ -22,7 +22,7 @@ export default function ProtectedRoute({
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center space-y-4">
-        <span className="w-12 h-12 border-4 border-[#0A7D32] border-t-[#ecc246] rounded-full animate-spin" />
+        <span className="w-12 h-12 border-4 border-emerald-700 border-t-[color:var(--color-gold)] rounded-full animate-spin" />
         <p className="text-stone-400 font-bold text-xs uppercase tracking-widest animate-pulse">
           Sovereign Guard Checking Session...
         </p>

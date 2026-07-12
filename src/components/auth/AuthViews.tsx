@@ -80,7 +80,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
       <div className="w-full max-w-md bg-stone-900 border border-stone-850 rounded-[32px] p-8 shadow-2xl relative z-10 text-left">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <span className="text-[10px] uppercase tracking-widest text-[#ecc246] font-bold">Unilevel Network Entrance</span>
+          <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Unilevel Network Entrance</span>
           <h2 className="font-sans font-black text-2xl text-white mt-1">Distributor Operations</h2>
           <p className="text-stone-400 text-xs mt-1.5 leading-relaxed">
             Formulating sovereign health solutions and unilevel business networks across Africa.
@@ -93,7 +93,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
             onClick={() => { setAuthMethod("email"); setOtpSent(false); }}
             className={`py-2 text-xs font-bold rounded-lg transition-all ${
               authMethod === "email"
-                ? "bg-[#0A7D32]/15 border border-[#0A7D32]/30 text-emerald-400"
+                ? "bg-emerald-700/15 border border-emerald-700/30 text-emerald-400"
                 : "text-stone-400 hover:text-white"
             }`}
           >
@@ -103,7 +103,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
             onClick={() => { setAuthMethod("phone"); setOtpSent(false); }}
             className={`py-2 text-xs font-bold rounded-lg transition-all ${
               authMethod === "phone"
-                ? "bg-[#0A7D32]/15 border border-[#0A7D32]/30 text-emerald-400"
+                ? "bg-emerald-700/15 border border-emerald-700/30 text-emerald-400"
                 : "text-stone-400 hover:text-white"
             }`}
           >
@@ -124,7 +124,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@domain.com"
-                  className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                  className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
                 />
               </div>
             </div>
@@ -139,7 +139,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="• • • • • •"
-                  className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                  className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
                 />
               </div>
             </div>
@@ -147,14 +147,14 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-6"
+              className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white keep-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-6"
             >
               {loading ? (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
                   <span>Enter Sovereign Dashboard</span>
-                  <ArrowRight className="w-4 h-4 text-[#ecc246]" />
+                  <ArrowRight className="w-4 h-4 text-[color:var(--color-gold)]" />
                 </>
               )}
             </button>
@@ -174,7 +174,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+237 6xx xxx xxx"
-                      className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                      className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
                     />
                   </div>
                 </div>
@@ -182,22 +182,22 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white keep-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   {loading ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <span>Dispatch Simulated OTP Code</span>
-                      <Smartphone className="w-4 h-4 text-[#ecc246]" />
+                      <Smartphone className="w-4 h-4 text-[color:var(--color-gold)]" />
                     </>
                   )}
                 </button>
               </form>
             ) : (
               <form onSubmit={handleVerifyOTP} className="space-y-4">
-                <div className="p-4 bg-stone-950 rounded-xl border border-[#ecc246]/10 text-center">
-                  <span className="text-[10px] text-[#ecc246] font-bold block uppercase mb-1">Simulated Carrier Handshake</span>
+                <div className="p-4 bg-stone-950 rounded-xl border border-[color:var(--color-gold)]/10 text-center">
+                  <span className="text-[10px] text-[color:var(--color-gold)] font-bold block uppercase mb-1">Simulated Carrier Handshake</span>
                   <p className="text-stone-400 text-xs">
                     Verification code sent to <strong className="text-white">{phone}</strong>. Use code: <strong className="text-emerald-400 text-sm font-mono">{generatedOtp}</strong>
                   </p>
@@ -212,21 +212,21 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
                     value={enteredOtp}
                     onChange={(e) => setEnteredOtp(e.target.value)}
                     placeholder="• • • • • •"
-                    className="w-full py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-center font-bold text-lg tracking-widest"
+                    className="w-full py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-center font-bold text-lg tracking-widest"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white keep-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   {loading ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <span>Confirm Authorization Code</span>
-                      <ShieldCheck className="w-4 h-4 text-[#ecc246]" />
+                      <ShieldCheck className="w-4 h-4 text-[color:var(--color-gold)]" />
                     </>
                   )}
                 </button>
@@ -238,7 +238,7 @@ export function DistributorLogin({ addNotification }: { addNotification: any }) 
         <div className="mt-8 pt-6 border-t border-stone-850/60 text-center text-xs space-y-2">
           <p className="text-stone-500">
             Don't have a unilevel business account yet?{" "}
-            <Link to="/distributor/signup" className="text-[#ecc246] font-bold hover:underline">
+            <Link to="/distributor/signup" className="text-[color:var(--color-gold)] font-bold hover:underline">
               Apply Now
             </Link>
           </p>
@@ -293,7 +293,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
       <Helmet><meta name="robots" content="noindex, nofollow" /><title>Become a Distributor — Songtai Life</title></Helmet>
       <div className="w-full max-w-md bg-stone-900 border border-stone-850 rounded-[32px] p-8 shadow-2xl relative z-10 text-left">
         <div className="text-center mb-8">
-          <span className="text-[10px] uppercase tracking-widest text-[#ecc246] font-bold">Unilevel Matrix Recruitment</span>
+          <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Unilevel Matrix Recruitment</span>
           <h2 className="font-sans font-black text-2xl text-white mt-1">Become a Distributor</h2>
           <p className="text-stone-400 text-xs mt-1.5 leading-relaxed">
             Register and unlock unilevel overrides, binary margins, and bio-yield agricultural overrides.
@@ -310,7 +310,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
                 value={sponsorCode}
                 onChange={(e) => setSponsorCode(e.target.value)}
                 placeholder="ST-ELENA-88 (Default Sponsor)"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm uppercase font-mono"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm uppercase font-mono"
               />
             </div>
           </div>
@@ -325,7 +325,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@domain.com"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
             </div>
           </div>
@@ -340,7 +340,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+237 6xx xxx xxx"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
             </div>
           </div>
@@ -355,7 +355,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Minimum 6 characters"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
             </div>
           </div>
@@ -363,14 +363,14 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-6"
+            className="w-full py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white keep-white font-bold text-xs rounded-xl shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-6"
           >
             {loading ? (
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
                 <span>Register & Launch Portal</span>
-                <Sparkles className="w-4 h-4 text-[#ecc246]" />
+                <Sparkles className="w-4 h-4 text-[color:var(--color-gold)]" />
               </>
             )}
           </button>
@@ -379,7 +379,7 @@ export function DistributorSignup({ addNotification }: { addNotification: any })
         <div className="mt-8 pt-6 border-t border-stone-850/60 text-center text-xs">
           <p className="text-stone-500">
             Already registered as a network distributor?{" "}
-            <Link to="/distributor/login" className="text-[#ecc246] font-bold hover:underline">
+            <Link to="/distributor/login" className="text-[color:var(--color-gold)] font-bold hover:underline">
               Log In
             </Link>
           </p>
@@ -424,7 +424,7 @@ export function AdminLogin({ addNotification }: { addNotification: any }) {
       
       <div className="w-full max-w-md bg-stone-900 border border-yellow-950/20 rounded-[32px] p-8 shadow-2xl relative z-10 text-left">
         <div className="text-center mb-8">
-          <span className="text-[10px] uppercase tracking-widest text-[#ecc246] font-bold">Corporate Auditing Hub</span>
+          <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Corporate Auditing Hub</span>
           <h2 className="font-sans font-black text-2xl text-white mt-1">Admin Operations</h2>
           <p className="text-stone-400 text-xs mt-1.5 leading-relaxed">
             Verify KYC uploads, monitor total unilevel ledger volumes, and dispatch commission adjustments.
@@ -448,7 +448,7 @@ export function AdminLogin({ addNotification }: { addNotification: any }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@songtailife.com"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#ecc246] focus:ring-1 focus:ring-[#ecc246] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[color:var(--color-gold)] focus:ring-1 focus:ring-[color:var(--color-gold)] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
             </div>
           </div>
@@ -463,7 +463,7 @@ export function AdminLogin({ addNotification }: { addNotification: any }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="• • • • • •"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#ecc246] focus:ring-1 focus:ring-[#ecc246] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[color:var(--color-gold)] focus:ring-1 focus:ring-[color:var(--color-gold)] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
             </div>
           </div>

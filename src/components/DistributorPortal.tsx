@@ -303,7 +303,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
         {/* Portal Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 pb-6 border-b border-stone-850">
           <div>
-            <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">Luminous Network Management</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Luminous Network Management</span>
             <h1 className="font-sans font-extrabold text-3xl text-white mt-1">Distributor Operations</h1>
             <p className="text-stone-400 text-sm mt-1">Configure compliance settings, monitor commission balances, and track matrix downline structures.</p>
           </div>
@@ -322,14 +322,14 @@ export default function DistributorPortal({ addNotification }: { addNotification
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Wallet Balance Card */}
           <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left">
-            <div className="absolute top-4 right-4 p-2 bg-[#0A7D32]/10 rounded-xl text-[#ecc246]">
+            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-[color:var(--color-gold)]">
               <Wallet className="w-5 h-5" />
             </div>
             <span className="text-stone-400 text-xs font-semibold uppercase">Wallet Balance</span>
             <span className="block text-3xl font-black text-white mt-2">
-              {(wallet?.balanceXaf || 0).toLocaleString()} <span className="text-xs text-[#ecc246] font-normal">XAF</span>
+              {(wallet?.balanceXaf || 0).toLocaleString()} <span className="text-xs text-[color:var(--color-gold)] font-normal">XAF</span>
             </span>
-            <div className="flex items-center gap-1.5 mt-4 text-[11px] text-[#ecc246] font-bold">
+            <div className="flex items-center gap-1.5 mt-4 text-[11px] text-[color:var(--color-gold)] font-bold">
               <Sparkles className="w-3.5 h-3.5 animate-pulse" />
               Sovereign Balance Ready
             </div>
@@ -337,7 +337,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
           {/* Direct Downlines Card */}
           <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left">
-            <div className="absolute top-4 right-4 p-2 bg-[#0A7D32]/10 rounded-xl text-emerald-400">
+            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-emerald-400">
               <Users className="w-5 h-5" />
             </div>
             <span className="text-stone-400 text-xs font-semibold uppercase">Direct Downlines</span>
@@ -352,7 +352,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
           {/* Code Card */}
           <div className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left">
-            <div className="absolute top-4 right-4 p-2 bg-[#0A7D32]/10 rounded-xl text-[#ecc246]">
+            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-[color:var(--color-gold)]">
               <Award className="w-5 h-5" />
             </div>
             <span className="text-stone-400 text-xs font-semibold uppercase">Sponsor ID</span>
@@ -360,7 +360,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
               {distributorProfile?.distributorCode || "PENDING"}
             </span>
             <div className="flex items-center gap-1 mt-4 text-[11px] text-emerald-400 font-semibold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#ecc246]" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-[color:var(--color-gold)]" />
               Sovereign Rank: {distributorProfile?.rank || "Bronze"}
             </div>
           </div>
@@ -368,9 +368,9 @@ export default function DistributorPortal({ addNotification }: { addNotification
           {/* Compliance Status Card */}
           <div
             onClick={() => setActivePanel("kyc")}
-            className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left cursor-pointer hover:border-[#0A7D32]/40 transition-all group"
+            className="bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[24px] p-6 relative overflow-hidden text-left cursor-pointer hover:border-emerald-700/40 transition-all group"
           >
-            <div className="absolute top-4 right-4 p-2 bg-[#0A7D32]/10 rounded-xl text-[#ecc246] group-hover:scale-110 transition-transform">
+            <div className="absolute top-4 right-4 p-2 bg-emerald-700/10 rounded-xl text-[color:var(--color-gold)] group-hover:scale-110 transition-transform">
               <FileCheck2 className="w-5 h-5" />
             </div>
             <span className="text-stone-400 text-xs font-semibold uppercase">KYC Status</span>
@@ -416,7 +416,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
               onClick={() => setActivePanel(tab.id as any)}
               className={`flex items-center gap-2 px-4.5 py-3.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activePanel === tab.id
-                  ? "bg-[#0A7D32]/15 border border-[#0A7D32]/50 text-emerald-400 font-extrabold shadow-lg"
+                  ? "bg-emerald-700/15 border border-emerald-700/50 text-emerald-400 font-extrabold shadow-lg"
                   : "bg-stone-900 border border-stone-850/60 text-stone-400 hover:text-white"
               }`}
             >
@@ -486,7 +486,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                     </div>
                     <button
                       onClick={() => setActivePanel("kyc")}
-                      className="px-4 py-2 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors flex-shrink-0 text-center"
+                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-colors flex-shrink-0 text-center"
                     >
                       Verify Now
                     </button>
@@ -537,14 +537,14 @@ export default function DistributorPortal({ addNotification }: { addNotification
                       value={newMemberName}
                       onChange={(e) => setNewMemberName(e.target.value)}
                       placeholder="e.g. Samuel Eto'o"
-                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none"
+                      className="w-full px-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none"
                     />
                   </div>
                   <button
                     type="submit"
-                    className="w-full py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <UserPlus className="w-4 h-4 text-[#ecc246]" />
+                    <UserPlus className="w-4 h-4 text-[color:var(--color-gold)]" />
                     Register Directly Under Me
                   </button>
                 </form>
@@ -595,7 +595,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                       <path
                         key={node.uid}
                         d={`M ${startX} ${startY} C ${startX} ${(startY + endY) / 2}, ${endX} ${(startY + endY) / 2}, ${endX} ${endY}`}
-                        stroke="#0A7D32"
+                        stroke="#016934"
                         strokeWidth="2.5"
                         fill="none"
                         opacity="0.6"
@@ -604,7 +604,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                   })}
 
                   <g transform="translate(300, 80)">
-                    <rect x="-90" y="-30" width="180" height="60" rx="14" fill="#0A7D32" fillOpacity="0.1" stroke="#0A7D32" strokeWidth="2" />
+                    <rect x="-90" y="-30" width="180" height="60" rx="14" fill="#016934" fillOpacity="0.1" stroke="#016934" strokeWidth="2" />
                     <text x="0" y="-8" textAnchor="middle" fill="#white" fontSize="11" fontWeight="bold">You (Sovereign Root)</text>
                     <text x="0" y="8" textAnchor="middle" fill="#ecc246" fontSize="9" fontWeight="bold">{distributorProfile?.distributorCode}</text>
                     <text x="0" y="20" textAnchor="middle" fill="#888" fontSize="8" fontWeight="bold">Rank: {distributorProfile?.rank}</text>
@@ -670,7 +670,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                           <td className="px-6 py-4 font-mono text-[10px] font-semibold text-stone-500">{tx.id}</td>
                           <td className="px-6 py-4 uppercase font-bold">
                             {tx.type === "commission" ? (
-                              <span className="text-[#ecc246] flex items-center gap-1">
+                              <span className="text-[color:var(--color-gold)] flex items-center gap-1">
                                 <ArrowUpRight className="w-3.5 h-3.5" /> Earned
                               </span>
                             ) : (
@@ -693,7 +693,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
             {/* Withdrawal Form */}
             <div className="lg:col-span-4 bg-gradient-to-b from-stone-900 to-stone-950 border border-stone-850 rounded-[32px] p-6">
-              <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">MeSomb Gateway</span>
+              <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">MeSomb Gateway</span>
               <h3 className="font-sans font-bold text-lg text-white mt-1">Request Mobile Money Cashout</h3>
               <form onSubmit={handlePayoutSubmit} className="mt-6 space-y-4">
                 <div className="grid grid-cols-2 gap-2">
@@ -704,21 +704,21 @@ export default function DistributorPortal({ addNotification }: { addNotification
                   <label className="text-stone-400 text-xs block mb-1.5 font-bold">Cameroon Phone Number</label>
                   <div className="relative">
                     <Smartphone className="absolute left-3.5 top-3.5 w-4 h-4 text-stone-600" />
-                    <input type="tel" required value={payoutPhone} onChange={(e) => setPayoutPhone(e.target.value)} placeholder="+237 6xx xxx xxx" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
+                    <input type="tel" required value={payoutPhone} onChange={(e) => setPayoutPhone(e.target.value)} placeholder="+237 6xx xxx xxx" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
                   </div>
                 </div>
                 <div>
                   <label className="text-stone-400 text-xs block mb-1.5 font-bold">Cashout Amount (XAF)</label>
                   <div className="relative">
                     <CreditCard className="absolute left-3.5 top-3.5 w-4 h-4 text-stone-600" />
-                    <input type="number" required value={payoutAmount} onChange={(e) => setPayoutAmount(e.target.value)} placeholder="e.g. 5000" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-[#0A7D32] focus:ring-1 focus:ring-[#0A7D32] rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
+                    <input type="number" required value={payoutAmount} onChange={(e) => setPayoutAmount(e.target.value)} placeholder="e.g. 5000" className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-850 focus:border-emerald-700 focus:ring-1 focus:ring-emerald-700 rounded-xl text-stone-200 placeholder-stone-700 text-xs outline-none" />
                   </div>
                 </div>
-                <button type="submit" disabled={payoutLoading} className="w-full py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                <button type="submit" disabled={payoutLoading} className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                   {payoutLoading ? (
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <><Send className="w-4 h-4 text-[#ecc246]" /><span>Initiate MeSomb Cashout</span></>
+                    <><Send className="w-4 h-4 text-[color:var(--color-gold)]" /><span>Initiate MeSomb Cashout</span></>
                   )}
                 </button>
               </form>
@@ -750,7 +750,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                       <tr key={ord.id} className="hover:bg-stone-900/20 transition-all">
                         <td className="px-6 py-4 font-mono text-[10px] text-white">{ord.id}</td>
                         <td className="px-6 py-4 font-bold text-white">{ord.amountXaf.toLocaleString()} XAF</td>
-                        <td className="px-6 py-4 text-[#ecc246] font-bold">+{ord.pvPoints} PV</td>
+                        <td className="px-6 py-4 text-[color:var(--color-gold)] font-bold">+{ord.pvPoints} PV</td>
                         <td className="px-6 py-4"><span className="px-2 py-0.5 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 rounded-full text-[9px] uppercase font-bold">Processed</span></td>
                       </tr>
                     ))
@@ -766,7 +766,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-8 flex flex-col justify-between space-y-6 text-left">
               <div>
-                <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">Unilevel Recruitment Link</span>
+                <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Unilevel Recruitment Link</span>
                 <h3 className="font-sans font-bold text-xl text-white mt-1">Share Your Referral ID</h3>
                 <p className="text-stone-400 text-xs leading-relaxed mt-2">
                   Recruiters gain 10% on direct sales volume plus team matrix overriding overrides.
@@ -777,7 +777,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                   <label className="text-stone-500 text-[10px] font-bold uppercase block mb-1">My Distributor Code</label>
                   <div className="p-4 bg-stone-950 rounded-xl border border-stone-850 flex justify-between items-center font-mono text-sm font-bold text-white">
                     <span>{distributorProfile?.distributorCode}</span>
-                    <button onClick={copyReferralLink} className="p-1.5 hover:bg-stone-900 rounded-lg text-[#ecc246] cursor-pointer">
+                    <button onClick={copyReferralLink} className="p-1.5 hover:bg-stone-900 rounded-lg text-[color:var(--color-gold)] cursor-pointer">
                       {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
@@ -786,7 +786,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                   <label className="text-stone-500 text-[10px] font-bold uppercase block mb-1">Referral Registration URL</label>
                   <div className="p-4 bg-stone-950 rounded-xl border border-stone-850 flex justify-between items-center text-xs text-stone-300">
                     <span className="truncate mr-3">songtailife.cm/join?ref={distributorProfile?.distributorCode}</span>
-                    <button onClick={copyReferralLink} className="p-1.5 hover:bg-stone-900 rounded-lg text-[#ecc246] cursor-pointer">
+                    <button onClick={copyReferralLink} className="p-1.5 hover:bg-stone-900 rounded-lg text-[color:var(--color-gold)] cursor-pointer">
                       {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
@@ -795,12 +795,12 @@ export default function DistributorPortal({ addNotification }: { addNotification
             </div>
 
             <div className="bg-stone-900 border border-stone-850 rounded-[32px] p-8 flex flex-col items-center justify-center text-center space-y-4">
-              <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">Luminous QR Code</span>
+              <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Luminous QR Code</span>
               <div className="p-4 bg-white/5 rounded-3xl border border-stone-800">
                 <QRCodeSVG
                   value={`https://songtailife.cm/join?ref=${distributorProfile?.distributorCode}`}
                   size={160}
-                  fgColor="#ecc246"
+                  fgColor="var(--color-gold)"
                   bgColor="transparent"
                 />
               </div>
@@ -816,7 +816,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
         {activePanel === "kyc" && (
           <div className="bg-stone-900/40 border border-stone-850 rounded-[32px] p-8 max-w-2xl mx-auto text-left space-y-6">
             <div>
-              <span className="text-xs uppercase tracking-widest text-[#ecc246] font-bold">CEMAC Health & Network Compliance</span>
+              <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">CEMAC Health & Network Compliance</span>
               <h3 className="font-sans font-bold text-xl text-white mt-1">Verify Identity Document</h3>
               <p className="text-stone-400 text-xs leading-relaxed mt-1.5">
                 Upload your Cameroon CNI card or National Passport. Verified users unlock maximum MeSomb unilevel payout privileges.
@@ -826,13 +826,13 @@ export default function DistributorPortal({ addNotification }: { addNotification
             <div className="border border-stone-850 bg-stone-950 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4 relative">
               {distributorProfile?.kycStatus === "verified" ? (
                 <div className="space-y-2">
-                  <Check className="w-12 h-12 text-[#ecc246] mx-auto p-2 bg-[#0A7D32]/10 rounded-full" />
+                  <Check className="w-12 h-12 text-[color:var(--color-gold)] mx-auto p-2 bg-emerald-700/10 rounded-full" />
                   <h4 className="font-bold text-white text-sm">Compliance Completed Successfully</h4>
                   <p className="text-stone-500 text-xs">Your passport has been validated by corporate operations.</p>
                 </div>
               ) : distributorProfile?.kycStatus === "pending" ? (
                 <div className="space-y-2">
-                  <span className="w-10 h-10 border-4 border-[#ecc246] border-t-transparent rounded-full animate-spin inline-block mx-auto" />
+                  <span className="w-10 h-10 border-4 border-[color:var(--color-gold)] border-t-transparent rounded-full animate-spin inline-block mx-auto" />
                   <h4 className="font-bold text-white text-sm">Identity Auditing In Progress</h4>
                   <p className="text-stone-500 text-xs">Operations team is verifying document parameters. Expect 24 hour SLA.</p>
                 </div>
@@ -847,7 +847,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                       </div>
                     </div>
                   )}
-                  <label className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-stone-800 hover:border-[#0A7D32]/40 rounded-2xl cursor-pointer transition-all">
+                  <label className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-stone-800 hover:border-emerald-700/40 rounded-2xl cursor-pointer transition-all">
                     <UploadCloud className="w-10 h-10 text-stone-500 mb-2" />
                     <span className="text-xs font-bold text-white block">Upload identity card / passport document</span>
                     <span className="text-[10px] text-stone-600 block mt-1">Accepts PNG, JPG or PDF up to 10MB</span>

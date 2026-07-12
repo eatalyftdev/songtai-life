@@ -46,7 +46,7 @@ export default function SEO({
   const resolvedImage  = (image ?? seoDefaults.og_image_url) || DEFAULT_IMAGE;
   const resolvedKw     = seoDefaults.keywords || DEFAULT_KEYWORDS;
   const resolvedAuthor = seoDefaults.author || "Songtai Life";
-  const resolvedColor  = seoDefaults.theme_color || "#0A7D32";
+  const resolvedColor  = seoDefaults.theme_color || "#016934";
   const pageTitle      = title ? `${title} | ${seoDefaults.site_title || "Songtai Life"}` : DEFAULT_TITLE;
   const canonical      = url ? `${SITE_URL}${url}` : SITE_URL;
 

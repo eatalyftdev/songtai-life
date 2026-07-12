@@ -10,14 +10,14 @@ export default function Opportunity({ onNavigate }: OpportunityProps) {
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans text-left relative overflow-hidden">
       {/* Background visual shapes */}
-      <div className="absolute top-[10%] left-[20%] w-[550px] h-[550px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[10%] right-[5%] w-[450px] h-[450px] rounded-full bg-[#C9A227]/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-[10%] left-[20%] w-[550px] h-[550px] rounded-full bg-emerald-700/5 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-[10%] right-[5%] w-[450px] h-[450px] rounded-full bg-[color:var(--color-gold)]/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16 relative z-10">
         
         {/* Header Hero Title */}
         <div className="space-y-4 max-w-2xl">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Luminous Careers</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Luminous Careers</span>
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight leading-[1.1]">
             Build Generational Wealth, Settle Instantly
           </h1>
@@ -27,7 +27,7 @@ export default function Opportunity({ onNavigate }: OpportunityProps) {
           <div className="pt-2">
             <button
               onClick={() => onNavigate("join")}
-              className="px-6 py-3 bg-[#0A7D32] hover:bg-[#086327] text-white font-bold text-xs rounded-xl transition-all shadow-md cursor-pointer"
+              className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl transition-all shadow-md cursor-pointer"
             >
               Start Your Wellness Franchise
             </button>
@@ -72,7 +72,7 @@ export default function Opportunity({ onNavigate }: OpportunityProps) {
                     <p className="text-stone-500 text-[10px] mt-0.5">{pack.desc}</p>
                   </div>
                   <div className="text-right">
-                    <span className="font-extrabold text-[#C9A227] block">{pack.price}</span>
+                    <span className="font-extrabold text-[color:var(--color-gold)] block">{pack.price}</span>
                     <span className="text-emerald-400 text-[10px] font-mono">{pack.pv}</span>
                   </div>
                 </div>
@@ -84,7 +84,7 @@ export default function Opportunity({ onNavigate }: OpportunityProps) {
         {/* 2. VISUAL COMPENSATION OVERVIEW */}
         <div className="space-y-8 border-t border-stone-900 pt-12">
           <div className="text-center max-w-xl mx-auto space-y-2">
-            <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Unilevel Incentives</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Unilevel Incentives</span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Interactive Commission Framework</h2>
             <p className="text-stone-400 text-xs sm:text-sm">We share 52% of all product sales volumes back into our leadership structures.</p>
           </div>
@@ -99,7 +99,7 @@ export default function Opportunity({ onNavigate }: OpportunityProps) {
               {
                 title: "Unilevel Volume Overrides",
                 desc: "Gain overriding bonuses from 3% down to 8% across 5 generations of downlines, calculated and credited biweekly based on overall team PV.",
-                icon: <TrendingUp className="w-5 h-5 text-[#C9A227]" />
+                icon: <TrendingUp className="w-5 h-5 text-[color:var(--color-gold)]" />
               },
               {
                 title: "Global Leadership Pools",

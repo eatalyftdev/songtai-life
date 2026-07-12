@@ -49,10 +49,10 @@ export default function ForcePasswordChange({ onComplete, addNotification }: For
 
   return (
     <div className="min-h-screen bg-stone-950 flex flex-col justify-center items-center p-4 font-sans antialiased">
-      <div className="w-full max-w-sm bg-stone-900 border border-[#ecc246]/20 rounded-[28px] p-8 shadow-2xl text-left">
+      <div className="w-full max-w-sm bg-stone-900 border border-[color:var(--color-gold)]/20 rounded-[28px] p-8 shadow-2xl text-left">
         <div className="text-center mb-6">
-          <div className="inline-flex p-3 bg-[#ecc246]/10 border border-[#ecc246]/20 rounded-2xl mb-3">
-            <ShieldCheck className="w-6 h-6 text-[#ecc246]" />
+          <div className="inline-flex p-3 bg-[color:var(--color-gold)]/10 border border-[color:var(--color-gold)]/20 rounded-2xl mb-3">
+            <ShieldCheck className="w-6 h-6 text-[color:var(--color-gold)]" />
           </div>
           <h2 className="font-black text-xl text-white">Set Your Password</h2>
           <p className="text-stone-400 text-xs mt-1.5 leading-relaxed">
@@ -72,7 +72,7 @@ export default function ForcePasswordChange({ onComplete, addNotification }: For
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
                 placeholder="Minimum 8 characters"
-                className="w-full pl-10 pr-10 py-3 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-10 py-3 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
               <button type="button" onClick={() => setShowPw(s => !s)} className="absolute right-3.5 top-3.5 text-stone-500 hover:text-stone-300">
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -90,7 +90,7 @@ export default function ForcePasswordChange({ onComplete, addNotification }: For
                 value={confirm}
                 onChange={e => setConfirm(e.target.value)}
                 placeholder="Re-enter password"
-                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-800 focus:border-[#ecc246] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-stone-950 border border-stone-800 focus:border-[color:var(--color-gold)] rounded-xl text-white placeholder-stone-700 outline-none text-sm"
               />
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function ForcePasswordChange({ onComplete, addNotification }: For
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-[#ecc246] hover:bg-[#dbb13b] text-stone-950 font-black text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
+            className="w-full py-3.5 bg-[color:var(--color-gold)] hover:bg-[color:var(--color-gold)]/90 text-stone-950 font-black text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
           >
             {loading
               ? <span className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
