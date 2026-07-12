@@ -224,7 +224,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
           </Helmet>
         )}
         {/* Soft radial backdrop */}
-        <div className="absolute top-[20%] left-[10%] w-[500px] h-[500px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
+        <div className="absolute top-[20%] left-[10%] w-[500px] h-[500px] rounded-full bg-emerald-600/5 blur-3xl pointer-events-none" />
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 relative z-10">
           {/* Back button */}
@@ -277,6 +277,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
                 <img
                   src={p.images[0] || "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800"}
                   alt={name}
+                  loading="eager"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -284,7 +285,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
                 <div className="grid grid-cols-2 gap-2">
                   {p.images.map((img, idx) => (
                     <div key={idx} className="aspect-video rounded-xl overflow-hidden bg-stone-950 border border-stone-850">
-                      <img src={img} alt="Product view" className="w-full h-full object-cover" />
+                      <img src={img} alt="Product view" loading="lazy" className="w-full h-full object-cover" />
                     </div>
                   ))}
                 </div>
@@ -294,7 +295,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
             {/* Product Meta & Actions (Col 7) */}
             <div className="md:col-span-7 space-y-6">
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#C9A227] tracking-wider bg-[#C9A227]/10 px-2.5 py-1 border border-[#C9A227]/20 rounded-full">
+                <span className="text-[10px] uppercase font-bold text-[color:var(--color-gold)] tracking-wider bg-[color:var(--color-gold)]/10 px-2.5 py-1 border border-[color:var(--color-gold)]/20 rounded-full">
                   {p.category}
                 </span>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white mt-3">{name}</h1>
@@ -302,7 +303,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
                   {p.strikePrice && (
                     <span className="text-sm text-stone-500 line-through font-mono">{p.strikePrice.toLocaleString()} XAF</span>
                   )}
-                  <span className="text-xl font-black text-[#C9A227]">{p.priceXaf.toLocaleString()} XAF</span>
+                  <span className="text-xl font-black text-[color:var(--color-gold)]">{p.priceXaf.toLocaleString()} XAF</span>
                   <span className="text-xs text-stone-400 font-mono px-2 py-1 bg-stone-950 border border-stone-850 rounded-md">
                     +{p.pvPoints} Volume Points (PV)
                   </span>
@@ -328,9 +329,9 @@ export default function Products({ onAddToCart }: ProductsProps) {
                       image: p.images[0] || "",
                     });
                   }}
-                  className="w-full py-4 bg-[#0A7D32] hover:bg-[#086327] text-white text-xs sm:text-sm font-bold rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-transparent"
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer border border-transparent keep-white"
                 >
-                  <ShoppingBag className="w-4 h-4 text-[#C9A227]" />
+                  <ShoppingBag className="w-4 h-4 text-[color:var(--color-gold)]" />
                   <span>Add {name} to Your Cart</span>
                 </button>
               </div>
@@ -349,14 +350,14 @@ export default function Products({ onAddToCart }: ProductsProps) {
         breadcrumbs={[{ name: "Products", url: "/?page=products" }]}
       />
       {/* Soft gradient backgrounds */}
-      <div className="absolute top-[10%] right-[5%] w-[450px] h-[450px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-[10%] right-[5%] w-[450px] h-[450px] rounded-full bg-emerald-600/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
 
         {/* Header Title Section */}
         <div className="border-b border-stone-900 pb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div className="space-y-1.5">
-            <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Premium Catalog</span>
+            <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Premium Catalog</span>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Sovereign Products</h1>
             <p className="text-stone-400 text-xs">High-end nutrition, organic cosmetics, and eco-agriculture catalysts.</p>
           </div>
@@ -370,7 +371,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-stone-900 border border-stone-850 rounded-xl text-xs text-white outline-none focus:border-[#0A7D32]"
+                className="w-full pl-10 pr-4 py-2.5 bg-stone-900 border border-stone-850 rounded-xl text-xs text-white outline-none focus:border-emerald-600"
               />
             </div>
 
@@ -381,7 +382,7 @@ export default function Products({ onAddToCart }: ProductsProps) {
                   onClick={() => setActiveCategory(cat)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     activeCategory === cat
-                      ? "bg-[#0A7D32] text-white"
+                      ? "bg-emerald-600 text-white keep-white"
                       : "text-stone-500 hover:text-stone-300"
                   }`}
                 >
@@ -414,14 +415,15 @@ export default function Products({ onAddToCart }: ProductsProps) {
                       <img
                         src={p.images[0] || "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&q=80&w=800"}
                         alt={name}
+                        loading="lazy"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-103"
                       />
-                      <span className="absolute top-3 left-3 px-2.5 py-1 bg-stone-900/90 backdrop-blur-md text-[10px] font-bold text-[#C9A227] rounded-md border border-stone-850">
+                      <span className="absolute top-3 left-3 px-2.5 py-1 bg-stone-900/90 backdrop-blur-md text-[10px] font-bold text-[color:var(--color-gold)] rounded-md border border-stone-850">
                         {p.pvPoints} PV
                       </span>
                       {(locale === "fr" ? (p.videoUrlFr || p.videoUrlEn) : (p.videoUrlEn || p.videoUrlFr)) && (
                         <span className="absolute top-3 right-3 w-7 h-7 rounded-full bg-stone-900/90 backdrop-blur-md border border-stone-850 flex items-center justify-center">
-                          <Play className="w-3 h-3 text-[#C9A227] fill-[#C9A227] ml-0.5" />
+                          <Play className="w-3 h-3 text-[color:var(--color-gold)] fill-[color:var(--color-gold)] ml-0.5" />
                         </span>
                       )}
                     </div>

@@ -4,11 +4,12 @@ import { useTranslation } from "react-i18next";
 import HeroCarousel from "./HeroCarousel";
 import {
   Award, TrendingUp, Users, Star, ArrowRight, Sparkles, Check,
-  Clock, Calendar, ChevronRight, X, Image as ImageIcon,
+  Clock, Calendar, ChevronRight, X, Image as ImageIcon, Pause, Play,
 } from "lucide-react";
 import { PRODUCTS_SEED, BLOG_SEED, TESTIMONIALS_SEED } from "../../data/mockData";
 import { supabase } from "../../lib/supabase";
 import { useHomepageSection } from "../../hooks/useHomepageSection";
+import InitialsAvatar from "./InitialsAvatar";
 
 // ── Icon map for DB-stored icon names ──────────────────────────────────────
 type LucideIcon = typeof Award;
@@ -212,7 +213,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         setLiveTestimonials(data.map((row: any) => ({
           id: row.id, name: row.name ?? "", rank: row.rank ?? "", region: row.region ?? "",
           quote: locale === "fr" ? (row.quote_fr || row.quote || "") : (row.quote || ""),
-          image: row.image ?? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
+          image: row.image ?? "",
           videoUrl: row.video_url ?? "",
         })));
       }
@@ -281,12 +282,14 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
     return () => clearInterval(iv);
   }, [liveEvents, t]);
 
+  const [testimonialPaused, setTestimonialPaused] = useState(false);
   useEffect(() => {
+    if (testimonialPaused) return;
     const iv = setInterval(() => {
       setCurrentTestimonialIdx(prev => (prev + 1) % liveTestimonials.length);
     }, 6000);
     return () => clearInterval(iv);
-  }, [liveTestimonials.length]);
+  }, [liveTestimonials.length, testimonialPaused]);
 
   // ── Live data: product categories (for homepage filter tabs) ───────────────
   const [liveCategories, setLiveCategories] = useState<{ key: string; label: string }[]>([]);
@@ -625,8 +628,23 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
           </div>
 
           {liveTestimonials.length > 0 && (
-            <div className={`lg:col-span-8 ${theme === "light" ? "bg-white border-stone-200" : "bg-stone-900 border-stone-850"} border p-6 sm:p-8 rounded-[28px] sm:rounded-[32px] shadow-xl relative overflow-hidden`}>
+            <div
+              className={`lg:col-span-8 ${theme === "light" ? "bg-white border-stone-200" : "bg-stone-900 border-stone-850"} border p-6 sm:p-8 rounded-[28px] sm:rounded-[32px] shadow-xl relative overflow-hidden`}
+              onMouseEnter={() => setTestimonialPaused(true)}
+              onMouseLeave={() => setTestimonialPaused(false)}
+            >
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-950/20 blur-2xl rounded-full" />
+              <button
+                type="button"
+                onClick={() => setTestimonialPaused(p => !p)}
+                aria-label={testimonialPaused ? "Resume auto-advancing testimonials" : "Pause auto-advancing testimonials"}
+                aria-pressed={testimonialPaused}
+                className={`absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-colors z-10 ${
+                  theme === "light" ? "bg-stone-100 hover:bg-stone-200 text-stone-600" : "bg-stone-950/70 hover:bg-stone-950 text-stone-300"
+                }`}
+              >
+                {testimonialPaused ? <Play className="w-3.5 h-3.5 ml-0.5" /> : <Pause className="w-3.5 h-3.5" />}
+              </button>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentTestimonialIdx}
@@ -640,11 +658,20 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                     "{liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.quote}"
                   </p>
                   <div className={`flex items-center gap-4 pt-4 border-t ${theme === "light" ? "border-stone-100" : "border-stone-850"}`}>
-                    <img
-                      src={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.image}
-                      alt={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.name}
-                      className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border ${theme === "light" ? "border-stone-200" : "border-stone-850"}`}
-                    />
+                    {liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.image ? (
+                      <img
+                        src={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.image}
+                        alt={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.name}
+                        loading="lazy"
+                        className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border ${theme === "light" ? "border-stone-200" : "border-stone-850"}`}
+                      />
+                    ) : (
+                      <InitialsAvatar
+                        name={liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.name || "?"}
+                        size={48}
+                        className={`border ${theme === "light" ? "border-stone-200" : "border-stone-850"}`}
+                      />
+                    )}
                     <div>
                       <h5 className={`font-extrabold ${textPrimary} text-sm`}>{liveTestimonials[currentTestimonialIdx % liveTestimonials.length]?.name}</h5>
                       <span className={`${textDim} text-[10px] uppercase font-bold tracking-wider`}>

@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Shield, Sparkles, Award, Sprout, Heart, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
+import InitialsAvatar from "./InitialsAvatar";
 
 interface StoryContent {
   tagline_en: string; tagline_fr: string;
@@ -41,10 +42,13 @@ const DEFAULT_BODY: StoryBody = {
   image_url: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=600",
 };
 
+// No stock photos here by design — until a real headshot is uploaded via the
+// admin CMS, team members render as a designed initials avatar rather than a
+// mismatched stock headshot presented as if it were a real person.
 const DEFAULT_TEAM: TeamMember[] = [
-  { name: "Dr. Elena Ndip", role_en: "Chief Medical & Botanical Officer", desc_en: "Over 18 years of clinical pharmacology, specializes in phytomedicine research at the University of Yaoundé.", image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300" },
-  { name: "Francois Beyene", role_en: "Agronomist & Sourcing Expert", desc_en: "Advises our cacao, moringa, and coffee farmer cooperatives in Bafoussam on biological growth multipliers.", image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300" },
-  { name: "Amadou Diallo", role_en: "Double Diamond Global Ambassador", desc_en: "An executive business coach who has mentored thousands of direct-selling entrepreneurs throughout CEMAC.", image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300" },
+  { name: "Dr. Elena Ndip", role_en: "Chief Medical & Botanical Officer", desc_en: "Over 18 years of clinical pharmacology, specializes in phytomedicine research at the University of Yaoundé.", image: "" },
+  { name: "Francois Beyene", role_en: "Agronomist & Sourcing Expert", desc_en: "Advises our cacao, moringa, and coffee farmer cooperatives in Bafoussam on biological growth multipliers.", image: "" },
+  { name: "Amadou Diallo", role_en: "Double Diamond Global Ambassador", desc_en: "An executive business coach who has mentored thousands of direct-selling entrepreneurs throughout CEMAC.", image: "" },
 ];
 
 const DEFAULT_CERTS: Cert[] = [
@@ -79,13 +83,13 @@ export default function About() {
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 py-16 font-sans relative overflow-hidden text-left">
-      <div className="absolute top-[15%] left-[5%] w-[400px] h-[400px] rounded-full bg-[#0A7D32]/5 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[20%] right-[10%] w-[500px] h-[500px] rounded-full bg-[#C9A227]/5 blur-3xl pointer-events-none" />
+      <div className="absolute top-[15%] left-[5%] w-[400px] h-[400px] rounded-full bg-emerald-600/5 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-[20%] right-[10%] w-[500px] h-[500px] rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16 relative z-10">
         
         <div className="space-y-4">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">{t(header.tagline_en, header.tagline_fr)}</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">{t(header.tagline_en, header.tagline_fr)}</span>
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight leading-[1.1]">
             {t(header.headline_en, header.headline_fr)}
           </h1>
@@ -103,7 +107,7 @@ export default function About() {
             <p className="text-stone-400 text-xs leading-relaxed">{t(body.story2_en, body.story2_fr)}</p>
           </div>
           <div className="aspect-video rounded-2xl overflow-hidden bg-stone-950 border border-stone-800">
-            <img src={body.image_url} alt="Cameroon organic farms" className="w-full h-full object-cover opacity-80" />
+            <img src={body.image_url} alt="Cameroon organic farms" loading="lazy" className="w-full h-full object-cover opacity-80" />
           </div>
         </div>
 
@@ -116,7 +120,7 @@ export default function About() {
           </div>
           <div className="bg-stone-900/10 border border-stone-850 p-8 rounded-[24px] space-y-3">
             <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#C9A227]" /> Our Pan-African Vision
+              <Sparkles className="w-5 h-5 text-[color:var(--color-gold)]" /> Our Pan-African Vision
             </h3>
             <p className="text-stone-400 text-xs sm:text-sm leading-relaxed">{t(body.vision_en, body.vision_fr)}</p>
           </div>
@@ -134,15 +138,13 @@ export default function About() {
               return (
                 <div key={idx} className="bg-stone-900/30 border border-stone-850 p-6 rounded-2xl space-y-4">
                   {photo ? (
-                    <img src={photo} alt={member.name} className="w-16 h-16 rounded-full object-cover border border-stone-800" />
+                    <img src={photo} alt={member.name} loading="lazy" className="w-16 h-16 rounded-full object-cover border border-stone-800" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-stone-800 border border-stone-750 flex items-center justify-center text-stone-500 font-bold text-lg">
-                      {member.name?.trim()?.charAt(0) || "?"}
-                    </div>
+                    <InitialsAvatar name={member.name} size={64} className="border border-stone-800" />
                   )}
                   <div>
                     <h4 className="font-bold text-white text-base">{member.name}</h4>
-                    <span className="text-[10px] text-[#C9A227] font-bold block uppercase">{lang === "fr" ? (member.role_fr || member.role_en) : member.role_en}</span>
+                    <span className="text-[10px] text-[color:var(--color-gold)] font-bold block uppercase">{lang === "fr" ? (member.role_fr || member.role_en) : member.role_en}</span>
                     <p className="text-stone-400 text-xs mt-2.5 leading-relaxed">{shownDesc}</p>
                     {isLong && (
                       <button
@@ -170,7 +172,7 @@ export default function About() {
             {certs.map((cert, idx) => (
               <div key={idx} className="bg-stone-950 p-4 rounded-xl border border-stone-900/80 space-y-1">
                 <div className="flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-[#C9A227]" />
+                  <Award className="w-4 h-4 text-[color:var(--color-gold)]" />
                   <span className="text-white text-xs font-bold">{t(cert.label_en, cert.label_fr)}</span>
                 </div>
                 <p className="text-stone-500 text-[10px]">{t(cert.sub_en, cert.sub_fr)}</p>

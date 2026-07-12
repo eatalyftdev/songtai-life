@@ -1,9 +1,16 @@
 import { useState, useRef } from "react";
-import { Download, Play, FileText, Volume2, ShieldCheck, ExternalLink, Pause } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Download, Play, FileText, Volume2, ShieldCheck, ExternalLink, Pause, Leaf } from "lucide-react";
 
 export default function MediaCenter() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const showNotice = (msg: string) => {
+    setNotice(msg);
+    window.setTimeout(() => setNotice(null), 3000);
+  };
 
   // Simulated audio track
   const audioTrackUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
@@ -27,31 +34,47 @@ export default function MediaCenter() {
         
         {/* Header */}
         <div className="space-y-4">
-          <span className="text-xs uppercase tracking-widest text-[#C9A227] font-bold">Press Archives</span>
+          <span className="text-xs uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Press Archives</span>
           <h1 className="text-4xl font-extrabold text-white tracking-tight">Media & Download Center</h1>
           <p className="text-stone-400 text-sm max-w-xl leading-relaxed">
             Access authorized marketing pamphlets, presentation folders, pan-African product catalogs, and certified media streams to scale your regional meetings.
           </p>
         </div>
 
+        {/* Non-blocking inline notice — replaces native alert() popups */}
+        <AnimatePresence>
+          {notice && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-900 border border-stone-800 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-xl"
+              role="status"
+            >
+              {notice}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* 1. Video Section */}
         <div className="bg-stone-900/30 border border-stone-850 p-6 sm:p-8 rounded-[32px] space-y-6">
           <span className="text-[10px] uppercase font-bold text-stone-500 tracking-wider block">Corporate Presentation Video</span>
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            {/* Visual Embed box */}
+            {/* Visual placeholder — branded pattern, not a mismatched stock photo */}
             <div className="md:col-span-7 aspect-video rounded-2xl overflow-hidden bg-stone-950 border border-stone-800 relative group">
-              <img 
-                src="https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&q=80&w=800" 
-                alt="Corporate conference banner"
-                className="w-full h-full object-cover opacity-70"
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/50 transition-colors">
-                <button 
-                  onClick={() => alert("Corporate video play simulated. Real video stream loads on production servers.")}
-                  className="w-16 h-16 rounded-full bg-[#0A7D32] hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg cursor-pointer transition-transform group-hover:scale-105"
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-950 via-stone-950 to-stone-950" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Leaf className="w-20 h-20 text-emerald-900" strokeWidth={1} aria-hidden="true" />
+              </div>
+              <div className="signature-rule absolute bottom-0 left-0 right-0" aria-hidden="true" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/45 transition-colors">
+                <button
+                  onClick={() => showNotice("Corporate video coming soon — production stream loads once published.")}
+                  className="w-16 h-16 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-lg cursor-pointer transition-transform group-hover:scale-105"
+                  aria-label="Play corporate presentation video"
                 >
-                  <Play className="w-6 h-6 text-[#C9A227] fill-[#C9A227] ml-1" />
+                  <Play className="w-6 h-6 text-[color:var(--color-gold)] fill-[color:var(--color-gold)] ml-1" />
                 </button>
               </div>
             </div>
@@ -64,7 +87,7 @@ export default function MediaCenter() {
                 Take a behind-the-scenes look at our northern Cameroon botanical collection facilities, our laboratory testing standards, and double diamond award ceremonies.
               </p>
               <div className="pt-2">
-                <span className="text-[10px] font-bold text-[#C9A227] flex items-center gap-1">
+                <span className="text-[10px] font-bold text-[color:var(--color-gold)] flex items-center gap-1">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" /> Authorized Corporate Copy
                 </span>
               </div>
@@ -99,7 +122,7 @@ export default function MediaCenter() {
             ].map((dl, idx) => (
               <div key={idx} className="bg-stone-900/10 border border-stone-850 p-6 rounded-2xl flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
-                  <div className="p-3 bg-[#0A7D32]/10 border border-[#0A7D32]/20 text-[#C9A227] rounded-xl w-fit">
+                  <div className="p-3 bg-emerald-600/10 border border-emerald-600/20 text-[color:var(--color-gold)] rounded-xl w-fit">
                     <FileText className="w-5 h-5" />
                   </div>
                   <h4 className="font-extrabold text-white text-base leading-snug">{dl.title}</h4>
@@ -108,8 +131,8 @@ export default function MediaCenter() {
 
                 <div className="pt-4 flex items-center justify-between border-t border-stone-900 text-xs">
                   <span className="text-stone-500 font-mono">{dl.size}</span>
-                  <button 
-                    onClick={() => alert(`Simulating download of: ${dl.file}`)}
+                  <button
+                    onClick={() => showNotice(`Preparing ${dl.file} for download…`)}
                     className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
                   >
                     Download <Download className="w-3.5 h-3.5" />
@@ -121,9 +144,9 @@ export default function MediaCenter() {
         </div>
 
         {/* 3. Audio / Anthem Section */}
-        <div className="bg-[#0A7D32]/5 border border-emerald-950/40 p-6 rounded-[24px] flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="bg-emerald-600/5 border border-emerald-950/40 p-6 rounded-[24px] flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4 text-left">
-            <div className="p-3 bg-[#C9A227]/10 text-[#C9A227] rounded-xl border border-[#C9A227]/20">
+            <div className="p-3 bg-[color:var(--color-gold)]/10 text-[color:var(--color-gold)] rounded-xl border border-[color:var(--color-gold)]/20">
               <Volume2 className="w-6 h-6" />
             </div>
             <div>
@@ -136,17 +159,17 @@ export default function MediaCenter() {
 
           <button
             onClick={toggleAudio}
-            className="px-6 py-3.5 bg-[#0A7D32] hover:bg-[#086327] text-white text-xs font-bold rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-md self-stretch sm:self-auto justify-center"
+            className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-md self-stretch sm:self-auto justify-center keep-white"
           >
             {isPlayingAudio ? (
               <>
-                <Pause className="w-4 h-4 text-[#C9A227] fill-[#C9A227]" />
+                <Pause className="w-4 h-4 text-[color:var(--color-gold)] fill-[color:var(--color-gold)]" />
                 <span>Pause Anthem</span>
               </>
             ) : (
               <>
-                <Play className="w-4 h-4 text-[#C9A227] fill-[#C9A227]" />
-                <span>Play Anthem (SoundHelix)</span>
+                <Play className="w-4 h-4 text-[color:var(--color-gold)] fill-[color:var(--color-gold)]" />
+                <span>Play Anthem</span>
               </>
             )}
           </button>

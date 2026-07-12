@@ -141,7 +141,7 @@ export default function Blog() {
             {/* Hero Image */}
             {post.image && (
               <div className="aspect-[21/9] rounded-[32px] overflow-hidden bg-stone-950 border border-stone-850">
-                <img src={post.image} alt={getTitle(post)} className="w-full h-full object-cover" />
+                <img src={post.image} alt={getTitle(post)} loading="eager" className="w-full h-full object-cover" />
               </div>
             )}
 
@@ -224,7 +224,7 @@ export default function Blog() {
                 <div className="space-y-4">
                   <div className="aspect-[16/10] rounded-2xl overflow-hidden bg-stone-950">
                     {post.image ? (
-                      <img src={post.image} alt={getTitle(post)} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102" />
+                      <img src={post.image} alt={getTitle(post)} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102" />
                     ) : (
                       <div className="w-full h-full bg-stone-900 flex items-center justify-center">
                         <BookOpen className="w-12 h-12 text-stone-700" />

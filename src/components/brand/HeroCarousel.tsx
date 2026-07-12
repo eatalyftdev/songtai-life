@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import { useTranslation } from "react-i18next";
+import { Pause, Play } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 interface CarouselSlide {
@@ -174,15 +175,27 @@ export default function HeroCarousel() {
         </motion.div>
       </AnimatePresence>
 
+      {/* Explicit pause/play control — hover-pause alone doesn't help touch/keyboard users */}
+      <button
+        type="button"
+        onClick={() => setPaused(p => !p)}
+        aria-label={paused ? "Play carousel" : "Pause carousel"}
+        aria-pressed={paused}
+        className="absolute bottom-3 left-3 w-8 h-8 rounded-full bg-stone-950/70 backdrop-blur-sm border border-white/10 text-white flex items-center justify-center cursor-pointer hover:bg-stone-950/90 transition-colors"
+      >
+        {paused ? <Play className="w-3.5 h-3.5 ml-0.5" /> : <Pause className="w-3.5 h-3.5" />}
+      </button>
+
       {/* Dot indicators + progress bar */}
       <div className="absolute bottom-3 right-4 flex items-center gap-1.5">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={() => { setDirection(i > current ? 1 : -1); setCurrent(i); }}
+            aria-label={`Go to slide ${i + 1}`}
             className={`rounded-full transition-all duration-300 cursor-pointer ${
               i === current
-                ? "w-5 h-1.5 bg-[#ecc246]"
+                ? "w-5 h-1.5 bg-[color:var(--color-gold)]"
                 : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
             }`}
           />
@@ -193,7 +206,7 @@ export default function HeroCarousel() {
       {!paused && (
         <motion.div
           key={`progress-${current}`}
-          className="absolute top-0 left-0 h-0.5 bg-[#ecc246]/70"
+          className="absolute top-0 left-0 h-0.5 bg-[color:var(--color-gold)]/70"
           initial={{ width: "0%" }}
           animate={{ width: "100%" }}
           transition={{ duration: INTERVAL_MS / 1000, ease: "linear" }}
@@ -202,7 +215,7 @@ export default function HeroCarousel() {
 
       {/* FEATURED label */}
       <div className="absolute top-3 left-3">
-        <span className="text-[9px] uppercase tracking-widest font-black text-[#ecc246] bg-stone-950/70 backdrop-blur-sm px-2 py-1 rounded-full border border-[#ecc246]/30">
+        <span className="text-[9px] uppercase tracking-widest font-black text-[color:var(--color-gold)] bg-stone-950/70 backdrop-blur-sm px-2 py-1 rounded-full border border-[color:var(--color-gold)]/30">
           Featured Solution
         </span>
       </div>

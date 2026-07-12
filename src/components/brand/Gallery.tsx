@@ -139,10 +139,11 @@ export default function Gallery() {
                 <img
                   src={img.url}
                   alt={img.caption}
+                  loading="lazy"
                   className="w-full object-cover transition-transform duration-500 group-hover:scale-102"
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end text-left">
-                  <span className="text-[#C9A227] text-[9px] uppercase font-bold tracking-wider">{img.album}</span>
+                  <span className="text-[color:var(--color-gold)] text-[9px] uppercase font-bold tracking-wider">{img.album}</span>
                   <p className="text-white text-xs font-semibold leading-relaxed mt-1">{img.caption}</p>
                 </div>
               </div>
