@@ -11,6 +11,9 @@ channel = "stable-25_05"
 
 [userenv.shared]
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1eWp4Y2hnaHRldHhwaXllY2RzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMDIxNjksImV4cCI6MjA5ODU3ODE2OX0.KhNahEFCe4_l4a_2ucsOp9OFUXnmEBlYNZW33xSFnas"
+SUPABASE_URL = "https://auyjxchghtetxpiyecds.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1eWp4Y2hnaHRldHhwaXllY2RzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMDIxNjksImV4cCI6MjA5ODU3ODE2OX0.KhNahEFCe4_l4a_2ucsOp9OFUXnmEBlYNZW33xSFnas"
+VITE_SUPABASE_URL = "https://auyjxchghtetxpiyecds.supabase.co"
 
 [workflows]
 runButton = "Project"
