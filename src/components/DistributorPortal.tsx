@@ -38,12 +38,13 @@ interface Order {
 const RANK_ORDER = ["bronze", "silver", "gold", "platinum", "diamond"] as const;
 type RankName = typeof RANK_ORDER[number];
 
+// Must mirror the server-side rank thresholds in calculateUnilevelCommissions() (server.ts)
 const RANK_MILESTONES: Record<RankName, { pv: number; label: string }> = {
-  bronze:   { pv: 0,    label: "Bronze" },
-  silver:   { pv: 300,  label: "Silver" },
-  gold:     { pv: 1000, label: "Gold" },
-  platinum: { pv: 3000, label: "Platinum" },
-  diamond:  { pv: 8000, label: "Diamond" },
+  bronze:   { pv: 0,     label: "Bronze" },
+  silver:   { pv: 500,   label: "Silver" },
+  gold:     { pv: 2000,  label: "Gold" },
+  platinum: { pv: 5000,  label: "Platinum" },
+  diamond:  { pv: 10000, label: "Diamond" },
 };
 
 function RankProgressBar({ currentRank, currentPv }: { currentRank: string; currentPv: number }) {
@@ -187,32 +188,29 @@ export default function DistributorPortal({ addNotification }: { addNotification
     const sponsorCode = distributorProfile.distributorCode;
     const userId = user.id;
 
+    const mapDownline = (rows: any[]) => rows.map((d) => ({
+      uid: d.id, distributorCode: d.distributor_code,
+      rank: d.rank, sponsorId: d.sponsor_id, joinedAt: d.joined_at,
+    }));
+    const mapTx = (rows: any[]) => rows.map((t) => ({
+      id: t.id, type: t.type, amountXaf: t.amount_xaf,
+      description: t.description, createdAt: t.created_at,
+    }));
+    const mapOrders = (rows: any[]) => rows.map((o) => ({
+      id: o.order_id ?? o.id, amountXaf: o.amount_xaf,
+      pvPoints: o.pv_points ?? 0, status: o.status, createdAt: o.created_at,
+    }));
+
     const loadData = async () => {
-      const [downlineRes, txRes, commissionsRes] = await Promise.all([
+      const [downlineRes, txRes, ordersRes] = await Promise.all([
         supabase.from("distributors").select("*").eq("sponsor_id", sponsorCode),
         supabase.from("wallet_transactions").select("*").eq("wallet_id", userId).order("created_at", { ascending: false }),
-        supabase.from("commissions").select("*").eq("distributor_id", userId).order("created_at", { ascending: false }),
+        supabase.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
       ]);
 
-      if (downlineRes.data) {
-        setDownlineList(downlineRes.data.map((d) => ({
-          uid: d.id, distributorCode: d.distributor_code,
-          rank: d.rank, sponsorId: d.sponsor_id,
-        })));
-      }
-      if (txRes.data) {
-        setTransactions(txRes.data.map((t) => ({
-          id: t.id, type: t.type, amountXaf: t.amount_xaf,
-          description: t.description, createdAt: t.created_at,
-        })));
-      }
-      if (commissionsRes.data) {
-        setOrders(commissionsRes.data.map((c) => ({
-          id: c.id, amountXaf: c.amount_xaf ?? 55000,
-          pvPoints: c.level === 0 ? 100 : 50,
-          status: "processed", createdAt: c.created_at,
-        })));
-      }
+      if (downlineRes.data) setDownlineList(mapDownline(downlineRes.data));
+      if (txRes.data) setTransactions(mapTx(txRes.data));
+      if (ordersRes.data) setOrders(mapOrders(ordersRes.data));
     };
 
     loadData();
@@ -222,17 +220,17 @@ export default function DistributorPortal({ addNotification }: { addNotification
       .on("postgres_changes", { event: "*", schema: "public", table: "distributors", filter: `sponsor_id=eq.${sponsorCode}` },
         async () => {
           const { data } = await supabase.from("distributors").select("*").eq("sponsor_id", sponsorCode);
-          if (data) setDownlineList(data.map((d) => ({ uid: d.id, distributorCode: d.distributor_code, rank: d.rank, sponsorId: d.sponsor_id })));
+          if (data) setDownlineList(mapDownline(data));
         })
       .on("postgres_changes", { event: "*", schema: "public", table: "wallet_transactions", filter: `wallet_id=eq.${userId}` },
         async () => {
           const { data } = await supabase.from("wallet_transactions").select("*").eq("wallet_id", userId).order("created_at", { ascending: false });
-          if (data) setTransactions(data.map((t) => ({ id: t.id, type: t.type, amountXaf: t.amount_xaf, description: t.description, createdAt: t.created_at })));
+          if (data) setTransactions(mapTx(data));
         })
-      .on("postgres_changes", { event: "*", schema: "public", table: "commissions", filter: `distributor_id=eq.${userId}` },
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
         async () => {
-          const { data } = await supabase.from("commissions").select("*").eq("distributor_id", userId).order("created_at", { ascending: false });
-          if (data) setOrders(data.map((c) => ({ id: c.id, amountXaf: c.amount_xaf ?? 55000, pvPoints: c.level === 0 ? 100 : 50, status: "processed", createdAt: c.created_at })));
+          const { data } = await supabase.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+          if (data) setOrders(mapOrders(data));
         })
       .subscribe();
 
@@ -330,14 +328,19 @@ export default function DistributorPortal({ addNotification }: { addNotification
       months[key].Commission += t.amountXaf;
     });
     downlineList.forEach(m => {
-      const d = new Date();
+      if (!m.joinedAt) return;
+      const d = new Date(m.joinedAt);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (months[key]) months[key].Members += 1;
+      const name = d.toLocaleString("default", { month: "short" });
+      if (!months[key]) months[key] = { name, Commission: 0, Members: 0 };
+      months[key].Members += 1;
     });
     return Object.values(months).slice(-6);
   })();
 
-  const currentPv = distributorProfile ? (orders.reduce((s, o) => s + (o.pvPoints || 0), 0)) : 0;
+  // Real PV comes straight from the distributors table (kept in sync by the
+  // server-side unilevel commission engine) rather than re-derived client-side.
+  const currentPv = distributorProfile?.pv ?? 0;
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", icon: <TrendingUp className="w-4 h-4" /> },
@@ -763,7 +766,9 @@ export default function DistributorPortal({ addNotification }: { addNotification
                     <p className="font-mono text-[11px] text-[color:var(--color-muted)] flex-1 truncate">{ord.id}</p>
                     <p className="font-bold text-sm text-[color:var(--color-fg)]">{ord.amountXaf.toLocaleString()} <span className="text-[10px] font-normal text-[color:var(--color-muted)]">XAF</span></p>
                     <Badge variant="gold">+{ord.pvPoints} PV</Badge>
-                    <Badge variant="success">Processed</Badge>
+                    <Badge variant={ord.status === "paid" ? "success" : ord.status === "failed" || ord.status === "refunded" ? "danger" : "warning"}>
+                      {ord.status === "paid" ? "Paid" : ord.status === "failed" ? "Failed" : ord.status === "refunded" ? "Refunded" : "Pending"}
+                    </Badge>
                   </div>
                 ))}
               </div>

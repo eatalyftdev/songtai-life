@@ -19,6 +19,7 @@ export interface DistributorProfile {
   placementId: string | null;
   rank: "bronze" | "silver" | "gold" | "platinum" | "diamond";
   kycStatus: "none" | "pending" | "verified" | "rejected";
+  pv: number;
   joinedAt: any;
 }
 
@@ -53,6 +54,7 @@ function mapDistributor(uid: string, row: any): DistributorProfile {
     placementId: row.placement_id ?? null,
     rank: row.rank ?? "bronze",
     kycStatus: row.kyc_status ?? "none",
+    pv: row.pv ?? 0,
     joinedAt: row.joined_at,
   };
 }
@@ -163,6 +165,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         async () => {
           const { data } = await supabase.from("wallets").select("*").eq("id", user.id).maybeSingle();
           if (data) setWallet(mapWallet(user.id, data));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "distributors", filter: `id=eq.${user.id}` },
+        async () => {
+          const { data } = await supabase.from("distributors").select("*").eq("id", user.id).maybeSingle();
+          if (data) setDistributorProfile(mapDistributor(user.id, data));
         }
       )
       .subscribe();
