@@ -92,26 +92,18 @@ end;
 $$;
 
 -- ── 5. BILINGUAL PRODUCTS ────────────────────────────────────
--- Rename English columns (conditional — safe to re-run if already renamed)
-do $
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'products' and column_name = 'name'
-  ) then
-    alter table public.products rename column name to name_en;
-  end if;
-end $;
+-- Rename English columns (idempotent — catches error if already renamed)
+DO $rename_name$
+BEGIN
+  ALTER TABLE public.products RENAME COLUMN name TO name_en;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $rename_name$;
 
-do $
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'products' and column_name = 'description'
-  ) then
-    alter table public.products rename column description to description_en;
-  end if;
-end $;
+DO $rename_desc$
+BEGIN
+  ALTER TABLE public.products RENAME COLUMN description TO description_en;
+EXCEPTION WHEN undefined_column THEN NULL;
+END $rename_desc$;
 
 -- Add French translation columns
 alter table public.products
