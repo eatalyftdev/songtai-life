@@ -477,11 +477,12 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
   const TABS = [
     { id: "dashboard", label: "Dashboard", icon: <TrendingUp className="w-4 h-4" /> },
-    { id: "genealogy", label: "My Team", icon: <Users className="w-4 h-4" /> },
-    { id: "wallet",    label: "Wallet", icon: <Wallet className="w-4 h-4" /> },
+    { id: "genealogy", label: "My Team",   icon: <Users className="w-4 h-4" /> },
+    { id: "earnings",  label: "Earnings",  icon: <BarChart3 className="w-4 h-4" /> },
+    { id: "wallet",    label: "Wallet",    icon: <Wallet className="w-4 h-4" /> },
     { id: "orders",    label: "Purchases", icon: <ShoppingBag className="w-4 h-4" /> },
-    { id: "referral",  label: "Referral", icon: <Sparkles className="w-4 h-4" /> },
-    { id: "kyc",       label: "KYC", icon: <FileCheck2 className="w-4 h-4" /> },
+    { id: "referral",  label: "Referral",  icon: <Sparkles className="w-4 h-4" /> },
+    { id: "kyc",       label: "KYC",       icon: <FileCheck2 className="w-4 h-4" /> },
   ];
 
   return (
@@ -663,14 +664,17 @@ export default function DistributorPortal({ addNotification }: { addNotification
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            PANEL 2 — TEAM / GENEALOGY (Phase 5)
+            PANEL 2 — TEAM / GENEALOGY
         ══════════════════════════════════════════════════════════════════ */}
         {activePanel === "genealogy" && (
           <div className="space-y-4">
+            {/* Header + view toggle */}
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <h3 className="font-bold text-lg text-[color:var(--color-fg)]">My Network</h3>
-                <p className="text-[color:var(--color-muted)] text-xs mt-0.5">{downlineList.length} direct downline{downlineList.length !== 1 ? "s" : ""}</p>
+                <p className="text-[color:var(--color-muted)] text-xs mt-0.5">
+                  {treeStats ? `${treeStats.total_downline} total in your downline` : `${downlineList.length} direct downline${downlineList.length !== 1 ? "s" : ""}`}
+                </p>
               </div>
               <div className="flex gap-2">
                 <Button variant={!treeViewMode ? "primary" : "secondary"} size="sm" onClick={() => setTreeViewMode(false)}>
@@ -681,6 +685,25 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 </Button>
               </div>
             </div>
+
+            {/* Leg PV summary — shown in tree view when stats are available */}
+            {treeViewMode && treeStats && (
+              <div className="grid grid-cols-3 gap-3">
+                <Card padding="sm" className="text-center space-y-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-blue-400">Left Leg PV</p>
+                  <p className="text-lg font-black text-[color:var(--color-fg)]">{treeStats.left_leg_pv.toLocaleString()}</p>
+                </Card>
+                <Card padding="sm" className="text-center space-y-1 border-[color:var(--color-gold)]/40">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-[color:var(--color-gold)]">Weaker Leg PV</p>
+                  <p className="text-lg font-black text-[color:var(--color-gold)]">{treeStats.weaker_leg_pv.toLocaleString()}</p>
+                  <p className="text-[8px] text-[color:var(--color-muted)] capitalize">{treeStats.weaker_leg} leg · weekly bonus base</p>
+                </Card>
+                <Card padding="sm" className="text-center space-y-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-400">Right Leg PV</p>
+                  <p className="text-lg font-black text-[color:var(--color-fg)]">{treeStats.right_leg_pv.toLocaleString()}</p>
+                </Card>
+              </div>
+            )}
 
             {!treeViewMode ? (
               /* List view — default on mobile */
@@ -714,57 +737,180 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 )}
               </Card>
             ) : (
-              /* Tree view — opt-in on desktop */
+              /* Tree view — BinaryTreeNode, panned/zoomed, up to 12 generations */
               <Card padding="none" className="overflow-hidden">
-                <div className="flex gap-2 p-3 border-b border-[color:var(--color-border)]">
+                <div className="flex gap-2 p-3 border-b border-[color:var(--color-border)] items-center">
                   <Button variant="secondary" size="sm" icon={<ZoomIn className="w-3.5 h-3.5" />} onClick={() => setZoom(p => Math.min(p + 0.15, 2))}>+</Button>
                   <Button variant="secondary" size="sm" icon={<ZoomOut className="w-3.5 h-3.5" />} onClick={() => setZoom(p => Math.max(p - 0.15, 0.4))}>−</Button>
                   <Button variant="ghost" size="sm" onClick={() => { setPanX(0); setPanY(0); setZoom(1); }}>Reset</Button>
+                  <span className="text-[10px] text-[color:var(--color-muted)] ml-auto hidden sm:block">Drag to pan · +/− to zoom · click + to expand generations</span>
                 </div>
-                <div
-                  onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-                  className="relative w-full min-h-[420px] bg-[color:var(--color-bg)] overflow-hidden cursor-grab active:cursor-grabbing"
-                >
-                  <div style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})`, transformOrigin: "center 80px", transition: isDragging ? "none" : "transform 0.15s ease" }} className="absolute inset-0 flex items-start justify-center pt-8">
-                    <svg width="600" height="380" className="overflow-visible">
-                      {downlineList.map((node, index) => {
-                        const total = downlineList.length;
-                        const spacing = Math.max(120, 600 / (total + 1));
-                        const endX = 300 + (index - (total - 1) / 2) * spacing;
-                        return (
-                          <path key={node.uid}
-                            d={`M 300 80 C 300 ${160}, ${endX} ${160}, ${endX} 220`}
-                            stroke="var(--color-primary)" strokeWidth="1.5" fill="none" opacity="0.4"
-                          />
-                        );
-                      })}
-                      <g transform="translate(300,50)">
-                        <rect x="-70" y="-24" width="140" height="48" rx="12" fill="var(--color-primary)" fillOpacity="0.12" stroke="var(--color-primary)" strokeWidth="1.5" />
-                        <text x="0" y="-4" textAnchor="middle" fill="var(--color-fg)" fontSize="10" fontWeight="bold">You</text>
-                        <text x="0" y="12" textAnchor="middle" fill="var(--color-gold)" fontSize="9" fontFamily="monospace">{distributorProfile?.distributorCode}</text>
-                      </g>
-                      {downlineList.map((node, index) => {
-                        const total = downlineList.length;
-                        const spacing = Math.max(120, 600 / (total + 1));
-                        const endX = 300 + (index - (total - 1) / 2) * spacing;
-                        return (
-                          <g key={node.uid} transform={`translate(${endX},230)`}>
-                            <rect x="-60" y="-22" width="120" height="44" rx="10" fill="var(--color-surface)" stroke="var(--color-border)" strokeWidth="1" />
-                            <text x="0" y="-4" textAnchor="middle" fill="var(--color-fg)" fontSize="9" fontFamily="monospace" fontWeight="bold">{node.distributorCode}</text>
-                            <text x="0" y="10" textAnchor="middle" fill="var(--color-muted)" fontSize="8" fontWeight="bold" textTransform="capitalize">{node.rank ?? "bronze"}</text>
-                          </g>
-                        );
-                      })}
-                    </svg>
+                {treeLoading ? (
+                  <div className="flex items-center justify-center min-h-[420px]">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-6 h-6 border-2 border-[color:var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-[color:var(--color-muted)]">Loading your network…</p>
+                    </div>
                   </div>
-                  {downlineList.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <p className="text-[color:var(--color-muted)] text-sm">No downlines to display.</p>
+                ) : !treeData ? (
+                  <div className="flex items-center justify-center min-h-[420px]">
+                    <p className="text-[color:var(--color-muted)] text-sm">No network data found.</p>
+                  </div>
+                ) : (
+                  <div
+                    onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+                    className="relative w-full min-h-[480px] bg-[color:var(--color-bg)] overflow-hidden cursor-grab active:cursor-grabbing"
+                  >
+                    <div
+                      style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})`, transformOrigin: "center 80px", transition: isDragging ? "none" : "transform 0.15s ease" }}
+                      className="absolute inset-0 flex items-start justify-center pt-8"
+                    >
+                      <BinaryTreeNode node={treeData} generation={0} maxAutoExpand={2} />
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            PANEL 2b — EARNINGS (Performance + Leadership Bonus)
+        ══════════════════════════════════════════════════════════════════ */}
+        {activePanel === "earnings" && (
+          <div className="space-y-5">
+            {earningsLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-6 h-6 border-2 border-[color:var(--color-primary)] border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-[color:var(--color-muted)]">Loading earnings data…</p>
+                </div>
+              </div>
+            ) : !earningsData ? (
+              <div className="text-center py-20 text-[color:var(--color-muted)] text-sm">
+                Earnings data unavailable. Ensure your distributor profile is active.
+              </div>
+            ) : (
+              <>
+                {/* Weekly Performance Bonus */}
+                <Card padding="lg" className="space-y-4">
+                  <div>
+                    <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Weekly Performance Bonus</span>
+                    <h3 className="font-bold text-base text-[color:var(--color-fg)] mt-1">Binary PV Bonus</h3>
+                    <p className="text-xs text-[color:var(--color-muted)] mt-1">Calculated on your weaker leg PV × your rank bonus %. Paid weekly, capped per rank.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-xl bg-[color:var(--color-bg)] border border-blue-500/20 text-center">
+                      <p className="text-[9px] uppercase tracking-widest text-blue-400 font-bold">Left Leg PV</p>
+                      <p className="text-xl font-black text-[color:var(--color-fg)] mt-1">{earningsData.performance_bonus.left_leg_pv.toLocaleString()}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-[color:var(--color-bg)] border border-emerald-500/20 text-center">
+                      <p className="text-[9px] uppercase tracking-widest text-emerald-400 font-bold">Right Leg PV</p>
+                      <p className="text-xl font-black text-[color:var(--color-fg)] mt-1">{earningsData.performance_bonus.right_leg_pv.toLocaleString()}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-[color:var(--color-gold)]/5 border border-[color:var(--color-gold)]/30 text-center">
+                      <p className="text-[9px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Weaker Leg PV</p>
+                      <p className="text-xl font-black text-[color:var(--color-gold)] mt-1">{earningsData.performance_bonus.weaker_leg_pv.toLocaleString()}</p>
+                      <p className="text-[8px] text-[color:var(--color-muted)] capitalize mt-0.5">{earningsData.performance_bonus.weaker_leg} leg</p>
+                    </div>
+                    <div className={`p-3 rounded-xl text-center border ${earningsData.performance_bonus.is_capped ? "bg-amber-500/5 border-amber-500/30" : "bg-[color:var(--color-primary)]/5 border-[color:var(--color-primary)]/20"}`}>
+                      <p className="text-[9px] uppercase tracking-widest text-[color:var(--color-primary)] font-bold">Est. Bonus</p>
+                      <p className="text-xl font-black text-[color:var(--color-primary)] mt-1">{earningsData.performance_bonus.bonus_xaf.toLocaleString()}</p>
+                      <p className="text-[8px] text-[color:var(--color-muted)] mt-0.5">XAF/week</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[color:var(--color-bg)] border border-[color:var(--color-border)]">
+                      <span className="text-[color:var(--color-muted)]">Bonus rate:</span>
+                      <span className="font-bold text-[color:var(--color-fg)]">{earningsData.performance_bonus.weekly_bonus_pct}%</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[color:var(--color-bg)] border border-[color:var(--color-border)]">
+                      <span className="text-[color:var(--color-muted)]">Weekly ceiling:</span>
+                      <span className="font-bold text-[color:var(--color-fg)]">{earningsData.performance_bonus.weekly_ceiling_xaf > 0 ? `${earningsData.performance_bonus.weekly_ceiling_xaf.toLocaleString()} XAF` : "Uncapped"}</span>
+                    </div>
+                    {earningsData.performance_bonus.is_capped && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                        <Award className="w-3.5 h-3.5" />
+                        <span className="font-bold">Bonus is capped at your rank ceiling (raw: {earningsData.performance_bonus.raw_bonus_xaf.toLocaleString()} XAF)</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* 12-Generation Leadership Bonus */}
+                <Card padding="none">
+                  <div className="p-5 border-b border-[color:var(--color-border)]">
+                    <span className="text-[10px] uppercase tracking-widest text-[color:var(--color-gold)] font-bold">Leadership Bonus</span>
+                    <h3 className="font-bold text-base text-[color:var(--color-fg)] mt-1">12-Generation Override</h3>
+                    <p className="text-xs text-[color:var(--color-muted)] mt-1">Earned on your downline's purchases, generation by generation. Unlock deeper generations by advancing your rank.</p>
+                  </div>
+                  <div className="divide-y divide-[color:var(--color-border)]">
+                    {(earningsData.leadership_bonus as any[]).map((gen: any) => (
+                      <div key={gen.generation} className={`px-5 py-3.5 flex items-center gap-4 ${!gen.unlocked ? "opacity-50" : ""}`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-black
+                          ${gen.unlocked ? "bg-[color:var(--color-primary)]/10 text-[color:var(--color-primary)]" : "bg-[color:var(--color-border)]/50 text-[color:var(--color-muted)]"}`}>
+                          {gen.generation}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-[color:var(--color-fg)]">Generation {gen.generation}</p>
+                            {!gen.unlocked && gen.unlock_rank && (
+                              <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-[color:var(--color-muted)] bg-[color:var(--color-border)]/50 px-2 py-0.5 rounded-full">
+                                <Lock className="w-2.5 h-2.5" />Reach {gen.unlock_rank}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-[color:var(--color-muted)] mt-0.5">
+                            {gen.unlocked ? `${gen.pct}% on gen ${gen.generation} purchases` : "Locked at your current rank"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          {gen.unlocked ? (
+                            <>
+                              <p className="font-black text-sm text-emerald-400">{gen.earned_xaf.toLocaleString()}</p>
+                              <p className="text-[9px] text-[color:var(--color-muted)]">XAF earned</p>
+                            </>
+                          ) : (
+                            <Lock className="w-4 h-4 text-[color:var(--color-border)]" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+
+                {/* Commission history summary */}
+                <Card padding="none">
+                  <div className="p-5 border-b border-[color:var(--color-border)] flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-[color:var(--color-primary)]" />
+                    <h4 className="font-bold text-sm text-[color:var(--color-fg)]">Commission History</h4>
+                    <Badge variant="default" className="ml-auto">{commissions.length} records</Badge>
+                  </div>
+                  {commissions.length === 0 ? (
+                    <div className="py-12 text-center text-[color:var(--color-muted)] text-xs">
+                      No commissions yet. Commissions accrue as your team purchases products.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[color:var(--color-border)]">
+                      {commissions.map(tx => (
+                        <div key={tx.id} className="px-5 py-4 flex items-center gap-4">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                            <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-[color:var(--color-fg)] truncate">{tx.description}</p>
+                            <p className="text-[10px] text-[color:var(--color-muted)] font-mono mt-0.5">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          <p className="font-black text-sm text-emerald-400 whitespace-nowrap">+{tx.amountXaf.toLocaleString()} XAF</p>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
-              </Card>
+                </Card>
+              </>
             )}
           </div>
         )}
