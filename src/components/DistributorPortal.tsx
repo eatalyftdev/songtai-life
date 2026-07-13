@@ -6,7 +6,7 @@ import {
   Trash2, FileCheck2, UserPlus, UploadCloud, Smartphone, CreditCard,
   CheckCircle2, ShieldAlert, BadgeInfo, Copy, Check, ZoomIn, ZoomOut,
   ShoppingBag, TrendingUp, ChevronDown, ChevronRight, Star, LogOut,
-  Shield, QrCode, ExternalLink
+  Shield, QrCode, ExternalLink, GitBranch, BarChart3, Lock
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -143,6 +143,94 @@ function KycBanner({ kycStatus, onGoToKyc }: { kycStatus: string; onGoToKyc: () 
   );
 }
 
+// ── Binary tree helpers ────────────────────────────────────────────────────
+
+function EmptyTreeSlot() {
+  return (
+    <div className="border border-dashed border-[color:var(--color-border)] rounded-xl p-2.5 text-center min-w-[120px] max-w-[140px] opacity-40 select-none">
+      <p className="text-[10px] text-[color:var(--color-muted)]">Empty slot</p>
+    </div>
+  );
+}
+
+const RANK_COLORS: Record<string, string> = {
+  bronze:   "text-amber-600 border-amber-600/30 bg-amber-600/10",
+  silver:   "text-slate-400 border-slate-400/30 bg-slate-400/10",
+  gold:     "text-yellow-400 border-yellow-400/30 bg-yellow-400/10",
+  platinum: "text-cyan-400  border-cyan-400/30  bg-cyan-400/10",
+  diamond:  "text-purple-400 border-purple-400/30 bg-purple-400/10",
+};
+
+function BinaryTreeNode({
+  node,
+  generation,
+  maxAutoExpand = 2,
+}: {
+  node: any;
+  generation: number;
+  maxAutoExpand?: number;
+}) {
+  const [expanded, setExpanded] = useState(generation < maxAutoExpand);
+  const leftChild  = node.children?.find((c: any) => c.placement_leg === "left"  || (node.children.indexOf(c) === 0 && !node.children[1]));
+  const rightChild = node.children?.find((c: any) => c.placement_leg === "right" || (node.children.indexOf(c) === 1));
+
+  // Fallback: first child left, second child right
+  const left  = leftChild  ?? (node.children?.[0] && !rightChild ? null : node.children?.[0]) ?? null;
+  const right = rightChild ?? node.children?.[1] ?? null;
+  const hasChildren = node.children?.length > 0;
+  const rc = RANK_COLORS[node.rank ?? "bronze"] ?? RANK_COLORS.bronze;
+  const isRoot = generation === 0;
+
+  return (
+    <div className="flex flex-col items-center">
+      {/* Node card */}
+      <div className={`relative border rounded-xl p-2.5 text-center min-w-[120px] max-w-[140px] transition-shadow hover:shadow-lg
+        ${isRoot ? "border-[color:var(--color-primary)] bg-[color:var(--color-primary)]/5 shadow-[color:var(--color-primary)]/20 shadow-md" : "border-[color:var(--color-border)] bg-[color:var(--color-surface)]"}`}>
+        <p className="text-[9px] text-[color:var(--color-muted)] font-mono truncate">{node.distributor_code}</p>
+        <p className="text-[10px] font-black text-[color:var(--color-fg)] truncate mt-0.5">{node.displayName}</p>
+        <div className="flex items-center justify-center mt-1">
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border capitalize ${rc}`}>{node.rank ?? "bronze"}</span>
+        </div>
+        <p className="text-[9px] text-[color:var(--color-gold)] font-bold mt-0.5">{(node.pv ?? 0).toLocaleString()} PV</p>
+        {isRoot && <p className="text-[8px] text-[color:var(--color-primary)] font-bold mt-0.5">YOU</p>}
+
+        {hasChildren && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-[color:var(--color-surface)] border border-[color:var(--color-border)] flex items-center justify-center text-[color:var(--color-muted)] hover:text-[color:var(--color-primary)] hover:border-[color:var(--color-primary)] transition-colors cursor-pointer z-10 shadow-sm text-xs font-black"
+          >
+            {expanded ? "−" : "+"}
+          </button>
+        )}
+      </div>
+
+      {/* Connector line + children */}
+      {expanded && hasChildren && (
+        <div className="flex flex-col items-center mt-8">
+          {/* Vertical line from parent */}
+          <div className="w-px h-5 bg-[color:var(--color-border)]" />
+          <div className="flex gap-8 relative">
+            {/* Horizontal bridge */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px w-[calc(100%-80px)] bg-[color:var(--color-border)]" />
+            {/* Left branch */}
+            <div className="flex flex-col items-center gap-0">
+              <div className="w-px h-5 bg-[color:var(--color-border)]" />
+              <span className="text-[8px] font-bold uppercase text-blue-400 mb-1.5">L</span>
+              {left ? <BinaryTreeNode node={left} generation={generation + 1} maxAutoExpand={maxAutoExpand} /> : <EmptyTreeSlot />}
+            </div>
+            {/* Right branch */}
+            <div className="flex flex-col items-center gap-0">
+              <div className="w-px h-5 bg-[color:var(--color-border)]" />
+              <span className="text-[8px] font-bold uppercase text-emerald-400 mb-1.5">R</span>
+              {right ? <BinaryTreeNode node={right} generation={generation + 1} maxAutoExpand={maxAutoExpand} /> : <EmptyTreeSlot />}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
@@ -161,7 +249,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DistributorPortal({ addNotification }: { addNotification: any }) {
   const { user, userProfile, distributorProfile, wallet, logout } = useAuth();
 
-  const [activePanel, setActivePanel] = useState<"dashboard" | "genealogy" | "wallet" | "orders" | "referral" | "kyc">("dashboard");
+  const [activePanel, setActivePanel] = useState<"dashboard" | "genealogy" | "earnings" | "wallet" | "orders" | "referral" | "kyc">("dashboard");
   const [payoutProvider, setPayoutProvider] = useState<"mtn_momo" | "orange_money">("mtn_momo");
   const [payoutPhone, setPayoutPhone] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
@@ -180,8 +268,17 @@ export default function DistributorPortal({ addNotification }: { addNotification
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [treeViewMode, setTreeViewMode] = useState(false);
+  const [treeViewMode, setTreeViewMode] = useState(true);
   const dragStart = useRef({ x: 0, y: 0 });
+
+  // Binary tree state
+  const [treeData, setTreeData]   = useState<any>(null);
+  const [treeStats, setTreeStats] = useState<any>(null);
+  const [treeLoading, setTreeLoading] = useState(false);
+
+  // Earnings state
+  const [earningsData, setEarningsData]     = useState<any>(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
 
   useEffect(() => {
     if (!user || !distributorProfile) return;
@@ -236,6 +333,42 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
     return () => { supabase.removeChannel(channel); };
   }, [user?.id, distributorProfile?.distributorCode]);
+
+  // Fetch binary tree when genealogy panel opens
+  useEffect(() => {
+    if (activePanel !== "genealogy" || !user) return;
+    if (treeData) return; // already loaded
+    const load = async () => {
+      setTreeLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const res = await fetch("/api/distributor/tree", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const json = await res.json();
+        if (res.ok) { setTreeData(json.tree); setTreeStats(json.stats); }
+      } catch { /* silently ignore */ }
+      finally { setTreeLoading(false); }
+    };
+    load();
+  }, [activePanel, user?.id]);
+
+  // Fetch earnings when earnings panel opens
+  useEffect(() => {
+    if (activePanel !== "earnings" || !user) return;
+    if (earningsData) return; // already loaded
+    const load = async () => {
+      setEarningsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const res = await fetch("/api/distributor/earnings", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const json = await res.json();
+        if (res.ok) setEarningsData(json);
+      } catch { /* silently ignore */ }
+      finally { setEarningsLoading(false); }
+    };
+    load();
+  }, [activePanel, user?.id]);
 
   const handlePayoutSubmit = async (e: FormEvent) => {
     e.preventDefault();

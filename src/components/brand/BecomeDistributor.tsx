@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { Check, ShieldCheck, CreditCard, Smartphone, Award, Lock, Sparkles, Loader } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../context/AuthContext";
 
 interface BecomeDistributorProps {
   addNotification: (msg: string, type: "success" | "info" | "gold") => void;
@@ -48,15 +49,23 @@ const DEFAULTS: DistributorPageData = {
 };
 
 export default function BecomeDistributor({ addNotification, onNavigate }: BecomeDistributorProps) {
+  const { user } = useAuth();
   const [pageData, setPageData] = useState<DistributorPageData>(DEFAULTS);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [sponsorCode, setSponsorCode] = useState("");
   const [pack, setPack] = useState("bronze");
   const [paymentMethod, setPaymentMethod] = useState("momo");
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<"form" | "momo_verify" | "success">("form");
   const lang: string = "en";
+
+  // Pre-fill sponsor code from URL ?ref= parameter
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) setSponsorCode(ref);
+  }, []);
 
   useEffect(() => {
     supabase.from("homepage_sections").select("content").eq("section_key", "page_become_distributor").maybeSingle()
@@ -76,32 +85,87 @@ export default function BecomeDistributor({ addNotification, onNavigate }: Becom
   const activePack = pageData.packs.find(p => p.key === pack) ?? pageData.packs[0];
   const getPrice = () => activePack ? `${activePack.price_xaf.toLocaleString()} XAF` : "25,000 XAF";
 
-  const handleRegister = (e: FormEvent) => {
+  const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !phone.trim()) {
       addNotification("Please complete all registration inputs.", "info");
       return;
     }
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      // Get auth session — create one if not already logged in
+      let userId = user?.id ?? null;
+      let accessToken: string | null = null;
+
+      if (!userId) {
+        const tempPassword = crypto.getRandomValues(new Uint8Array(12)).reduce(
+          (s, b) => s + b.toString(16).padStart(2, "0"), ""
+        ) + "A1!";
+        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: tempPassword,
+          options: { data: { displayName: name.trim(), phone: phone.trim() } },
+        });
+        if (signUpErr || !signUpData.user) throw new Error(signUpErr?.message ?? "Account creation failed.");
+        userId = signUpData.user.id;
+        accessToken = signUpData.session?.access_token ?? null;
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        accessToken = session?.access_token ?? null;
+      }
+
+      // Build pack cart item — tagged so the webhook handler knows this is a pack purchase
+      const pvMap: Record<string, number> = { bronze: 50, silver: 150, gold: 350, platinum: 700, vip: 1200 };
+      const priceXaf = activePack?.price_xaf ?? 25000;
+      const packItem = {
+        type:        "distributor_pack",
+        packTier:    pack,
+        pv:          pvMap[pack] ?? 50,
+        sponsorCode: sponsorCode.trim() || null,
+        price_xaf:   priceXaf,
+        name:        `${activePack?.label_en ?? pack} — Songtai Life Distributor Pack`,
+        quantity:    1,
+      };
+
+      const provider = paymentMethod === "orange" ? "ORANGE" : "MTN";
+      const resp = await fetch("/api/payment/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          amountXaf:     priceXaf,
+          pvPoints:      packItem.pv,
+          phone:         phone.trim(),
+          provider,
+          cart:          [packItem],
+          userId,
+          customerName:  name.trim(),
+          customerPhone: phone.trim(),
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? "Checkout failed.");
+
       if (paymentMethod === "momo" || paymentMethod === "orange") {
         setStep("momo_verify");
         addNotification("MeSomb payment request sent to your mobile handset!", "gold");
       } else {
         setStep("success");
-        addNotification("Congratulations! Your Songtai Distributor node is active.", "success");
+        addNotification("Congratulations! Your Songtai Distributor node is being activated.", "success");
       }
-    }, 2000);
+    } catch (err: any) {
+      addNotification(err.message ?? "Registration failed. Please try again.", "info");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleVerifyPin = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setStep("success");
-      addNotification("Mobile payment received successfully! Welcome to Songtai Life.", "success");
-    }, 2500);
+    setStep("success");
+    addNotification("Payment submitted! Your distributor account will activate on confirmation.", "success");
   };
 
   return (

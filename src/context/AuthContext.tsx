@@ -17,9 +17,15 @@ export interface DistributorProfile {
   distributorCode: string;
   sponsorId: string | null;
   placementId: string | null;
+  placementLeg: "left" | "right" | null;
   rank: "bronze" | "silver" | "gold" | "platinum" | "diamond";
   kycStatus: "none" | "pending" | "verified" | "rejected";
   pv: number;
+  leftLegPv: number;
+  rightLegPv: number;
+  packTier: string | null;
+  status: string | null;
+  referralLink: string | null;
   joinedAt: any;
 }
 
@@ -50,12 +56,18 @@ function mapDistributor(uid: string, row: any): DistributorProfile {
   return {
     uid,
     distributorCode: row.distributor_code,
-    sponsorId: row.sponsor_id ?? null,
-    placementId: row.placement_id ?? null,
-    rank: row.rank ?? "bronze",
-    kycStatus: row.kyc_status ?? "none",
-    pv: row.pv ?? 0,
-    joinedAt: row.joined_at,
+    sponsorId:    row.sponsor_id    ?? null,
+    placementId:  row.placement_id  ?? null,
+    placementLeg: row.placement_leg ?? null,
+    rank:         row.rank          ?? "bronze",
+    kycStatus:    row.kyc_status    ?? "none",
+    pv:           row.pv            ?? 0,
+    leftLegPv:    row.left_leg_pv   ?? 0,
+    rightLegPv:   row.right_leg_pv  ?? 0,
+    packTier:     row.pack_tier     ?? null,
+    status:       row.status        ?? null,
+    referralLink: row.referral_link ?? null,
+    joinedAt:     row.joined_at,
   };
 }
 

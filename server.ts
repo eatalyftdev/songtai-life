@@ -254,6 +254,165 @@ async function awardCommission(
   console.log(`[MLM-Engine] Credited ${amountXaf} XAF to ${uid} (Level ${level} ${type})`);
 }
 
+// ── Pack Purchase → Distributor Activation ───────────────────────────────────
+async function activateDistributorOnPackPurchase(
+  orderId: string,
+  orderData: any,
+  packItem: { type: string; packTier?: string; pv?: number; sponsorCode?: string; price_xaf?: number }
+) {
+  if (!db) return;
+  try {
+    const userId = orderData.user_id;
+    if (!userId || userId === "guest") {
+      console.warn(`[PackActivation] Cannot activate — no authenticated user for order ${orderId}`);
+      return;
+    }
+
+    const packTier  = String(packItem.packTier  ?? "bronze");
+    const packPv    = Math.floor(Number(packItem.pv ?? 0));
+    const priceXaf  = Math.floor(Number(packItem.price_xaf ?? orderData.amount_xaf ?? 0));
+    const sponsorCode = packItem.sponsorCode ?? null;
+
+    // Resolve sponsor distributor UUID from sponsor code
+    let sponsorDistId: string | null = null;
+    if (sponsorCode) {
+      const { data: sponsor } = await db.from("distributors")
+        .select("id, distributor_code")
+        .eq("distributor_code", sponsorCode)
+        .maybeSingle();
+      sponsorDistId = sponsor?.id ?? null;
+    }
+
+    // Find first available binary slot under the sponsor (BFS)
+    let placementId:  string | null    = sponsorCode;
+    let placementLeg: "left" | "right" = "left";
+
+    if (sponsorCode) {
+      const queue: string[] = [sponsorCode];
+      bfsSearch: while (queue.length > 0) {
+        const code = queue.shift()!;
+        const { data: kids } = await db.from("distributors")
+          .select("distributor_code, placement_leg")
+          .eq("placement_id", code);
+        const leftKid  = (kids ?? []).find((k: any) => k.placement_leg === "left");
+        const rightKid = (kids ?? []).find((k: any) => k.placement_leg === "right");
+        if (!leftKid)  { placementId = code; placementLeg = "left";  break bfsSearch; }
+        if (!rightKid) { placementId = code; placementLeg = "right"; break bfsSearch; }
+        queue.push(leftKid.distributor_code, rightKid.distributor_code);
+      }
+    }
+
+    // Check if distributor row already exists for this user
+    const { data: existing } = await db.from("distributors")
+      .select("id, distributor_code, status")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (existing) {
+      // Upgrade / re-activate existing distributor row
+      await db.from("distributors").update({
+        status:         "active",
+        pack_tier:      packTier,
+        pack_price_xaf: priceXaf,
+        pack_pv:        packPv,
+        referral_link:  `https://songtailife.cm/join?ref=${existing.distributor_code}`,
+      }).eq("id", userId);
+      console.log(`[PackActivation] Distributor ${userId} re-activated with pack ${packTier} (Order ${orderId})`);
+    } else {
+      // Create brand-new distributor row
+      const code = `ST-${Math.floor(10000 + Math.random() * 90000)}`;
+      await db.from("distributors").insert({
+        id:             userId,
+        distributor_code: code,
+        sponsor_id:     sponsorCode ?? "Root",
+        placement_id:   placementId,
+        placement_leg:  placementLeg,
+        rank:           "bronze",
+        kyc_status:     "none",
+        status:         "active",
+        pack_tier:      packTier,
+        pack_price_xaf: priceXaf,
+        pack_pv:        packPv,
+        pv:             packPv,
+        referral_link:  `https://songtailife.cm/join?ref=${code}`,
+        joined_at:      new Date().toISOString(),
+      });
+
+      // Ensure profile has distributor role
+      await db.from("profiles").update({ role: "distributor" }).eq("id", userId);
+
+      // Credit pack PV to sponsor's binary leg
+      if (sponsorDistId && packPv > 0) {
+        const pvCol = placementLeg === "left" ? "left_leg_pv" : "right_leg_pv";
+        const { data: sponsorRow } = await db.from("distributors")
+          .select(pvCol).eq("id", sponsorDistId).maybeSingle();
+        const currentLegPv: number = (sponsorRow as any)?.[pvCol] ?? 0;
+        await db.from("distributors")
+          .update({ [pvCol]: currentLegPv + packPv })
+          .eq("id", sponsorDistId);
+      }
+
+      console.log(`[PackActivation] New distributor ${code} created for user ${userId} (Order ${orderId})`);
+    }
+
+    // Run the unilevel commission engine for the pack PV
+    if (packPv > 0) {
+      await calculateUnilevelCommissions(orderId, userId, priceXaf, packPv);
+    }
+  } catch (err: any) {
+    console.error(`[PackActivation] Error for Order ${orderId}:`, err.message);
+  }
+}
+
+// ── Customer WhatsApp notification ───────────────────────────────────────────
+async function sendCustomerWhatsApp(
+  customerPhone: string,
+  orderId: string,
+  amountXaf: number,
+  outcome: "success" | "failure"
+): Promise<void> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
+  if (!accountSid || !authToken || !fromNumber) return;
+
+  const normalized = customerPhone.replace(/\s/g, "");
+  const to = normalized.startsWith("whatsapp:") ? normalized
+    : `whatsapp:${normalized.startsWith("+") ? normalized : `+${normalized}`}`;
+
+  const body = outcome === "success"
+    ? [
+        `✅ *Payment Confirmed — Songtai Life*`,
+        ``,
+        `Thank you! Your mobile money payment was received.`,
+        `*Order:* ${orderId}`,
+        `*Amount:* ${amountXaf.toLocaleString()} XAF`,
+        ``,
+        `Your distributor account is now active. Login at songtailife.cm to access your dashboard.`,
+      ].join("\n")
+    : [
+        `❌ *Payment Not Processed — Songtai Life*`,
+        ``,
+        `Your mobile money payment was not successful.`,
+        `*Order:* ${orderId}`,
+        `*Amount:* ${amountXaf.toLocaleString()} XAF`,
+        ``,
+        `Please try again or contact us for assistance.`,
+      ].join("\n");
+
+  try {
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+      method: "POST",
+      headers: { "Authorization": `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ From: fromNumber, To: to, Body: body }).toString(),
+    });
+    console.log(`[CustomerWhatsApp] Sent '${outcome}' for Order ${orderId} → ${customerPhone}`);
+  } catch (err: any) {
+    console.error(`[CustomerWhatsApp] Failed for Order ${orderId}:`, err.message);
+  }
+}
+
 // ─── Twilio WhatsApp Order Notification ─────────────────────────────────────
 async function sendOrderWhatsApp(
   toNumber: string,
@@ -395,6 +554,68 @@ async function startServer() {
   }));
 
   await hydrateSeeds();
+
+  // ── Stale order expiry — safety net for missed webhooks ─────────────────────
+  // Runs every 5 min; finds orders stuck in pending/pending_confirmation for
+  // more than 30 min and resolves them (re-queries MeSomb if possible, else marks expired).
+  setInterval(async () => {
+    if (!db) return;
+    try {
+      const cutoffTs = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: staleOrders } = await db.from("orders")
+        .select("order_id, mesomb_transaction_id, customer_phone, amount_xaf, user_id, cart, pv_points, status")
+        .in("status", ["pending", "pending_confirmation"])
+        .lt("created_at", cutoffTs);
+
+      if (!staleOrders || staleOrders.length === 0) return;
+      console.log(`[StaleOrderCron] Found ${staleOrders.length} stale order(s) to resolve.`);
+
+      const mesomb = getMeSombClient();
+      for (const stale of staleOrders) {
+        try {
+          let resolvedStatus: "paid" | "expired" | "cancelled" = "expired";
+
+          if (mesomb && stale.mesomb_transaction_id) {
+            try {
+              const check = await (mesomb as any).checkTransaction(stale.mesomb_transaction_id);
+              const st = (check?.status ?? "").toUpperCase();
+              if (st === "SUCCESS") resolvedStatus = "paid";
+              else if (st === "FAILED" || st === "CANCELLED") resolvedStatus = "cancelled";
+            } catch { /* leave as expired */ }
+          }
+
+          if (resolvedStatus === "paid") {
+            await db.from("orders").update({
+              status: "paid",
+              paid_at: new Date().toISOString(),
+            }).eq("order_id", stale.order_id);
+
+            if (stale.user_id && stale.user_id !== "guest") {
+              await calculateUnilevelCommissions(stale.order_id, stale.user_id, stale.amount_xaf, stale.pv_points ?? 0);
+              const packItem = (stale.cart || []).find((i: any) => i.type === "distributor_pack");
+              if (packItem) {
+                await activateDistributorOnPackPurchase(stale.order_id, stale, packItem);
+              }
+            }
+            if (stale.customer_phone) {
+              sendCustomerWhatsApp(stale.customer_phone, stale.order_id, stale.amount_xaf, "success").catch(() => {});
+            }
+            console.log(`[StaleOrderCron] Order ${stale.order_id} resolved → paid (MeSomb re-query)`);
+          } else {
+            await db.from("orders").update({ status: resolvedStatus }).eq("order_id", stale.order_id);
+            if (resolvedStatus === "cancelled" && stale.customer_phone) {
+              sendCustomerWhatsApp(stale.customer_phone, stale.order_id, stale.amount_xaf, "failure").catch(() => {});
+            }
+            console.log(`[StaleOrderCron] Order ${stale.order_id} → ${resolvedStatus}`);
+          }
+        } catch (orderErr: any) {
+          console.error(`[StaleOrderCron] Error on order ${stale.order_id}:`, orderErr.message);
+        }
+      }
+    } catch (cronErr: any) {
+      console.error("[StaleOrderCron] Cron error:", cronErr.message);
+    }
+  }, 5 * 60 * 1000);
 
   // Gemini client
   let aiClient: GoogleGenAI | null = null;
@@ -679,6 +900,17 @@ Answer concisely, helpfully, and professionally. Support both English and French
             await calculateUnilevelCommissions(orderId, orderData.user_id, orderData.amount_xaf, orderData.pv_points);
           }
 
+          // Pack purchase — activate / create distributor row
+          const packItem = (orderData.cart ?? []).find((i: any) => i.type === "distributor_pack");
+          if (packItem && orderData.user_id && orderData.user_id !== "guest") {
+            await activateDistributorOnPackPurchase(orderId, orderData, packItem);
+          }
+
+          // Customer WhatsApp notification — non-blocking
+          if (orderData.customer_phone) {
+            sendCustomerWhatsApp(orderData.customer_phone, orderId, orderData.amount_xaf, "success").catch(() => {});
+          }
+
           // WhatsApp admin notification — non-blocking
           (async () => {
             try {
@@ -715,7 +947,12 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
         case "payment.transaction.failed": {
           if (!orderId) { console.warn("[Webhook] No orderId in failed event."); break; }
+          // Fetch order first so we can send customer notification
+          const { data: failedOrder } = await db.from("orders").select("customer_phone, amount_xaf").eq("order_id", orderId).maybeSingle();
           await db.from("orders").update({ status: "cancelled", mesomb_transaction_id: mesombTx }).eq("order_id", orderId);
+          if (failedOrder?.customer_phone) {
+            sendCustomerWhatsApp(failedOrder.customer_phone, orderId, failedOrder.amount_xaf ?? 0, "failure").catch(() => {});
+          }
           console.log(`[Webhook] Order ${orderId} → cancelled (payment failed).`);
           break;
         }
@@ -1035,6 +1272,153 @@ Answer concisely, helpfully, and professionally. Support both English and French
     }, { onConflict: "id", ignoreDuplicates: true });
 
     res.json({ success: true, distributorCode: generatedCode, memberId: newAuthUser.user.id });
+  }));
+
+  // ── Distributor binary tree (12 generations, BFS) ─────────────────────────
+  app.get("/api/distributor/tree", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authentication required." });
+    const userId = sessionUser.claims.sub as string;
+    const MAX_GEN = 12;
+
+    const { data: root } = await db.from("distributors")
+      .select("id, distributor_code, rank, pv, placement_leg, left_leg_pv, right_leg_pv, pack_tier, status, joined_at")
+      .eq("id", userId).maybeSingle();
+    if (!root) return res.status(404).json({ error: "Distributor profile not found." });
+
+    const { data: rootProf } = await db.from("profiles")
+      .select("display_name, email").eq("id", userId).maybeSingle();
+
+    const rootNode: any = {
+      ...root,
+      displayName: rootProf?.display_name || rootProf?.email?.split("@")[0] || root.distributor_code,
+      children: [],
+      generation: 0,
+    };
+
+    const nodeMap = new Map<string, any>([[root.distributor_code, rootNode]]);
+    let currentLevel: any[] = [rootNode];
+    let totalNodes = 0;
+
+    for (let gen = 0; gen < MAX_GEN && currentLevel.length > 0; gen++) {
+      const codes = currentLevel.map((n: any) => n.distributor_code);
+      const { data: kids } = await db.from("distributors")
+        .select("id, distributor_code, rank, pv, placement_leg, left_leg_pv, right_leg_pv, pack_tier, status, joined_at, placement_id")
+        .in("placement_id", codes);
+
+      if (!kids || kids.length === 0) break;
+      totalNodes += kids.length;
+
+      const kidIds = kids.map((k: any) => k.id);
+      const { data: profs } = await db.from("profiles")
+        .select("id, display_name, email").in("id", kidIds);
+      const pmap = new Map((profs ?? []).map((p: any) => [p.id, p]));
+
+      const nextLevel: any[] = [];
+      for (const kid of kids) {
+        const parentNode = nodeMap.get(kid.placement_id);
+        if (!parentNode) continue;
+        const prof = pmap.get(kid.id);
+        const childNode: any = {
+          ...kid,
+          displayName: prof?.display_name || prof?.email?.split("@")[0] || kid.distributor_code,
+          children: [],
+          generation: gen + 1,
+        };
+        parentNode.children.push(childNode);
+        nodeMap.set(kid.distributor_code, childNode);
+        nextLevel.push(childNode);
+      }
+      currentLevel = nextLevel;
+    }
+
+    const leftPv  = root.left_leg_pv  ?? 0;
+    const rightPv = root.right_leg_pv ?? 0;
+
+    res.json({
+      tree: rootNode,
+      stats: {
+        total_downline: totalNodes,
+        left_leg_pv:    leftPv,
+        right_leg_pv:   rightPv,
+        weaker_leg:     leftPv <= rightPv ? "left" : "right",
+        weaker_leg_pv:  Math.min(leftPv, rightPv),
+      },
+    });
+  }));
+
+  // ── Distributor earnings (Performance Bonus + Leadership Bonus) ───────────
+  app.get("/api/distributor/earnings", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authentication required." });
+    const userId = sessionUser.claims.sub as string;
+
+    const { data: dist } = await db.from("distributors")
+      .select("rank, left_leg_pv, right_leg_pv, pv")
+      .eq("id", userId).maybeSingle();
+    if (!dist) return res.status(404).json({ error: "Distributor profile not found." });
+
+    const { data: allTiers } = await db.from("rank_tiers")
+      .select("*").order("display_order", { ascending: true });
+
+    const myTier = (allTiers ?? []).find((t: any) => t.rank_key === dist.rank) ?? null;
+
+    const leftPv   = dist.left_leg_pv  ?? 0;
+    const rightPv  = dist.right_leg_pv ?? 0;
+    const weakerPv = Math.min(leftPv, rightPv);
+    const bonusPct  = myTier?.weekly_bonus_pct    ?? 0;
+    const ceilingXaf = myTier?.weekly_ceiling_xaf ?? 0;
+    const rawBonus  = Math.floor(weakerPv * bonusPct / 100);
+    const bonusXaf  = ceilingXaf > 0 ? Math.min(rawBonus, ceilingXaf) : rawBonus;
+
+    // Commission totals by level for Leadership Bonus breakdown
+    const { data: comms } = await db.from("commissions")
+      .select("level, amount_xaf")
+      .eq("distributor_id", userId)
+      .eq("status", "completed");
+    const commByGen: Record<number, number> = {};
+    for (const c of (comms ?? [])) {
+      commByGen[c.level] = (commByGen[c.level] ?? 0) + (c.amount_xaf ?? 0);
+    }
+
+    // 12-generation leadership bonus breakdown
+    const genPcts: number[] = myTier?.generation_pcts ?? [];
+    const leadershipBonus = Array.from({ length: 12 }, (_, i) => {
+      const gen = i + 1;
+      const pct = genPcts[i] ?? 0;
+      const unlocked = pct > 0;
+      let unlockRank: string | null = null;
+      if (!unlocked && allTiers) {
+        for (const tier of allTiers) {
+          const tierPcts: number[] = tier.generation_pcts ?? [];
+          if ((tierPcts[i] ?? 0) > 0) { unlockRank = tier.rank_label_en ?? tier.rank_key; break; }
+        }
+      }
+      return {
+        generation:  gen,
+        pct,
+        earned_xaf: commByGen[i] ?? 0,
+        unlocked,
+        unlock_rank: unlockRank,
+      };
+    });
+
+    res.json({
+      rank:      dist.rank,
+      rank_tier: myTier,
+      performance_bonus: {
+        left_leg_pv:    leftPv,
+        right_leg_pv:   rightPv,
+        weaker_leg:     leftPv <= rightPv ? "left" : "right",
+        weaker_leg_pv:  weakerPv,
+        weekly_bonus_pct:   bonusPct,
+        weekly_ceiling_xaf: ceilingXaf,
+        raw_bonus_xaf:  rawBonus,
+        bonus_xaf:      bonusXaf,
+        is_capped:      ceilingXaf > 0 && rawBonus > ceilingXaf,
+      },
+      leadership_bonus: leadershipBonus,
+    });
   }));
 
   // Simple in-memory rate limiter for bootstrap endpoint
