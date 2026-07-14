@@ -3,7 +3,7 @@ import { Upload, X, CheckCircle2, AlertCircle, Image as ImageIcon, FileText, Ref
 import { supabase } from "../lib/supabase";
 
 interface MediaUploaderProps {
-  bucket: "media" | "documents" | "testimonials";
+  bucket: "media" | "documents" | "testimonials" | "media-center";
   /**
    * Subfolder within the bucket, e.g. "branding", "blog", "gallery/uncategorized".
    * If omitted files land in the bucket root.

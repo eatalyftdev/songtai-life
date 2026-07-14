@@ -11,6 +11,12 @@ interface VideoUploaderProps {
   currentThumbnailUrl?: string;
   onUploaded: (videoUrl: string, thumbnailUrl: string, durationSeconds: number) => void;
   onRemoved?: () => void;
+  /** Storage bucket the video itself uploads to. Defaults to "product-videos". */
+  bucket?: string;
+  /** Storage bucket the auto-generated thumbnail uploads to. Defaults to "media". */
+  thumbnailBucket?: string;
+  /** Subfolder within thumbnailBucket. Defaults to "products/thumbnails". */
+  thumbnailFolder?: string;
 }
 
 type UploadStatus = "idle" | "uploading" | "processing" | "done" | "error";
@@ -64,6 +70,9 @@ export default function VideoUploader({
   currentThumbnailUrl,
   onUploaded,
   onRemoved,
+  bucket = "product-videos",
+  thumbnailBucket = "media",
+  thumbnailFolder = "products/thumbnails",
 }: VideoUploaderProps) {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [progress, setProgress] = useState(0);
@@ -114,7 +123,7 @@ export default function VideoUploader({
         uploadDataDuringCreation: true,
         removeFingerprintOnSuccess: true,
         metadata: {
-          bucketName: "product-videos",
+          bucketName: bucket,
           objectName,
           contentType: file.type || "video/mp4",
           cacheControl: "3600",
@@ -137,7 +146,7 @@ export default function VideoUploader({
       throw err;
     });
 
-    const videoPublicUrl = `${SUPABASE_URL}/storage/v1/object/public/product-videos/${objectName}`;
+    const videoPublicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${objectName}`;
     setUploadedVideoUrl(videoPublicUrl);
     setProgress(92);
 
@@ -153,13 +162,13 @@ export default function VideoUploader({
 
         const thumbExt = "jpg";
         const thumbName = `${folder}-${locale}-${Date.now()}.${thumbExt}`;
-        const thumbPath = `products/thumbnails/${thumbName}`;
+        const thumbPath = `${thumbnailFolder}/${thumbName}`;
         const { data: thumbData, error: thumbErr } = await supabase.storage
-          .from("media")
+          .from(thumbnailBucket)
           .upload(thumbPath, blob, { contentType: "image/jpeg", cacheControl: "3600", upsert: true });
 
         if (!thumbErr && thumbData) {
-          const { data: thumbUrlData } = supabase.storage.from("media").getPublicUrl(thumbData.path);
+          const { data: thumbUrlData } = supabase.storage.from(thumbnailBucket).getPublicUrl(thumbData.path);
           thumbnailUrl = thumbUrlData.publicUrl;
         }
       }
@@ -170,7 +179,7 @@ export default function VideoUploader({
     setProgress(100);
     setStatus("done");
     onUploaded(videoPublicUrl, thumbnailUrl, durationSeconds);
-  }, [folder, locale, onUploaded]);
+  }, [folder, locale, onUploaded, bucket, thumbnailBucket, thumbnailFolder]);
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
