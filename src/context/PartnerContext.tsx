@@ -65,6 +65,43 @@ export function PartnerProvider({ children, notAvailableSlot, loadingSlot }: Par
 
     setState("loading");
     setCurrentSlug(slug);
+  pending_contact_name: string | null;
+  pending_contact_phone: string | null;
+  status: "pending" | "active" | "suspended";
+}
+
+type PartnerState = "loading" | "active" | "not_found" | "main_site";
+
+interface PartnerProviderProps {
+  children: ReactNode;
+  loadingSlot: ReactNode;
+  notAvailableSlot: (slug: string) => ReactNode;
+}
+
+const PartnerContext = createContext<PartnerData | null>(null);
+
+export function usePartner(): PartnerData | null {
+  return useContext(PartnerContext);
+}
+
+export function PartnerProvider({ children, loadingSlot, notAvailableSlot }: PartnerProviderProps) {
+  const location = useLocation();
+  const [partner, setPartner] = useState<PartnerData | null>(null);
+  const [state, setState] = useState<PartnerState>("main_site");
+  const [currentSlug, setCurrentSlug] = useState("");
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/p\/([^/]+)/);
+    if (!match) {
+      setPartner(null);
+      setState("main_site");
+      setCurrentSlug("");
+      return;
+    }
+
+    const partnerSlug = match[1];
+    setCurrentSlug(partnerSlug);
+    setState("loading");
 
     supabase
       .from("partners")
@@ -74,6 +111,10 @@ export function PartnerProvider({ children, notAvailableSlot, loadingSlot }: Par
         "hero_image_url, status"
       )
       .eq("slug", slug)
+        "hero_image_url, pending_contact_name, pending_contact_phone, status"
+      )
+      .eq("slug", partnerSlug)
+      .eq("status", "active")
       .single()
       .then(({ data, error }) => {
         const row = data as unknown as PartnerData | null;
@@ -89,6 +130,10 @@ export function PartnerProvider({ children, notAvailableSlot, loadingSlot }: Par
 
   if (slug && state === "loading") return <>{loadingSlot}</>;
   if (slug && state === "not_found") return <>{notAvailableSlot(slug)}</>;
+  }, [location.pathname]);
+
+  if (state === "loading") return <>{loadingSlot}</>;
+  if (state === "not_found") return <>{notAvailableSlot(currentSlug)}</>;
 
   return (
     <PartnerContext.Provider value={partner}>
