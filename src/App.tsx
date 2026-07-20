@@ -46,6 +46,7 @@ const PaymentConfigPage        = lazy(() => import("./components/admin/pages/Pay
 const AISettingsPage           = lazy(() => import("./components/admin/pages/AISettingsPage"));
 const PageEditsPage            = lazy(() => import("./components/admin/pages/PageEditsPage"));
 const PartnersPage             = lazy(() => import("./components/admin/pages/PartnersPage"));
+const GodModeDistributorPage   = lazy(() => import("./components/admin/pages/GodModeDistributorPage"));
 
 function AdminFallback() {
   return (
@@ -373,6 +374,7 @@ function AppContent() {
             <Route path="settings"     element={<Suspense fallback={<AdminFallback />}><SettingsPage /></Suspense>} />
             <Route path="audit"        element={<Suspense fallback={<AdminFallback />}><AuditPage /></Suspense>} />
             <Route path="partners"     element={<Suspense fallback={<AdminFallback />}><PartnersPage /></Suspense>} />
+            <Route path="god-mode"     element={<Suspense fallback={<AdminFallback />}><GodModeDistributorPage /></Suspense>} />
           </Route>
 
           {/* Tech Spec Browser */}

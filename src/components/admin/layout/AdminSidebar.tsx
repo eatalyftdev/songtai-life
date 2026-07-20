@@ -5,7 +5,7 @@ import {
   LayoutDashboard, ShoppingBag, ShoppingCart, Users, Wallet, Award,
   BookOpen, Calendar, Star, Image, CalendarCheck, Mail, Send,
   Library, Settings, History, LogOut, ChevronLeft, ChevronRight, Menu,
-  HelpCircle, Layers, Sliders, BookMarked, Phone, Leaf, CreditCard, Bot, FileEdit, Globe
+  HelpCircle, Layers, Sliders, BookMarked, Phone, Leaf, CreditCard, Bot, FileEdit, Globe, Zap
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 
@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { label: "Newsletter",       path: "/admin/newsletter",    icon: Send,            roles: ["admin","superadmin"] },
   { label: "Media Library",    path: "/admin/media",         icon: Library,         roles: ["admin","superadmin","content_editor"] },
   { label: "Partner Sites",    path: "/admin/partners",      icon: Globe,           roles: ["admin","superadmin"] },
+  { label: "God Mode",         path: "/admin/god-mode",      icon: Zap,             roles: ["admin","superadmin"] },
   { label: "Site Settings",    path: "/admin/settings",      icon: Settings,        roles: ["admin","superadmin"] },
   { label: "Audit Log",        path: "/admin/audit",         icon: History,         roles: ["admin","superadmin"] },
 ];

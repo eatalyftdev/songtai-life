@@ -1,7 +1,8 @@
 import { useState, useEffect, FormEvent, ReactNode } from "react";
 import {
   Globe, Plus, Edit2, CheckCircle, PauseCircle, PlayCircle,
-  Link2, Copy, Check, ExternalLink, AlertTriangle, User
+  Link2, Copy, Check, ExternalLink, AlertTriangle, User,
+  RefreshCw, Shield, XCircle
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import PageShell, { Card, TableWrapper, Th, Td, Btn, SearchInput, Select } from "../shared/PageShell";
@@ -26,6 +27,7 @@ interface Partner {
   pending_contact_phone: string | null;
   custom_domain: string | null;
   domain_status: "none" | "pending_verification" | "verified" | "failed" | null;
+  domain_verification_token: string | null;
   created_at: string;
   approved_at: string | null;
   distributorEmail?: string;
@@ -117,6 +119,9 @@ export default function PartnersPage() {
   const [error, setError] = useState("");
   const [copiedSlug, setCopiedSlug] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [domainOp, setDomainOp] = useState<"attaching" | "checking" | null>(null);
+  const [dnsRecords, setDnsRecords] = useState<{ type: string; domain: string; value: string }[]>([]);
+  const [domainOpMsg, setDomainOpMsg] = useState("");
 
   // ── Load partners ──────────────────────────────────────────────────────────
   const load = async () => {
@@ -153,6 +158,8 @@ export default function PartnersPage() {
   };
 
   const openEdit = (p: Partner) => {
+    setDnsRecords([]);
+    setDomainOpMsg("");
     setEditing(p);
     setForm({
       slug: p.slug,
@@ -259,6 +266,52 @@ export default function PartnersPage() {
   const relTime = (iso: string) => {
     const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
     return d === 0 ? "Today" : `${d}d ago`;
+  };
+
+  // ── Domain management ──────────────────────────────────────────────────────
+  const attachDomain = async (id: string, domain: string) => {
+    setDomainOp("attaching");
+    setDnsRecords([]);
+    setDomainOpMsg("");
+    try {
+      const res = await fetch(`/api/admin/partner/${id}/domain/attach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ domain }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setDomainOpMsg(json.error ?? "Failed to attach domain."); return; }
+      setDnsRecords(json.verification ?? []);
+      setDomainOpMsg(json.message ?? "Domain attached.");
+      setPartners(prev => prev.map(p => p.id === id ? { ...p, custom_domain: domain, domain_status: "pending_verification" } : p));
+      if (editing?.id === id) setEditing(e => e ? { ...e, custom_domain: domain, domain_status: "pending_verification" } : e);
+    } catch (err: any) {
+      setDomainOpMsg(err.message ?? "Unexpected error.");
+    } finally {
+      setDomainOp(null);
+    }
+  };
+
+  const checkDomainStatus = async (id: string) => {
+    setDomainOp("checking");
+    setDomainOpMsg("");
+    try {
+      const res = await fetch(`/api/admin/partner/${id}/domain/check`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) { setDomainOpMsg(json.error ?? "Failed to check domain."); return; }
+      setDnsRecords(json.verification ?? []);
+      setDomainOpMsg(json.message ?? "");
+      const newStatus = json.domain_status as Partner["domain_status"];
+      setPartners(prev => prev.map(p => p.id === id ? { ...p, domain_status: newStatus } : p));
+      if (editing?.id === id) setEditing(e => e ? { ...e, domain_status: newStatus } : e);
+    } catch (err: any) {
+      setDomainOpMsg(err.message ?? "Unexpected error.");
+    } finally {
+      setDomainOp(null);
+    }
   };
 
   return (
@@ -491,6 +544,103 @@ export default function PartnersPage() {
               The partner site will remain accessible at its default <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{form.slug || "slug"}</code> URL regardless of custom domain status.
             </p>
           </FormRow>
+
+          {/* Domain verification — only shown when editing an existing partner with a custom domain */}
+          {editing && editing.custom_domain && (
+            <div className="space-y-3">
+              <SectionHeader>Domain Verification</SectionHeader>
+
+              {/* Status badge */}
+              <div className="flex items-center gap-2">
+                {editing.domain_status === "verified" && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-800/40">
+                    <Shield className="w-3 h-3" /> Verified — SSL active
+                  </span>
+                )}
+                {(editing.domain_status === "pending_verification" || editing.domain_status === "none" || !editing.domain_status) && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-900/40 text-amber-400 border border-amber-800/40">
+                    <AlertTriangle className="w-3 h-3" /> {editing.domain_status === "pending_verification" ? "Pending verification" : "Not attached to Vercel"}
+                  </span>
+                )}
+                {editing.domain_status === "failed" && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-900/30 text-red-400 border border-red-800/30">
+                    <XCircle className="w-3 h-3" /> Verification failed
+                  </span>
+                )}
+              </div>
+
+              {/* Attach button — only if not yet added to Vercel */}
+              {(editing.domain_status === "none" || !editing.domain_status) && (
+                <div className="flex items-center gap-2">
+                  <Btn
+                    variant="secondary" size="xs"
+                    loading={domainOp === "attaching"}
+                    onClick={() => attachDomain(editing.id, editing.custom_domain!)}
+                  >
+                    <Globe className="w-3 h-3" />
+                    Attach to Vercel
+                  </Btn>
+                  <p className="text-[10px] text-stone-500">Registers this domain with the partner platform — you'll get the DNS records to add at your registrar.</p>
+                </div>
+              )}
+
+              {/* Check status button — if pending or failed */}
+              {(editing.domain_status === "pending_verification" || editing.domain_status === "failed") && (
+                <Btn
+                  variant="secondary" size="xs"
+                  loading={domainOp === "checking"}
+                  onClick={() => checkDomainStatus(editing.id)}
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Check verification status
+                </Btn>
+              )}
+
+              {/* Operation message */}
+              {domainOpMsg && (
+                <p className={`text-[11px] leading-relaxed ${editing.domain_status === "verified" ? "text-emerald-400" : "text-stone-400"}`}>
+                  {domainOpMsg}
+                </p>
+              )}
+
+              {/* DNS records table */}
+              {dnsRecords.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wide">DNS Records to add at your registrar</p>
+                  <div className="rounded-xl border border-stone-800 overflow-hidden">
+                    <table className="w-full text-[10px]">
+                      <thead className="bg-stone-800/60">
+                        <tr>
+                          <th className="text-left px-3 py-1.5 text-stone-400 font-semibold">Type</th>
+                          <th className="text-left px-3 py-1.5 text-stone-400 font-semibold">Name / Host</th>
+                          <th className="text-left px-3 py-1.5 text-stone-400 font-semibold">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dnsRecords.map((r, i) => (
+                          <tr key={i} className="border-t border-stone-800">
+                            <td className="px-3 py-1.5 font-mono text-amber-400 font-bold">{r.type}</td>
+                            <td className="px-3 py-1.5 font-mono text-stone-300">{r.domain}</td>
+                            <td className="px-3 py-1.5 font-mono text-stone-400 break-all">{r.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[10px] text-stone-500">
+                    Add these records at your DNS provider, then click "Check verification status". Vercel provisions SSL automatically once verified.
+                  </p>
+                </div>
+              )}
+
+              {/* Verified state — no action needed */}
+              {editing.domain_status === "verified" && dnsRecords.length === 0 && (
+                <p className="text-[11px] text-stone-500">
+                  Domain is verified and serving traffic. SSL is active. The site also remains accessible at its default <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{editing.slug}</code> URL.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Status */}
           <SectionHeader>Visibility</SectionHeader>

@@ -1,0 +1,55 @@
+14:13:07.214 Running build in Washington, D.C., USA (East) – iad1
+14:13:07.215 Build machine configuration: 2 cores, 8 GB
+14:13:07.327 Cloning github.com/eatalyftdev/songtai-life (Branch: partners-songtai, Commit: 08f992e)
+14:13:08.101 Cloning completed: 774.000ms
+14:13:08.234 Restored build cache from previous deployment (77QoatU5cJ7g8AwTZRJ8tYBo4tpa)
+14:13:08.437 Running "vercel build"
+14:13:08.455 Vercel CLI 56.2.0
+14:13:09.224 Running "install" command: `npm install`...
+14:13:12.373 
+14:13:12.373 up to date, audited 574 packages in 3s
+14:13:12.374 
+14:13:12.374 81 packages are looking for funding
+14:13:12.374   run `npm fund` for details
+14:13:12.389 
+14:13:12.389 10 moderate severity vulnerabilities
+14:13:12.389 
+14:13:12.390 To address issues that do not require attention, run:
+14:13:12.390   npm audit fix
+14:13:12.390 
+14:13:12.390 To address all issues (including breaking changes), run:
+14:13:12.391   npm audit fix --force
+14:13:12.391 
+14:13:12.391 Run `npm audit` for details.
+14:13:12.652 
+14:13:12.653 > react-example@0.0.0 build
+14:13:12.653 > vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs
+14:13:12.653 
+14:13:13.280 vite v6.4.3 building for production...
+14:13:13.367 transforming...
+14:13:14.253 ✓ 18 modules transformed.
+14:13:14.256 ✗ Build failed in 947ms
+14:13:14.257 error during build:
+14:13:14.257 [vite:esbuild] Transform failed with 1 error:
+14:13:14.257 /vercel/path0/src/context/PartnerContext.tsx:73:0: ERROR: Expected ")" but found "type"
+14:13:14.257 file: /vercel/path0/src/context/PartnerContext.tsx:73:0
+14:13:14.257 
+14:13:14.257 Expected ")" but found "type"
+14:13:14.258 71 |  }
+14:13:14.258 72 |  
+14:13:14.258 73 |  type PartnerState = "loading" | "active" | "not_found" | "main_site";
+14:13:14.258    |  ^
+14:13:14.258 74 |  
+14:13:14.258 75 |  interface PartnerProviderProps {
+14:13:14.258 
+14:13:14.258     at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1467:15)
+14:13:14.258     at /vercel/path0/node_modules/esbuild/lib/main.js:736:50
+14:13:14.259     at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:603:9)
+14:13:14.259     at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:658:12)
+14:13:14.259     at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:581:7)
+14:13:14.259     at Socket.emit (node:events:509:28)
+14:13:14.259     at addChunk (node:internal/streams/readable:563:12)
+14:13:14.259     at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+14:13:14.259     at Readable.push (node:internal/streams/readable:394:5)
+14:13:14.259     at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+14:13:14.364 Error: Command "npm run build" exited with 1

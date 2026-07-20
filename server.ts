@@ -1784,6 +1784,152 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ success: true, partner: data });
   }));
 
+  // ── Admin: attach a custom domain to a partner site via Vercel API ──────────
+  app.post("/api/admin/partner/:id/domain/attach", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+
+    const VERCEL_API_TOKEN   = process.env.VERCEL_API_TOKEN;
+    const VERCEL_PROJECT_ID  = process.env.VERCEL_PROJECT_ID;
+    if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
+      return res.status(503).json({
+        error: "Vercel domain integration is not configured. Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment secrets.",
+        missing: [!VERCEL_API_TOKEN && "VERCEL_API_TOKEN", !VERCEL_PROJECT_ID && "VERCEL_PROJECT_ID"].filter(Boolean),
+      });
+    }
+
+    const { id } = req.params;
+    const { domain } = req.body;
+    if (!domain || !/^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i.test(domain)) {
+      return res.status(400).json({ error: "A valid domain name is required (e.g. janedoe-wellness.com)." });
+    }
+
+    const { data: partner } = await db.from("partners").select("id, slug, custom_domain").eq("id", id).maybeSingle();
+    if (!partner) return res.status(404).json({ error: "Partner not found." });
+
+    // Call Vercel API to add the domain
+    const vercelRes = await fetch(
+      `https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/domains`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${VERCEL_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: domain }),
+      }
+    );
+    const vercelData = await vercelRes.json() as any;
+
+    if (!vercelRes.ok && vercelData.error?.code !== "domain_already_in_use") {
+      console.error("[Domain] Vercel API error:", vercelData);
+      return res.status(502).json({
+        error: vercelData.error?.message ?? "Vercel API rejected the domain. Check the domain name and try again.",
+        vercel_code: vercelData.error?.code,
+      });
+    }
+
+    const verification = vercelData.verification ?? [];
+    const now = new Date().toISOString();
+
+    // Update partner row: store domain, verification token, and set status
+    const updatePayload: Record<string, any> = {
+      custom_domain: domain,
+      domain_status: "pending_verification",
+      vercel_domain_added_at: now,
+    };
+    // Store verification records as JSON string if the column exists
+    if (verification.length > 0) {
+      updatePayload.domain_verification_token = JSON.stringify(verification);
+    }
+    await db.from("partners").update(updatePayload).eq("id", id);
+
+    try {
+      await db.from("audit_logs").insert({
+        action: "Partner Custom Domain Attached",
+        details: `Admin ${actor.email ?? actorId} attached domain "${domain}" to partner site "${partner.slug}" (id: ${id}). Vercel status: pending_verification.`,
+      });
+    } catch {}
+
+    return res.json({
+      success: true,
+      domain,
+      domain_status: "pending_verification",
+      verification,
+      message: "Domain added to Vercel. Configure the DNS records below at your domain registrar, then check status.",
+    });
+  }));
+
+  // ── Admin: check Vercel domain verification status ────────────────────────
+  app.post("/api/admin/partner/:id/domain/check", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+
+    const VERCEL_API_TOKEN   = process.env.VERCEL_API_TOKEN;
+    const VERCEL_PROJECT_ID  = process.env.VERCEL_PROJECT_ID;
+    if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
+      return res.status(503).json({
+        error: "Vercel domain integration is not configured. Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment secrets.",
+      });
+    }
+
+    const { id } = req.params;
+    const { data: partner } = await db.from("partners").select("id, slug, custom_domain, domain_status").eq("id", id).maybeSingle();
+    if (!partner) return res.status(404).json({ error: "Partner not found." });
+    if (!partner.custom_domain) return res.status(400).json({ error: "This partner has no custom domain set." });
+
+    // Query Vercel for domain status
+    const vercelRes = await fetch(
+      `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains/${encodeURIComponent(partner.custom_domain)}`,
+      { headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}` } }
+    );
+    const vercelData = await vercelRes.json() as any;
+
+    if (!vercelRes.ok) {
+      console.error("[Domain] Vercel check error:", vercelData);
+      return res.status(502).json({
+        error: vercelData.error?.message ?? "Could not check domain status with Vercel.",
+        vercel_code: vercelData.error?.code,
+      });
+    }
+
+    const verified   = vercelData.verified === true;
+    const verification = vercelData.verification ?? [];
+    const newStatus  = verified ? "verified" : "pending_verification";
+
+    await db.from("partners").update({ domain_status: newStatus }).eq("id", id);
+
+    if (verified) {
+      try {
+        await db.from("audit_logs").insert({
+          action: "Partner Custom Domain Verified",
+          details: `Domain "${partner.custom_domain}" for partner "${partner.slug}" (id: ${id}) is now verified. SSL will be provisioned by Vercel automatically.`,
+        });
+      } catch {}
+    }
+
+    return res.json({
+      success: true,
+      domain: partner.custom_domain,
+      verified,
+      domain_status: newStatus,
+      verification,
+      message: verified
+        ? "Domain is verified! Vercel will provision SSL automatically within minutes."
+        : "Domain is not yet verified. Ensure the DNS records are correctly configured at your registrar.",
+    });
+  }));
+
   // ── Public partner lookup by slug ─────────────────────────────────────────
   app.get("/api/partner/:slug", requireDb(async (db, req, res) => {
     const { slug } = req.params as { slug: string };
