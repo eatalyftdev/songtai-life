@@ -1803,11 +1803,6 @@ Answer concisely, helpfully, and professionally. Support both English and French
     if (error || !data) {
       return res.status(404).json({ error: "Partner not found or inactive" });
     }
-      .select("id, slug, whatsapp_number, contact_email, hero_title_en, hero_title_fr, hero_subtitle_en, hero_subtitle_fr, hero_image_url, status")
-      .eq("slug", slug)
-      .eq("status", "active")
-      .single();
-    if (error || !data) return res.status(404).json({ error: "Partner not found or inactive" });
     return res.json(data);
   }));
 
