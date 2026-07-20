@@ -5,6 +5,7 @@ import { ShoppingBag, Globe2, Sun, Moon, Menu, X, ChevronDown } from "lucide-rea
 import i18n from "../i18n";
 import { supabase } from "../lib/supabase";
 import Logo from "./Logo";
+import { usePartner } from "../context/PartnerContext";
 
 interface NavbarProps {
   activeTab: "brand" | "portal" | "tech-spec";
@@ -83,7 +84,12 @@ export default function Navbar({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [megaOpen]);
 
+  const partner = usePartner();
+  const isPartnerSite = !!partner;
+
   const handleMenuClick = (id: string) => {
+    // Block join/opportunity navigation on partner sites
+    if (isPartnerSite && (id === "opportunity" || id === "join")) return;
     setActiveTab("brand");
     setBrandPage(id);
     setMobileMenuOpen(false);
@@ -263,13 +269,15 @@ export default function Navbar({
               )}
             </button>
 
-            {/* Become a Distributor CTA */}
-            <button
-              onClick={() => handleMenuClick("opportunity")}
-              className="hidden xl:flex items-center px-3 py-1.5 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-900 rounded-full text-xs font-black transition-all cursor-pointer shadow-md min-h-[36px] whitespace-nowrap"
-            >
-              {t("nav.join")}
-            </button>
+            {/* Become a Distributor CTA — hidden on partner sites */}
+            {!isPartnerSite && (
+              <button
+                onClick={() => handleMenuClick("opportunity")}
+                className="hidden xl:flex items-center px-3 py-1.5 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-900 rounded-full text-xs font-black transition-all cursor-pointer shadow-md min-h-[36px] whitespace-nowrap"
+              >
+                {t("nav.join")}
+              </button>
+            )}
 
             {/* Mobile Hamburger */}
             <button
@@ -336,12 +344,15 @@ export default function Navbar({
                 <Globe2 className="w-4 h-4" />
                 {locale === "en" ? "Passer en Français" : "Switch to English"}
               </button>
-              <button
-                onClick={() => handleMenuClick("opportunity")}
-                className="flex-1 py-3 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-900 rounded-xl text-sm font-black transition-all cursor-pointer text-center min-h-[48px]"
-              >
-                {t("nav.join")}
-              </button>
+              {/* Mobile join CTA — hidden on partner sites */}
+              {!isPartnerSite && (
+                <button
+                  onClick={() => handleMenuClick("opportunity")}
+                  className="flex-1 py-3 bg-[color:var(--color-gold)] hover:opacity-90 text-stone-900 rounded-xl text-sm font-black transition-all cursor-pointer text-center min-h-[48px]"
+                >
+                  {t("nav.join")}
+                </button>
+              )}
             </motion.div>
           </motion.div>
         )}

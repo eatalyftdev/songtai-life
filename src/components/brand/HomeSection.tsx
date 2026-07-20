@@ -10,6 +10,7 @@ import { PRODUCTS_SEED, BLOG_SEED, TESTIMONIALS_SEED } from "../../data/mockData
 import { supabase } from "../../lib/supabase";
 import { useHomepageSection } from "../../hooks/useHomepageSection";
 import InitialsAvatar from "./InitialsAvatar";
+import { usePartner } from "../../context/PartnerContext";
 
 // ── Icon map for DB-stored icon names ──────────────────────────────────────
 type LucideIcon = typeof Award;
@@ -41,6 +42,7 @@ interface HomeSectionProps {
 export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }: HomeSectionProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith("fr") ? "fr" : "en";
+  const partner = usePartner();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [currentTestimonialIdx, setCurrentTestimonialIdx] = useState(0);
   const [selectedGalleryImg, setSelectedGalleryImg] = useState<string | null>(null);
@@ -75,10 +77,23 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
   });
 
   // ── Resolved text (DB > i18n fallback) ─────────────────────────────────
-  const heroHeadline = locale === "fr"
+  // Partner hero overrides — if the partner has set bilingual hero content, use it
+  // Both EN and FR must be non-empty to trigger an override (prevents locale mismatch)
+  const partnerHasHero =
+    !!partner &&
+    !!(partner.hero_title_en && partner.hero_title_fr);
+  const partnerHasSub =
+    !!partner &&
+    !!(partner.hero_subtitle_en && partner.hero_subtitle_fr);
+
+  const heroHeadline = partnerHasHero
+    ? (locale === "fr" ? partner!.hero_title_fr! : partner!.hero_title_en!)
+    : locale === "fr"
     ? (heroSection.headline_fr || t("hero.slogan"))
     : (heroSection.headline_en || t("hero.slogan"));
-  const heroSub = locale === "fr"
+  const heroSub = partnerHasSub
+    ? (locale === "fr" ? partner!.hero_subtitle_fr! : partner!.hero_subtitle_en!)
+    : locale === "fr"
     ? (heroSection.subheadline_fr || t("hero.sub"))
     : (heroSection.subheadline_en || t("hero.sub"));
   const heroCta1 = locale === "fr"
@@ -420,13 +435,16 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
               transition={{ duration: 0.8, delay: 0.2 + heroWords.length * 0.08, ease: [0.16, 1, 0.3, 1] }}
               className="flex flex-col xs:flex-row flex-wrap gap-3 sm:gap-4 pt-2"
             >
-              <button
-                onClick={() => onNavigate("join")}
-                className="px-6 sm:px-8 py-3.5 sm:py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-2xl transition-all duration-200 shadow-lg hover:shadow-emerald-950/40 hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-2 group border border-transparent min-h-[48px] keep-white"
-              >
-                <span>{heroCta1}</span>
-                <ArrowRight className={`w-4 h-4 ${accentGold} transition-transform duration-200 group-hover:translate-x-1 flex-shrink-0`} />
-              </button>
+              {/* Join CTA — hidden on partner sites */}
+              {!partner && (
+                <button
+                  onClick={() => onNavigate("join")}
+                  className="px-6 sm:px-8 py-3.5 sm:py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-2xl transition-all duration-200 shadow-lg hover:shadow-emerald-950/40 hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-2 group border border-transparent min-h-[48px] keep-white"
+                >
+                  <span>{heroCta1}</span>
+                  <ArrowRight className={`w-4 h-4 ${accentGold} transition-transform duration-200 group-hover:translate-x-1 flex-shrink-0`} />
+                </button>
+              )}
 
               <button
                 onClick={() => onNavigate("products")}
@@ -443,7 +461,18 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
-            <HeroCarousel />
+            {/* On partner sites with a custom hero image, show it instead of the carousel */}
+            {partner?.hero_image_url ? (
+              <div className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-2xl">
+                <img
+                  src={partner.hero_image_url}
+                  alt={heroHeadline}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <HeroCarousel />
+            )}
           </motion.div>
         </div>
 

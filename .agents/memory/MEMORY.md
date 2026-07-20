@@ -14,3 +14,4 @@
 - [Product video — YouTube link support](product-video-youtube-feature.md) — dual video source (upload vs YouTube) per locale, mutually exclusive; SPA has no real URL deep-linking despite sitemap.
 - [Theme system architecture](theme-system.md) — brand-matched light/dark tokens; Fraunces display font; signature gradient rule; stone+emerald palette remap pattern; gold CSS var usage.
 - [MLM anti-pattern audit rules](mlm-anti-pattern-audit.md) — no fake-people stock photos, carousels need visible pause controls, no native alert(), certs belong in footer sitewide.
+- [Partner Sites Multi-Tenant Architecture](partner-sites-architecture.md) — /p/:slug path routing, PartnerProvider context, component hook points, RLS requirement for anon reads.

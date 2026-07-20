@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Product } from "../types";
 import SEO from "./SEO";
+import { usePartner } from "../context/PartnerContext";
 import Footer from "./Footer";
 import AppointmentBooking from "./brand/AppointmentBooking";
 
@@ -54,7 +55,15 @@ export default function BrandShowcase({
   addNotification, openPrivacyPolicy, theme,
 }: BrandShowcaseProps) {
   const { t } = useTranslation();
-  const seo = PAGE_SEO[brandPage] ?? PAGE_SEO.home;
+  const partner = usePartner();
+  const isPartnerSite = !!partner;
+
+  // On partner sites, redirect join/opportunity pages to home
+  const effectivePage = isPartnerSite && (brandPage === "opportunity" || brandPage === "join")
+    ? "home"
+    : brandPage;
+
+  const seo = PAGE_SEO[effectivePage] ?? PAGE_SEO.home;
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -65,34 +74,35 @@ export default function BrandShowcase({
       <SEO title={t(seo.titleKey)} description={t(seo.descKey)} />
 
       <div className="flex-grow">
-        {brandPage === "home" && (
+        {effectivePage === "home" && (
           <HomeSection
             onNavigate={(page) => setBrandPage(page as BrandSubPage)}
             onAddToCart={addToCart}
             theme={theme}
           />
         )}
-        {brandPage === "about" && <About />}
-        {brandPage === "products" && <Products onAddToCart={addToCart} />}
-        {brandPage === "opportunity" && (
+        {effectivePage === "about" && <About />}
+        {effectivePage === "products" && <Products onAddToCart={addToCart} />}
+        {/* opportunity and join are intentionally omitted on partner sites (effectivePage remaps them to "home") */}
+        {effectivePage === "opportunity" && (
           <Opportunity onNavigate={(page) => setBrandPage(page as BrandSubPage)} />
         )}
-        {brandPage === "events" && <Events addNotification={addNotification} />}
-        {brandPage === "blog" && <Blog />}
-        {brandPage === "gallery" && <Gallery />}
-        {brandPage === "media" && <MediaCenter />}
-        {brandPage === "videos" && (
+        {effectivePage === "events" && <Events addNotification={addNotification} />}
+        {effectivePage === "blog" && <Blog />}
+        {effectivePage === "gallery" && <Gallery />}
+        {effectivePage === "media" && <MediaCenter />}
+        {effectivePage === "videos" && (
           <VideoShowcase onNavigate={(page) => setBrandPage(page as BrandSubPage)} />
         )}
-        {brandPage === "faq" && <FAQ />}
-        {brandPage === "contact" && <Contact addNotification={addNotification} />}
-        {brandPage === "join" && (
+        {effectivePage === "faq" && <FAQ />}
+        {effectivePage === "contact" && <Contact addNotification={addNotification} />}
+        {effectivePage === "join" && (
           <BecomeDistributor
             addNotification={addNotification}
             onNavigate={(page) => setBrandPage(page as BrandSubPage)}
           />
         )}
-        {brandPage === "appointment" && (
+        {effectivePage === "appointment" && (
           <AppointmentBooking addNotification={addNotification} />
         )}
       </div>

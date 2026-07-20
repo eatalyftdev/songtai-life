@@ -1,0 +1,89 @@
+# Claude Code Build Prompt — Songtai Partners: Multi-Tenant Partner Websites
+
+Paste this into Claude Code inside the `songtai-life` repo.
+
+---
+
+## 0. Skill activation
+
+Activate **Frontend/Mobile**, **Backend**, **API/Architecture**, **Infrastructure**, **DevOps**, and **Security** skills from the `jeffallan/claude-skills` framework before coding. State which skills you're activating.
+
+## 1. What this actually is — read before building
+
+This is **not** "one git branch per partner." It's a single multi-tenant codebase, branched once from the current main site, that renders a different partner's branding depending on which URL it's accessed from — all partners share the same deployed app and the same Supabase database as the main site. A new partner never requires new code or a new deployment — just a new row in the `partners` table, created through the admin panel.
+
+**Repo/branch/deploy setup:**
+1. Create a new branch off current `main`, e.g. `partners-platform`.
+2. This branch becomes its own Vercel project (e.g. `songtai-life-partners`), deployed independently from the main `songtai-life` Vercel project — separate deployment, same Supabase project/credentials (same env vars for `SUPABASE_URL`/keys). Confirm this new Vercel project is wired to auto-deploy from the `partners-platform` branch, not `main`.
+3. Going forward, shared logic (product data rendering, FAQ, blog, theme system, i18n) should be kept easy to sync between `main` and `partners-platform` — if the two branches diverge significantly over time, flag this as a refactor risk (e.g. shared component library/package) rather than letting them silently drift apart.
+
+## 2. Schema already in place (no migration needed)
+
+```
+partners (
+  id, distributor_id -> distributors,
+  slug,                      -- unique, used for subdomain or /p/[slug] path
+  custom_domain,             -- optional, nullable, for future custom domains
+  whatsapp_number,           -- REPLACES the company WhatsApp number, this partner's instance only
+  contact_email,
+  hero_title_en/fr, hero_subtitle_en/fr, hero_image_url,
+  status ['pending'|'active'|'suspended'],
+  approved_by -> profiles, approved_at,
+  created_at, updated_at
+)
+```
+
+A partner site is uniquely identified by matching the incoming request's subdomain (or `/p/[slug]` path segment, if subdomains aren't feasible on this Vercel setup — pick whichever the project's DNS/domain setup supports and document the choice) against `partners.slug` where `status = 'active'`. If no match, or `status != 'active'`, serve a clear "this partner page is not currently available" state — never fall back to rendering the main company site under a partner's URL as if nothing were wrong.
+
+## 3. Tenant resolution
+
+- Implement Next.js middleware that inspects the request host/path, looks up the matching `partners` row (cache this lookup appropriately — don't hit Supabase on every single request/asset if avoidable), and injects the partner's context (id, slug, whatsapp_number, hero overrides) into the request so every page/component downstream can read it without re-querying.
+- If `partners-platform` is deployed at a wildcard domain (`*.songtai-partners.vercel.app` or similar) confirm the Vercel project/DNS actually supports wildcard subdomains before building subdomain-based routing; if it doesn't yet, build path-based routing (`/p/[slug]`) first as the reliable option and note wildcard subdomains as a fast-follow once DNS is confirmed.
+
+## 4. What's different on a partner site vs. the main site
+
+**Customized per partner (pulled from their `partners` row):**
+- WhatsApp contact number/link — every place the main site shows a WhatsApp contact (header, footer, contact widget, product inquiry buttons, Media Center download follow-up, etc.) must show *this partner's* number, not the company's, anywhere on their instance.
+- Homepage hero: `hero_title_en/fr`, `hero_subtitle_en/fr`, `hero_image_url` override the default company hero on this partner's homepage only. If any of these fields are null for a given partner, fall back to the main site's default hero content/image — never render a blank hero.
+- The site's contact email, if set.
+
+**Identical to the main site on every partner instance (same Supabase data, same components):**
+- Our Story / About, Mission, Vision
+- Products (with video showcase)
+- FAQ
+- Blog
+- Media Center (respecting the same `visibility`/`is_published` rules already built)
+- Theme system (light/dark, tokens, typography) and bilingual EN/FR toggle
+- Certifications, company heritage content
+
+**Explicitly removed on partner sites:**
+- The "Become a Distributor" / join flow page and any nav link to it. This is intentional — partner sites are for a distributor's own customer-facing storefront/brand presence, not for recruiting directly into an ambiguous downline. If a visitor would have hit a distributor-signup CTA on the main site, either omit that CTA entirely on partner instances, or (if product requirements evolve to want this) redirect it to the main site's join flow with this partner's referral code pre-applied — build the omit-entirely version now, and leave a clear, isolated integration point in the code where a redirect could be added later without a broader refactor.
+
+## 5. Admin panel — Partner management
+
+Add a "Partners" section to the **main site's** admin panel (not duplicated on the partner platform — partners are managed centrally):
+
+- List all partners: slug, linked distributor name, status, WhatsApp number, created date, last updated
+- Create new partner: select an existing active `distributor` (search/autocomplete), set `slug` (validate uniqueness and URL-safety — lowercase, no spaces, no special characters beyond hyphens), set `whatsapp_number`, optionally set hero overrides (EN/FR title/subtitle, hero image upload)
+- Approve/activate a pending partner (`status: pending -> active`, set `approved_by`/`approved_at`), or suspend an active one (`status -> suspended`, immediately taking their site offline per section 2's fallback behavior)
+- Edit any partner's details, including reassigning/correcting WhatsApp number or hero content — changes must reflect on the live partner site without any redeploy, since this is all read from Supabase at request time
+- Delete/deactivate flow — decide and document whether deleting a partner cascades or is soft (recommend soft-delete via `status = 'suspended'` rather than hard delete, to preserve historical linkage to their distributor record and any analytics)
+
+## 6. Non-negotiables
+- Nothing built on `partners-platform` should be able to write to or alter data in a way that affects the main site's presentation — partner-specific fields live only in `partners`, never as new columns bolted onto shared tables like `products` or `page_sections` that the main site also reads from.
+- A suspended or nonexistent partner slug must never expose any distributor's data or fall through to an unbranded/broken page — always the explicit "not available" state.
+- Bilingual EN/FR must work identically on partner sites, including for the partner-specific hero fields (both must be filled or both fall back together — don't show an English hero title with a French subtitle fallback mismatch).
+- Keep the RLS posture consistent: the `partners` table should be readable by anyone (needed to render public partner sites) for active rows only, but writable only by admin-role profiles — verify this with actual RLS policies, not just app-level checks.
+
+## 7. QA checklist before deploy
+- [ ] Confirm the `partners-platform` branch deploys as its own Vercel project, independent from `main`/`songtai-life`, using the same Supabase project
+- [ ] Create a test partner via the admin panel, confirm their site is reachable at the correct URL pattern within a reasonable time (no redeploy needed) and shows their WhatsApp number/hero content everywhere it should
+- [ ] Confirm every other page (About, Products, FAQ, Blog, Media Center) renders identically to the main site's content on the partner instance
+- [ ] Confirm "Become a Distributor" is absent from the partner site's navigation and not reachable directly by URL
+- [ ] Suspend the test partner — confirm their site immediately shows the "not available" state, not stale cached content
+- [ ] Test a nonexistent slug — confirm the same clean "not available" state, not an error page or a silent fallback to the main site's branding
+- [ ] Test EN/FR toggle on a partner site, including their custom hero fields
+- [ ] Confirm no partner-specific data leaked into the main site's own database queries/pages
+- [ ] Run existing lint/test suite on both branches, then deploy
+
+Report back both live URLs (main site and the partners platform), the deployment IDs for each, and the final decision on subdomain vs. path-based routing (and why).

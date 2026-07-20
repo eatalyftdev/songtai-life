@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { useSiteSettings } from "../hooks/useSiteSettings";
+import { usePartner } from "../context/PartnerContext";
 import { trackEvent } from "./Analytics";
 
 export default function WhatsAppWidget() {
   const { whatsapp } = useSiteSettings();
+  const partner = usePartner();
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [prefersReduced, setPrefersReduced] = useState(false);
@@ -17,13 +19,15 @@ export default function WhatsAppWidget() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!whatsapp.enabled || !whatsapp.number) return null;
+  // On partner sites, use the partner's WhatsApp number (falls back to site-wide if not set)
+  const effectiveNumber = partner?.whatsapp_number || whatsapp.number;
+  if (!whatsapp.enabled || !effectiveNumber) return null;
 
   const message = whatsapp.default_message || t("whatsapp.defaultMessage");
-  const href = `https://wa.me/${whatsapp.number.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`;
+  const href = `https://wa.me/${effectiveNumber.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`;
 
   const handleClick = () => {
-    trackEvent("whatsapp_click", { whatsapp_number: whatsapp.number });
+    trackEvent("whatsapp_click", { whatsapp_number: effectiveNumber });
     window.open(href, "_blank", "noopener,noreferrer");
   };
 
