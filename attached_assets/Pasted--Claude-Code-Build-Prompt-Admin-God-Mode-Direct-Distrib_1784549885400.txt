@@ -1,0 +1,84 @@
+# Claude Code Build Prompt — Admin God Mode: Direct Distributor/Partner Creation + Custom Domains
+
+Paste this into Claude Code inside the `songtai-life` repo (this touches both the main site's admin panel and the `partners-platform` branch).
+
+---
+
+## 0. Skill activation
+
+Activate **Backend**, **Security**, **API/Architecture**, **Infrastructure**, and **DevOps** skills from the `jeffallan/claude-skills` framework before coding. State which skills you're activating.
+
+## 1. What "god mode" means here — be precise about scope
+
+Admin can create fully active distributor accounts and partner sites **without the person going through payment or signup**, and without the person needing to have an account yet at all for the site-creation case. This is a privileged, high-trust action — it must be fully audited and access-gated, not a casual toggle.
+
+Two distinct capabilities, don't conflate them:
+
+**A. God-mode distributor creation** — admin creates a real, active distributor record (name/phone/pack tier/sponsor/placement) instantly, bypassing the MeSomb payment webhook entirely.
+
+**B. Partner site creation without an account** — admin creates a live, customized partner microsite (own hero, own WhatsApp number, optionally own custom domain) attached to a *pending* contact, before that person has a distributor account or has logged in at all. It can later be linked to a real distributor once one exists (or never, if it's being used as a pure marketing preview before someone formally signs on).
+
+## 2. Schema already in place (no migration needed)
+
+```
+profiles     + account_source ['self_signup'|'admin_created'], created_by_admin -> profiles, claimed_at
+distributors + created_by_admin -> profiles
+partners     + created_by_admin -> profiles, pending_contact_name, pending_contact_phone,
+               domain_status ['none'|'pending_verification'|'verified'|'failed'],
+               domain_verification_token, vercel_domain_added_at
+```
+
+`claimed_at` stays null until the real person actually logs in and changes their temporary password (`profiles.must_change_password`, which already existed) — use this to distinguish "admin set this up on someone's behalf, they haven't touched it yet" from "this person is actively using their account."
+
+## 3. Capability A — God-mode distributor creation
+
+Admin panel form (admin-role gated, same pattern as every other admin section):
+
+- Fields: full name, phone, email (optional), pack tier (dropdown from the pack pricing already defined), sponsor (search existing distributors by name/code), placement leg (left/right, with a "next available slot" helper rather than forcing the admin to know tree structure by heart)
+- On submit:
+  1. Create a `profiles` row with `account_source = 'admin_created'`, `created_by_admin = <acting admin's id>`, a temporary password, `must_change_password = true`
+  2. Create the `distributors` row with `status = 'active'` immediately (no payment webhook involved), `created_by_admin` set, correct `placement_id`/`placement_leg`, generate `distributor_code`/`referral_link`
+  3. **Do not** create a fake/synthetic `orders` row to fake a payment — an admin-created distributor's activation event should be logged distinctly (e.g. in `audit_logs`, which already exists in this schema) as an explicit admin override, not disguised as a completed payment. Financial reporting must always be able to tell the difference between "someone actually paid" and "an admin activated this account directly."
+  4. If the pack tier the admin selects implies a real amount that should still hit accounting/commission calculations (e.g. does an admin-created distributor still generate a Sponsoring Bonus for their sponsor?) — **stop and confirm this business rule explicitly with Zayne before assuming either way**, rather than guessing; this materially affects real payouts to other distributors and should not be inferred silently.
+- Send the new distributor their login credentials (temporary password) via WhatsApp and/or SMS — reuse whatever notification channel the existing order-confirmation flow already uses.
+- Every god-mode creation writes a full `audit_logs` entry: which admin, what was created, when, and the full input payload (for accountability and reversibility if something needs correcting).
+
+## 4. Capability B — Partner site creation without an account
+
+Admin panel form, separate from Capability A (a partner site does not require Capability A to have been used first):
+
+- Fields: `slug` (validated unique, URL-safe), `pending_contact_name`, `pending_contact_phone`, `whatsapp_number` for the site, hero overrides (EN/FR title/subtitle, image), `distributor_id` (optional — leave blank if no account exists yet)
+- Creates the `partners` row with `created_by_admin` set and `status` starting at `pending` or `active` at the admin's discretion (an admin-created partner site can go live immediately without the usual approval step, since the admin *is* the approval in this flow — but still record `approved_by`/`approved_at` as the same admin for a consistent audit trail)
+- If/when a real distributor account is later created or identified for this person (either via Capability A or a normal signup), the admin can link the existing `partners` row to that `distributor_id` from the same edit screen — the site's URL and all its content stay exactly the same through that transition, nothing breaks for anyone already visiting it
+- The partner site works exactly as specified in the earlier Partners Platform build (same shared pages, WhatsApp/hero overrides, no "Become a Distributor" page) regardless of whether `distributor_id` is set yet
+
+## 5. Custom domain attachment
+
+For a partner with `custom_domain` set (e.g. `janedoe-wellness.com`, brought by the partner or purchased on their behalf):
+
+1. Admin enters the desired custom domain in the partner's edit screen.
+2. Backend calls the Vercel API to add the domain to the `songtai-life-partners` Vercel project (the one hosting `partners-platform`), and stores the returned verification requirements (TXT/CNAME records Vercel provides) — set `domain_status = 'pending_verification'`, `vercel_domain_added_at = now()`.
+3. Show the admin (and ideally the partner, if they have a way to see it) the exact DNS records that need to be added at their domain registrar — don't just say "add a CNAME," show the literal record values Vercel returned.
+4. Poll or provide a "check status" button that re-queries Vercel's domain verification status; on success, set `domain_status = 'verified'` and the domain now serves that partner's site (Vercel handles SSL provisioning automatically once verified — confirm this happens, don't build custom cert handling).
+5. On failure/timeout, set `domain_status = 'failed'` and surface a clear reason if Vercel's API provides one, rather than a generic error.
+6. The partner's site must remain reachable at its default `slug`-based URL regardless of custom domain status — a pending or failed custom domain should never take down the working default URL.
+7. **Requires a Vercel API token with domain-management permission on the correct project** — confirm this exists in the environment before building; if it doesn't, stop and flag it rather than building against a token that isn't there.
+
+## 6. Non-negotiables
+- Both god-mode capabilities are admin-role gated at the database level (RLS), not just hidden UI — verify a non-admin cannot hit these endpoints directly.
+- Every god-mode action is fully audited (`audit_logs`) — who, what, when, full payload. This is the trust boundary that makes "god mode" acceptable to have at all; treat the audit trail as non-optional, not a nice-to-have.
+- Never silently fabricate a payment/order record to make an admin-created distributor look like a normal signup in financial data — keep the distinction (`account_source`, `created_by_admin`) visible everywhere financial/commission reporting is shown.
+- Confirm with Zayne (don't assume) whether admin-created distributors trigger real commissions to their upline — this is a real-money question, not a UI question.
+- Custom domain SSL/verification goes through Vercel's own domain API — do not attempt manual certificate handling.
+
+## 7. QA checklist before deploy
+- [ ] God-mode create a distributor — confirm they appear active immediately, receive login credentials, and `audit_logs` records the action with full detail
+- [ ] Confirm the created distributor's record is clearly distinguishable from a paid signup in any admin/financial view (`account_source = 'admin_created'` visible)
+- [ ] God-mode create a partner site with no linked distributor — confirm it's live at its slug URL, shows the correct WhatsApp/hero overrides, and has no "Become a Distributor" page
+- [ ] Later link that partner site to a real distributor — confirm the live site's URL and content are unaffected by the linking
+- [ ] Add a test custom domain, confirm the DNS records shown match what Vercel actually requires, confirm status moves to `verified` after DNS is correctly set, and confirm SSL is live automatically
+- [ ] Confirm a partner site with `domain_status = 'pending_verification'` or `'failed'` is still reachable at its default slug URL
+- [ ] Attempt both god-mode actions as a non-admin — confirm both are blocked at the API/RLS level, not just missing from the UI
+- [ ] Run existing lint/test suite on both branches, then deploy
+
+Report back the live URLs (main site + partners platform), deployment IDs, and explicit confirmation from Zayne on the admin-created-distributor commission question from section 6 before this ships to production.

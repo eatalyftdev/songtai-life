@@ -1488,6 +1488,315 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ success: true, uid, message: "Superadmin account created. Log in and change your password immediately." });
   }));
 
+  // ── God-mode: search existing distributors (for sponsor picker) ─────────────
+  app.get("/api/admin/distributors/search", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+    const q = (req.query.q as string ?? "").trim();
+    const { data: dists } = await db.from("distributors")
+      .select("id, distributor_code, rank, status")
+      .or(q ? `distributor_code.ilike.%${q}%` : "status.eq.active")
+      .order("joined_at", { ascending: false })
+      .limit(20);
+    const ids = (dists ?? []).map((d: any) => d.id);
+    const { data: profs } = ids.length > 0
+      ? await db.from("profiles").select("id, display_name, email").in("id", ids)
+      : { data: [] };
+    const profMap: Record<string, any> = {};
+    (profs ?? []).forEach((p: any) => { profMap[p.id] = p; });
+    return res.json((dists ?? []).map((d: any) => ({
+      id: d.id,
+      code: d.distributor_code,
+      name: profMap[d.id]?.display_name || profMap[d.id]?.email?.split("@")[0] || d.distributor_code,
+      rank: d.rank,
+      status: d.status,
+    })));
+  }));
+
+  // ── God-mode: create a distributor account directly (no payment) ─────────────
+  app.post("/api/admin/distributor/create", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role, email, display_name").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+
+    const { displayName, phone, email, packTier, sponsorCode, placementLeg } = req.body;
+    if (!displayName || !phone || !packTier) {
+      return res.status(400).json({ error: "displayName, phone, and packTier are required." });
+    }
+    const VALID_TIERS = ["bronze","silver","gold","platinum","vip"];
+    if (!VALID_TIERS.includes(packTier)) {
+      return res.status(400).json({ error: `Invalid packTier. Must be one of: ${VALID_TIERS.join(", ")}` });
+    }
+
+    const pvMap:    Record<string, number> = { bronze: 50, silver: 150, gold: 350, platinum: 700, vip: 1200 };
+    const priceMap: Record<string, number> = { bronze: 25000, silver: 75000, gold: 180000, platinum: 350000, vip: 600000 };
+
+    // Generate 12-char hex temp password
+    const tempPassword = crypto.randomBytes(6).toString("hex");
+    const userEmail = (email?.trim()) || `dist-${Date.now()}@songtai.admin`;
+
+    // Create Supabase auth user
+    const { data: newAuthUser, error: createError } = await db.auth.admin.createUser({
+      email: userEmail,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { displayName, phone },
+    });
+    if (createError) throw createError;
+    const userId = newAuthUser.user.id;
+
+    // Resolve sponsor
+    let resolvedSponsorCode: string | null = null;
+    if (sponsorCode) {
+      const { data: sponsor } = await db.from("distributors").select("id, distributor_code").eq("distributor_code", sponsorCode).maybeSingle();
+      resolvedSponsorCode = sponsor?.distributor_code ?? null;
+    }
+
+    // BFS placement under sponsor (or root if none)
+    let placementId: string | null = resolvedSponsorCode;
+    let finalLeg: "left" | "right" = "left";
+    if (resolvedSponsorCode && (!placementLeg || placementLeg === "auto")) {
+      const queue: string[] = [resolvedSponsorCode];
+      bfsSearch: while (queue.length > 0) {
+        const code = queue.shift()!;
+        const { data: kids } = await db.from("distributors").select("distributor_code, placement_leg").eq("placement_id", code);
+        const leftKid  = (kids ?? []).find((k: any) => k.placement_leg === "left");
+        const rightKid = (kids ?? []).find((k: any) => k.placement_leg === "right");
+        if (!leftKid)  { placementId = code; finalLeg = "left";  break bfsSearch; }
+        if (!rightKid) { placementId = code; finalLeg = "right"; break bfsSearch; }
+        queue.push(leftKid.distributor_code, rightKid.distributor_code);
+      }
+    } else if (resolvedSponsorCode && (placementLeg === "left" || placementLeg === "right")) {
+      placementId = resolvedSponsorCode;
+      finalLeg = placementLeg;
+    }
+
+    // Generate unique distributor code
+    const code = `ST-${Math.floor(10000 + Math.random() * 90000)}`;
+
+    // Create profile
+    await db.from("profiles").upsert({
+      id: userId, email: userEmail, phone,
+      display_name: displayName, role: "distributor",
+      account_source: "admin_created",
+      created_by_admin: actorId,
+      must_change_password: true,
+    }, { onConflict: "id" });
+
+    // Create distributor row (status: active immediately — no payment)
+    await db.from("distributors").insert({
+      id: userId, distributor_code: code,
+      sponsor_id:     resolvedSponsorCode ?? "Root",
+      placement_id:   placementId ?? resolvedSponsorCode ?? "Root",
+      placement_leg:  finalLeg,
+      rank:           "bronze",
+      kyc_status:     "none",
+      status:         "active",
+      pack_tier:      packTier,
+      pack_price_xaf: priceMap[packTier] ?? 0,
+      pack_pv:        pvMap[packTier] ?? 50,
+      pv:             pvMap[packTier] ?? 50,
+      referral_link:  `https://songtailife.cm/join?ref=${code}`,
+      joined_at:      new Date().toISOString(),
+      created_by_admin: actorId,
+    });
+
+    // Audit log (never let this block the response)
+    try {
+      await db.from("audit_logs").insert({
+        action: "God-Mode Distributor Created",
+        details: `Admin ${actor.email ?? actorId} created distributor for ${displayName} (${phone}). Pack: ${packTier}. Code: ${code}. Sponsor: ${resolvedSponsorCode ?? "none"}. Placement: ${finalLeg} under ${placementId ?? "root"}. NO payment collected — admin activation override.`,
+      });
+    } catch { /* audit failure must never block the response */ }
+
+    // Send WhatsApp with credentials (fire-and-forget)
+    const waPhone = phone.replace(/\s/g, "");
+    const waTo = waPhone.startsWith("whatsapp:") ? waPhone : `whatsapp:${waPhone.startsWith("+") ? waPhone : `+${waPhone}`}`;
+    const waBody = [
+      `🌟 *Welcome to Songtai Life!*`,
+      ``,
+      `Your distributor account has been set up by our team.`,
+      ``,
+      `*Name:* ${displayName}`,
+      `*Distributor Code:* ${code}`,
+      `*Pack:* ${packTier.charAt(0).toUpperCase() + packTier.slice(1)}`,
+      ``,
+      `*Login Details:*`,
+      `*Email:* ${userEmail}`,
+      `*Temporary Password:* ${tempPassword}`,
+      ``,
+      `⚠️ Log in and change your password immediately.`,
+      `🔗 https://songtailife.cm/distributor/login`,
+    ].join("\n");
+    try {
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken  = process.env.TWILIO_AUTH_TOKEN;
+      const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
+      if (accountSid && authToken && fromNumber) {
+        const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+        await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+          method: "POST",
+          headers: { "Authorization": `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ From: fromNumber, To: waTo, Body: waBody }).toString(),
+        });
+      }
+    } catch (err: any) {
+      console.error(`[GodMode] WhatsApp notification failed for ${displayName}:`, err.message);
+    }
+
+    return res.json({
+      success: true, userId, distributorCode: code,
+      tempPassword, email: userEmail,
+      placementId, placementLeg: finalLeg,
+      sponsorCode: resolvedSponsorCode,
+      note: "IMPORTANT: Commission implications for admin-created distributors have not been confirmed with Zayne. No commissions were triggered. Resolve this business rule before this account's sponsor expects a payout.",
+    });
+  }));
+
+  // ── Admin: list all partner sites ─────────────────────────────────────────
+  app.get("/api/admin/partners", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+    const { data } = await db.from("partners").select("*").order("created_at", { ascending: false });
+    return res.json(data ?? []);
+  }));
+
+  // ── Admin: create a partner site ──────────────────────────────────────────
+  app.post("/api/admin/partner/create", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+
+    const { slug, pendingContactName, pendingContactPhone, whatsappNumber, contactEmail,
+            heroTitleEn, heroTitleFr, heroSubtitleEn, heroSubtitleFr, heroImageUrl,
+            distributorId, status, customDomain } = req.body;
+
+    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return res.status(400).json({ error: "slug is required and must be URL-safe (lowercase letters, numbers, hyphens)." });
+    }
+
+    // Check slug uniqueness
+    const { data: existing } = await db.from("partners").select("id").eq("slug", slug).maybeSingle();
+    if (existing) return res.status(409).json({ error: `Slug "${slug}" is already taken.` });
+
+    const now = new Date().toISOString();
+    const initialStatus = status === "active" ? "active" : "pending";
+
+    const { data, error } = await db.from("partners").insert({
+      slug,
+      whatsapp_number:      whatsappNumber || null,
+      contact_email:        contactEmail || null,
+      hero_title_en:        heroTitleEn || null,
+      hero_title_fr:        heroTitleFr || null,
+      hero_subtitle_en:     heroSubtitleEn || null,
+      hero_subtitle_fr:     heroSubtitleFr || null,
+      hero_image_url:       heroImageUrl || null,
+      distributor_id:       distributorId || null,
+      pending_contact_name: pendingContactName || null,
+      pending_contact_phone:pendingContactPhone || null,
+      custom_domain:        customDomain || null,
+      status:               initialStatus,
+      created_by_admin:     actorId,
+      ...(initialStatus === "active" ? { approved_by: actorId, approved_at: now } : {}),
+    }).select().single();
+    if (error) throw error;
+
+    try {
+      await db.from("audit_logs").insert({
+        action: "Partner Site Created",
+        details: `Admin ${actor.email ?? actorId} created partner site "${slug}" (status: ${initialStatus}). Contact: ${pendingContactName ?? "—"} / ${pendingContactPhone ?? "—"}.`,
+      });
+    } catch {}
+
+    return res.json({ success: true, partner: data });
+  }));
+
+  // ── Admin: update a partner site ──────────────────────────────────────────
+  app.put("/api/admin/partner/:id", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+
+    const { id } = req.params;
+    const { pendingContactName, pendingContactPhone, whatsappNumber, contactEmail,
+            heroTitleEn, heroTitleFr, heroSubtitleEn, heroSubtitleFr, heroImageUrl,
+            distributorId, status, customDomain } = req.body;
+
+    const { data: current } = await db.from("partners").select("status, slug").eq("id", id).maybeSingle();
+    if (!current) return res.status(404).json({ error: "Partner not found." });
+
+    const now = new Date().toISOString();
+    const updates: Record<string, any> = {};
+
+    // Only include fields that were explicitly passed in the body
+    if ("pendingContactName" in req.body) updates.pending_contact_name  = pendingContactName ?? null;
+    if ("pendingContactPhone" in req.body) updates.pending_contact_phone = pendingContactPhone ?? null;
+    if ("whatsappNumber"      in req.body) updates.whatsapp_number       = whatsappNumber ?? null;
+    if ("contactEmail"        in req.body) updates.contact_email         = contactEmail ?? null;
+    if ("heroTitleEn"         in req.body) updates.hero_title_en         = heroTitleEn ?? null;
+    if ("heroTitleFr"         in req.body) updates.hero_title_fr         = heroTitleFr ?? null;
+    if ("heroSubtitleEn"      in req.body) updates.hero_subtitle_en      = heroSubtitleEn ?? null;
+    if ("heroSubtitleFr"      in req.body) updates.hero_subtitle_fr      = heroSubtitleFr ?? null;
+    if ("heroImageUrl"        in req.body) updates.hero_image_url        = heroImageUrl ?? null;
+    if ("distributorId"       in req.body) updates.distributor_id        = distributorId ?? null;
+    if ("customDomain"        in req.body) updates.custom_domain         = customDomain ?? null;
+
+    if (status && status !== current.status) {
+      updates.status = status;
+      if (status === "active") { updates.approved_by = actorId; updates.approved_at = now; }
+    }
+
+    const { data, error } = await db.from("partners").update(updates).eq("id", id).select().single();
+    if (error) throw error;
+
+    try {
+      await db.from("audit_logs").insert({
+        action: "Partner Site Updated",
+        details: `Admin ${actor.email ?? actorId} updated partner site "${current.slug}" (id: ${id}).${status && status !== current.status ? ` Status: ${current.status} → ${status}.` : ""}`,
+      });
+    } catch {}
+
+    return res.json({ success: true, partner: data });
+  }));
+
+  // ── Public partner lookup by slug ─────────────────────────────────────────
+  app.get("/api/partner/:slug", requireDb(async (db, req, res) => {
+    const { slug } = req.params as { slug: string };
+    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return res.status(400).json({ error: "Invalid slug format" });
+    }
+    const { data, error } = await db
+      .from("partners")
+      .select("id, slug, whatsapp_number, contact_email, hero_title_en, hero_title_fr, hero_subtitle_en, hero_subtitle_fr, hero_image_url, status")
+      .eq("slug", slug)
+      .eq("status", "active")
+      .single();
+    if (error || !data) return res.status(404).json({ error: "Partner not found or inactive" });
+    return res.json(data);
+  }));
+
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "Songtai Life Backend — Replit Edition" });
