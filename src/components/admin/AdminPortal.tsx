@@ -1226,10 +1226,10 @@ export default function AdminPortal({
                           <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0.01}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                       <XAxis 
                         dataKey="displayDate" 
-                        stroke="#737373" 
+                        stroke="var(--color-muted)" 
                         fontSize={10}
                         fontWeight={500}
                         tickLine={false}
@@ -1241,7 +1241,7 @@ export default function AdminPortal({
                       {chartMetric !== "signups" && (
                         <YAxis 
                           yAxisId="left"
-                          stroke="#737373" 
+                          stroke="var(--color-muted)" 
                           fontSize={10}
                           fontWeight={500}
                           tickLine={false}
@@ -1255,7 +1255,7 @@ export default function AdminPortal({
                         <YAxis 
                           yAxisId="right"
                           orientation="right"
-                          stroke="#737373" 
+                          stroke="var(--color-muted)" 
                           fontSize={10}
                           fontWeight={500}
                           tickLine={false}
@@ -1266,7 +1266,7 @@ export default function AdminPortal({
                       {chartMetric === "signups" && (
                         <YAxis 
                           yAxisId="left"
-                          stroke="#737373" 
+                          stroke="var(--color-muted)" 
                           fontSize={10}
                           fontWeight={500}
                           tickLine={false}

@@ -18,8 +18,8 @@ const PIE_COLORS = ["#6b7280","#3b82f6","#f59e0b","#8b5cf6","#10b981","#ef4444"]
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-stone-900 border border-stone-700 rounded-xl px-3 py-2.5 text-xs shadow-xl">
-      <p className="text-stone-400 font-semibold mb-1">{label}</p>
+    <div className="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl px-3 py-2.5 text-xs shadow-xl">
+      <p className="text-[color:var(--color-muted)] font-semibold mb-1">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }} className="font-bold">
           {p.name}: {typeof p.value === "number" && p.name?.includes("XAF")
@@ -151,9 +151,9 @@ export default function DashboardPage() {
                     <stop offset="95%" stopColor={GREEN} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#292524" />
-                <XAxis dataKey="date" tick={{ fill: "#78716c", fontSize: 10 }} tickLine={false} interval="preserveStartEnd" />
-                <YAxis tick={{ fill: "#78716c", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="date" tick={{ fill: "var(--color-muted)", fontSize: 10 }} tickLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fill: "var(--color-muted)", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="Revenue XAF" stroke={GREEN} fill="url(#revGrad)" strokeWidth={2} dot={false} />
               </AreaChart>
@@ -172,7 +172,7 @@ export default function DashboardPage() {
                   {orderStatusData.map((_: any, i: number) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "10px", color: "#a8a29e" }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: "10px", color: "var(--color-muted)" }} />
               </PieChart>
             </ResponsiveContainer>
           )}
