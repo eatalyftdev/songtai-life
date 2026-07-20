@@ -1488,6 +1488,30 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ success: true, uid, message: "Superadmin account created. Log in and change your password immediately." });
   }));
 
+  // ── Partner site lookup (public — reads active partners only) ───────────────
+  // Used to validate a slug server-side (e.g. for future SSR or API integrations).
+  // The client-side PartnerProvider queries Supabase directly via the anon key.
+  app.get("/api/partner/:slug", requireDb(async (db, req, res) => {
+    const { slug } = req.params as { slug: string };
+    if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return res.status(400).json({ error: "Invalid slug format" });
+    }
+    const { data, error } = await db
+      .from("partners")
+      .select(
+        "id, slug, whatsapp_number, contact_email, " +
+        "hero_title_en, hero_title_fr, hero_subtitle_en, hero_subtitle_fr, " +
+        "hero_image_url, status"
+      )
+      .eq("slug", slug)
+      .eq("status", "active")
+      .single();
+    if (error || !data) {
+      return res.status(404).json({ error: "Partner not found or inactive" });
+    }
+    return res.json(data);
+  }));
+
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", service: "Songtai Life Backend — Replit Edition" });

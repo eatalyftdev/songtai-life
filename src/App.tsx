@@ -1,5 +1,7 @@
 import { useState, useEffect, FormEvent, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { PartnerProvider } from "./context/PartnerContext";
+import PartnerNotAvailable from "./components/PartnerNotAvailable";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Product } from "./types";
 import Navbar from "./components/Navbar";
@@ -43,6 +45,7 @@ const BecomeDistributorCMSPage = lazy(() => import("./components/admin/pages/Bec
 const PaymentConfigPage        = lazy(() => import("./components/admin/pages/PaymentConfigPage"));
 const AISettingsPage           = lazy(() => import("./components/admin/pages/AISettingsPage"));
 const PageEditsPage            = lazy(() => import("./components/admin/pages/PageEditsPage"));
+const PartnersPage             = lazy(() => import("./components/admin/pages/PartnersPage"));
 
 function AdminFallback() {
   return (
@@ -271,7 +274,10 @@ function AppContent() {
         brandPage={brandPage}
         setBrandPage={(page) => {
           setBrandPage(page);
-          navigate("/");
+          // Stay on the partner URL when navigating within a partner site
+          const partnerMatch = location.pathname.match(/^\/p\/([^/]+)/);
+          if (partnerMatch) navigate(`/p/${partnerMatch[1]}`);
+          else navigate("/");
         }}
         cartCount={cartCount}
         openCart={() => setCartOpen(true)}
@@ -282,8 +288,31 @@ function AppContent() {
       {/* Main Core Router Switch */}
       <main className="flex-grow">
         <Routes>
-          {/* Landing / Marketing Pages */}
+          {/* Landing / Marketing Pages — main site and partner sites (/p/:slug) */}
           <Route path="/" element={
+            <BrandShowcase 
+              brandPage={brandPage}
+              setBrandPage={setBrandPage}
+              addToCart={addToCart} 
+              setActiveTab={handleTabChange} 
+              addNotification={addNotification} 
+              openPrivacyPolicy={() => setPrivacyOpen(true)}
+              theme={theme}
+            />
+          } />
+          {/* Partner site — same BrandShowcase, partner context injected by PartnerProvider */}
+          <Route path="/p/:slug" element={
+            <BrandShowcase 
+              brandPage={brandPage}
+              setBrandPage={setBrandPage}
+              addToCart={addToCart} 
+              setActiveTab={handleTabChange} 
+              addNotification={addNotification} 
+              openPrivacyPolicy={() => setPrivacyOpen(true)}
+              theme={theme}
+            />
+          } />
+          <Route path="/p/:slug/*" element={
             <BrandShowcase 
               brandPage={brandPage}
               setBrandPage={setBrandPage}
@@ -343,6 +372,7 @@ function AppContent() {
             <Route path="media"        element={<Suspense fallback={<AdminFallback />}><MediaPage /></Suspense>} />
             <Route path="settings"     element={<Suspense fallback={<AdminFallback />}><SettingsPage /></Suspense>} />
             <Route path="audit"        element={<Suspense fallback={<AdminFallback />}><AuditPage /></Suspense>} />
+            <Route path="partners"     element={<Suspense fallback={<AdminFallback />}><PartnersPage /></Suspense>} />
           </Route>
 
           {/* Tech Spec Browser */}
@@ -695,13 +725,30 @@ function AppContent() {
   );
 }
 
+// Loading indicator while partner data fetches
+function PartnerLoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-stone-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-stone-400">
+        <span className="w-8 h-8 border-2 border-[#0A7D32] border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-semibold">Loading partner site…</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Analytics />
-        <WhatsAppWidget />
-        <AppContent />
+        <PartnerProvider
+          loadingSlot={<PartnerLoadingSpinner />}
+          notAvailableSlot={(slug) => <PartnerNotAvailable slug={slug} />}
+        >
+          <Analytics />
+          <WhatsAppWidget />
+          <AppContent />
+        </PartnerProvider>
       </AuthProvider>
     </BrowserRouter>
   );
