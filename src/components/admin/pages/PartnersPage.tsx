@@ -28,6 +28,9 @@ interface Partner {
   custom_domain: string | null;
   domain_status: "none" | "pending_verification" | "verified" | "failed" | null;
   domain_verification_token: string | null;
+  domain_check_attempts: number | null;
+  domain_last_checked_at: string | null;
+  vercel_domain_added_at: string | null;
   created_at: string;
   approved_at: string | null;
   distributorEmail?: string;

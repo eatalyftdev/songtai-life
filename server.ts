@@ -503,6 +503,96 @@ const app = express();
 const _parsedPort = parseInt(process.env.PORT ?? "");
 const PORT = Number.isInteger(_parsedPort) && _parsedPort > 0 && _parsedPort <= 65535 ? _parsedPort : 5000;
 
+// ── Vercel domain management helpers ─────────────────────────────────────────
+
+async function vercelRemoveDomain(domain: string): Promise<{ ok: boolean; error?: string }> {
+  const VERCEL_API_TOKEN  = process.env.VERCEL_API_TOKEN;
+  const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
+  if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) return { ok: false, error: "Vercel not configured." };
+  try {
+    const res = await fetch(
+      `https://api.vercel.com/v9/projects/${encodeURIComponent(VERCEL_PROJECT_ID)}/domains/${encodeURIComponent(domain)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}` } }
+    );
+    if (!res.ok) {
+      const body: any = await res.json().catch(() => ({}));
+      // 404 / domain_not_found means already gone — treat as success
+      if (res.status === 404 || body?.error?.code === "domain_not_found") return { ok: true };
+      return { ok: false, error: body?.error?.message ?? `Vercel returned ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err.message ?? "Network error removing domain." };
+  }
+}
+
+const DOMAIN_FAILURE_THRESHOLD_DAYS = 7;
+
+async function checkPartnerDomainStatus(db: any, partnerId: string): Promise<{
+  verified: boolean; domain_status: string; verification: any[];
+  domain_check_attempts: number; message: string;
+}> {
+  const VERCEL_API_TOKEN  = process.env.VERCEL_API_TOKEN;
+  const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
+  if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
+    return { verified: false, domain_status: "pending_verification", verification: [],
+             domain_check_attempts: 0, message: "Vercel not configured." };
+  }
+
+  const { data: partner } = await db.from("partners")
+    .select("id, slug, custom_domain, domain_status, domain_check_attempts, vercel_domain_added_at")
+    .eq("id", partnerId).maybeSingle();
+
+  if (!partner?.custom_domain) {
+    return { verified: false, domain_status: "none", verification: [], domain_check_attempts: 0, message: "No domain set." };
+  }
+
+  const now = new Date().toISOString();
+  const attempts = ((partner.domain_check_attempts as number) ?? 0) + 1;
+
+  let vercelData: any = {};
+  let vercelOk = false;
+  try {
+    const vercelRes = await fetch(
+      `https://api.vercel.com/v9/projects/${encodeURIComponent(VERCEL_PROJECT_ID)}/domains/${encodeURIComponent(partner.custom_domain as string)}`,
+      { headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}` } }
+    );
+    vercelData = await vercelRes.json();
+    vercelOk = vercelRes.ok;
+  } catch (err: any) {
+    console.error(`[DomainCheck] Network error for ${partner.custom_domain}:`, err.message);
+  }
+
+  if (!vercelOk) {
+    await db.from("partners").update({ domain_last_checked_at: now, domain_check_attempts: attempts }).eq("id", partnerId);
+    return { verified: false, domain_status: partner.domain_status as string, verification: [],
+             domain_check_attempts: attempts, message: vercelData?.error?.message ?? "Vercel API unreachable — will retry." };
+  }
+
+  const verified   = vercelData.verified === true;
+  const verification: any[] = vercelData.verification ?? [];
+
+  const addedAt     = partner.vercel_domain_added_at ? new Date(partner.vercel_domain_added_at as string) : null;
+  const threshold   = new Date(Date.now() - DOMAIN_FAILURE_THRESHOLD_DAYS * 86_400_000);
+  const pastThreshold = addedAt !== null && addedAt < threshold;
+
+  const newStatus = verified ? "verified" : pastThreshold ? "failed" : "pending_verification";
+
+  await db.from("partners").update({ domain_status: newStatus, domain_last_checked_at: now, domain_check_attempts: attempts }).eq("id", partnerId);
+
+  if (verified) {
+    try { await db.from("audit_logs").insert({ action: "Partner Domain Verified (auto)", details: `Domain "${partner.custom_domain}" for partner "${partner.slug}" verified via background check.` }); } catch {}
+  }
+
+  const message = verified
+    ? "Domain is verified! Vercel will provision SSL automatically within minutes."
+    : pastThreshold
+    ? `Domain has not verified after ${DOMAIN_FAILURE_THRESHOLD_DAYS} days. Check that the DNS record is correctly entered at your registrar — a typo in the CNAME value or an old TTL is usually the cause.`
+    : "DNS propagation can take anywhere from a few minutes to 24–48 hours depending on your registrar — this is completely normal. No action needed unless it's still pending after 48 hours.";
+
+  return { verified, domain_status: newStatus, verification, domain_check_attempts: attempts, message };
+}
+
 async function startServer() {
 
   // ── Security headers ────────────────────────────────────────────────────────
@@ -1759,18 +1849,30 @@ Answer concisely, helpfully, and professionally. Support both English and French
     }
 
     const { id } = req.params;
-    const { pendingContactName, pendingContactPhone, whatsappNumber, contactEmail,
+    const { slug, pendingContactName, pendingContactPhone, whatsappNumber, contactEmail,
             heroTitleEn, heroTitleFr, heroSubtitleEn, heroSubtitleFr, heroImageUrl,
             distributorId, status, customDomain } = req.body;
 
-    const { data: current } = await db.from("partners").select("status, slug").eq("id", id).maybeSingle();
+    const { data: current } = await db.from("partners")
+      .select("status, slug, custom_domain, domain_status")
+      .eq("id", id).maybeSingle();
     if (!current) return res.status(404).json({ error: "Partner not found." });
 
     const now = new Date().toISOString();
     const updates: Record<string, any> = {};
 
-    // Only include fields that were explicitly passed in the body
-    if ("pendingContactName" in req.body) updates.pending_contact_name  = pendingContactName ?? null;
+    // ── Slug change (with uniqueness check) ─────────────────────────────────
+    if ("slug" in req.body && slug && slug !== current.slug) {
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        return res.status(400).json({ error: "Slug must be lowercase letters, numbers, and hyphens only." });
+      }
+      const { data: conflict } = await db.from("partners").select("id").eq("slug", slug).neq("id", id).maybeSingle();
+      if (conflict) return res.status(409).json({ error: `Slug "${slug}" is already taken by another partner site.` });
+      updates.slug = slug;
+    }
+
+    // ── Standard fields ─────────────────────────────────────────────────────
+    if ("pendingContactName"  in req.body) updates.pending_contact_name  = pendingContactName ?? null;
     if ("pendingContactPhone" in req.body) updates.pending_contact_phone = pendingContactPhone ?? null;
     if ("whatsappNumber"      in req.body) updates.whatsapp_number       = whatsappNumber ?? null;
     if ("contactEmail"        in req.body) updates.contact_email         = contactEmail ?? null;
@@ -1780,7 +1882,31 @@ Answer concisely, helpfully, and professionally. Support both English and French
     if ("heroSubtitleFr"      in req.body) updates.hero_subtitle_fr      = heroSubtitleFr ?? null;
     if ("heroImageUrl"        in req.body) updates.hero_image_url        = heroImageUrl ?? null;
     if ("distributorId"       in req.body) updates.distributor_id        = distributorId ?? null;
-    if ("customDomain"        in req.body) updates.custom_domain         = customDomain ?? null;
+
+    // ── Custom domain change handling ────────────────────────────────────────
+    if ("customDomain" in req.body) {
+      const newDomain = (customDomain as string | null) || null;
+      const oldDomain = (current.custom_domain as string | null) || null;
+      const domainChanging = newDomain !== oldDomain;
+
+      if (domainChanging && oldDomain) {
+        // Remove old domain from Vercel silently (don't fail the whole request if this fails)
+        const removeResult = await vercelRemoveDomain(oldDomain);
+        if (!removeResult.ok) {
+          console.warn(`[PartnerUpdate] Could not remove old domain "${oldDomain}" from Vercel: ${removeResult.error}`);
+        }
+      }
+
+      updates.custom_domain = newDomain;
+      if (domainChanging) {
+        // Reset domain state whenever the domain value changes
+        updates.domain_status            = newDomain ? "none" : "none";
+        updates.domain_check_attempts    = 0;
+        updates.domain_last_checked_at   = null;
+        updates.domain_verification_token = null;
+        updates.vercel_domain_added_at   = null;
+      }
+    }
 
     if (status && status !== current.status) {
       updates.status = status;
@@ -1790,17 +1916,20 @@ Answer concisely, helpfully, and professionally. Support both English and French
     const { data, error } = await db.from("partners").update(updates).eq("id", id).select().single();
     if (error) throw error;
 
+    const newSlug = (data as any)?.slug ?? current.slug;
     try {
       await db.from("audit_logs").insert({
         action: "Partner Site Updated",
-        details: `Admin ${actor.email ?? actorId} updated partner site "${current.slug}" (id: ${id}).${status && status !== current.status ? ` Status: ${current.status} → ${status}.` : ""}`,
+        details: `Admin ${actor.email ?? actorId} updated partner "${newSlug}" (id: ${id}).${
+          updates.slug ? ` Slug: ${current.slug} → ${updates.slug}.` : ""}${
+          status && status !== current.status ? ` Status: ${current.status} → ${status}.` : ""}`,
       });
     } catch {}
 
     return res.json({ success: true, partner: data });
   }));
 
-  // ── Admin: attach a custom domain to a partner site via Vercel API ──────────
+  // ── Admin: attach (or replace) a custom domain via Vercel API ───────────────
   app.post("/api/admin/partner/:id/domain/attach", requireDb(async (db, req, res) => {
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
@@ -1810,8 +1939,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
       return res.status(403).json({ error: "Admin or superadmin role required." });
     }
 
-    const VERCEL_API_TOKEN   = process.env.VERCEL_API_TOKEN;
-    const VERCEL_PROJECT_ID  = process.env.VERCEL_PROJECT_ID;
+    const VERCEL_API_TOKEN  = process.env.VERCEL_API_TOKEN;
+    const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
     if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
       return res.status(503).json({
         error: "Vercel domain integration is not configured. Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment secrets.",
@@ -1821,45 +1950,56 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
     const { id } = req.params;
     const { domain } = req.body;
-    if (!domain || !/^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i.test(domain)) {
+    if (!domain || !/^[a-z0-9]+([-\.][a-z0-9]+)*\.[a-z]{2,}$/i.test(domain)) {
       return res.status(400).json({ error: "A valid domain name is required (e.g. janedoe-wellness.com)." });
     }
 
-    const { data: partner } = await db.from("partners").select("id, slug, custom_domain").eq("id", id).maybeSingle();
+    const { data: partner } = await db.from("partners")
+      .select("id, slug, custom_domain, domain_status")
+      .eq("id", id).maybeSingle();
     if (!partner) return res.status(404).json({ error: "Partner not found." });
 
-    // Call Vercel API to add the domain
+    // If partner already has a different domain attached, remove it from Vercel first
+    const oldDomain = partner.custom_domain as string | null;
+    if (oldDomain && oldDomain !== domain) {
+      const removeResult = await vercelRemoveDomain(oldDomain);
+      if (!removeResult.ok) {
+        console.warn(`[DomainAttach] Could not remove old domain "${oldDomain}": ${removeResult.error}`);
+        // Continue anyway — don't block adding the new domain over an old-domain removal failure
+      } else {
+        console.log(`[DomainAttach] Removed old domain "${oldDomain}" from Vercel.`);
+      }
+    }
+
+    // Add the new domain to Vercel
     const vercelRes = await fetch(
-      `https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/domains`,
+      `https://api.vercel.com/v10/projects/${encodeURIComponent(VERCEL_PROJECT_ID)}/domains`,
       {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${VERCEL_API_TOKEN}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}`, "Content-Type": "application/json" },
         body: JSON.stringify({ name: domain }),
       }
     );
     const vercelData = await vercelRes.json() as any;
 
     if (!vercelRes.ok && vercelData.error?.code !== "domain_already_in_use") {
-      console.error("[Domain] Vercel API error:", vercelData);
+      console.error("[DomainAttach] Vercel API error:", vercelData);
       return res.status(502).json({
         error: vercelData.error?.message ?? "Vercel API rejected the domain. Check the domain name and try again.",
         vercel_code: vercelData.error?.code,
       });
     }
 
-    const verification = vercelData.verification ?? [];
+    const verification: any[] = vercelData.verification ?? [];
     const now = new Date().toISOString();
 
-    // Update partner row: store domain, verification token, and set status
     const updatePayload: Record<string, any> = {
-      custom_domain: domain,
-      domain_status: "pending_verification",
-      vercel_domain_added_at: now,
+      custom_domain:            domain,
+      domain_status:            "pending_verification",
+      vercel_domain_added_at:   now,
+      domain_check_attempts:    0,
+      domain_last_checked_at:   null,
     };
-    // Store verification records as JSON string if the column exists
     if (verification.length > 0) {
       updatePayload.domain_verification_token = JSON.stringify(verification);
     }
@@ -1867,21 +2007,20 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
     try {
       await db.from("audit_logs").insert({
-        action: "Partner Custom Domain Attached",
-        details: `Admin ${actor.email ?? actorId} attached domain "${domain}" to partner site "${partner.slug}" (id: ${id}). Vercel status: pending_verification.`,
+        action: "Partner Domain Attached",
+        details: `Admin ${actor.email ?? actorId} attached domain "${domain}" to partner "${partner.slug}" (id: ${id})${oldDomain && oldDomain !== domain ? `, replacing "${oldDomain}"` : ""}.`,
       });
     } catch {}
 
     return res.json({
-      success: true,
-      domain,
-      domain_status: "pending_verification",
-      verification,
-      message: "Domain added to Vercel. Configure the DNS records below at your domain registrar, then check status.",
+      success: true, domain, domain_status: "pending_verification", verification,
+      message: oldDomain && oldDomain !== domain
+        ? `Old domain "${oldDomain}" removed from Vercel. New domain "${domain}" added — configure the DNS records below at your registrar.`
+        : "Domain added to Vercel. Configure the DNS records below at your registrar, then check status. DNS propagation can take minutes to 48 hours — this is normal.",
     });
   }));
 
-  // ── Admin: check Vercel domain verification status ────────────────────────
+  // ── Admin: check domain verification status (manual "Check now") ───────────
   app.post("/api/admin/partner/:id/domain/check", requireDb(async (db, req, res) => {
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
@@ -1890,60 +2029,58 @@ Answer concisely, helpfully, and professionally. Support both English and French
     if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
       return res.status(403).json({ error: "Admin or superadmin role required." });
     }
-
-    const VERCEL_API_TOKEN   = process.env.VERCEL_API_TOKEN;
-    const VERCEL_PROJECT_ID  = process.env.VERCEL_PROJECT_ID;
-    if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
-      return res.status(503).json({
-        error: "Vercel domain integration is not configured. Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment secrets.",
-      });
+    if (!process.env.VERCEL_API_TOKEN || !process.env.VERCEL_PROJECT_ID) {
+      return res.status(503).json({ error: "Vercel domain integration is not configured." });
     }
-
     const { id } = req.params;
-    const { data: partner } = await db.from("partners").select("id, slug, custom_domain, domain_status").eq("id", id).maybeSingle();
+    const { data: partner } = await db.from("partners").select("id, custom_domain").eq("id", id).maybeSingle();
     if (!partner) return res.status(404).json({ error: "Partner not found." });
     if (!partner.custom_domain) return res.status(400).json({ error: "This partner has no custom domain set." });
 
-    // Query Vercel for domain status
-    const vercelRes = await fetch(
-      `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/domains/${encodeURIComponent(partner.custom_domain)}`,
-      { headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}` } }
-    );
-    const vercelData = await vercelRes.json() as any;
+    const result = await checkPartnerDomainStatus(db, id);
+    return res.json({ success: true, domain: partner.custom_domain, ...result });
+  }));
 
-    if (!vercelRes.ok) {
-      console.error("[Domain] Vercel check error:", vercelData);
-      return res.status(502).json({
-        error: vercelData.error?.message ?? "Could not check domain status with Vercel.",
-        vercel_code: vercelData.error?.code,
+  // ── Admin: remove a custom domain entirely ────────────────────────────────
+  app.delete("/api/admin/partner/:id/domain", requireDb(async (db, req, res) => {
+    const sessionUser = (req as any).user;
+    if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
+    const actorId = sessionUser.claims.sub as string;
+    const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+    if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
+      return res.status(403).json({ error: "Admin or superadmin role required." });
+    }
+
+    const { id } = req.params;
+    const { data: partner } = await db.from("partners").select("id, slug, custom_domain").eq("id", id).maybeSingle();
+    if (!partner) return res.status(404).json({ error: "Partner not found." });
+
+    const oldDomain = partner.custom_domain as string | null;
+    if (oldDomain) {
+      const removeResult = await vercelRemoveDomain(oldDomain);
+      if (!removeResult.ok) {
+        console.warn(`[DomainRemove] Could not remove "${oldDomain}" from Vercel: ${removeResult.error}`);
+        // Continue — still clear it from the DB even if Vercel removal failed
+      }
+    }
+
+    await db.from("partners").update({
+      custom_domain:             null,
+      domain_status:             "none",
+      domain_check_attempts:     0,
+      domain_last_checked_at:    null,
+      domain_verification_token: null,
+      vercel_domain_added_at:    null,
+    }).eq("id", id);
+
+    try {
+      await db.from("audit_logs").insert({
+        action: "Partner Domain Removed",
+        details: `Admin ${actor.email ?? actorId} removed domain "${oldDomain ?? "none"}" from partner "${partner.slug}" (id: ${id}). Site reverts to slug-based URL only.`,
       });
-    }
+    } catch {}
 
-    const verified   = vercelData.verified === true;
-    const verification = vercelData.verification ?? [];
-    const newStatus  = verified ? "verified" : "pending_verification";
-
-    await db.from("partners").update({ domain_status: newStatus }).eq("id", id);
-
-    if (verified) {
-      try {
-        await db.from("audit_logs").insert({
-          action: "Partner Custom Domain Verified",
-          details: `Domain "${partner.custom_domain}" for partner "${partner.slug}" (id: ${id}) is now verified. SSL will be provisioned by Vercel automatically.`,
-        });
-      } catch {}
-    }
-
-    return res.json({
-      success: true,
-      domain: partner.custom_domain,
-      verified,
-      domain_status: newStatus,
-      verification,
-      message: verified
-        ? "Domain is verified! Vercel will provision SSL automatically within minutes."
-        : "Domain is not yet verified. Ensure the DNS records are correctly configured at your registrar.",
-    });
+    return res.json({ success: true, message: `Domain${oldDomain ? ` "${oldDomain}"` : ""} removed. Partner site is now accessible via its slug URL only.` });
   }));
 
   // ── Public partner lookup by slug ─────────────────────────────────────────
