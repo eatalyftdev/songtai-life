@@ -492,7 +492,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                 {/* Floating stat badge — bottom-right */}
                 <motion.div
                   className="absolute -bottom-3 -right-3 sm:-bottom-4 sm:-right-4 flex items-center gap-2 px-3 py-2 rounded-2xl shadow-lg border backdrop-blur-sm"
-                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "rgba(var(--color-primary-rgb,16,185,129),0.35)" }}
+                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "rgba(30,154,86,0.35)" }}
                   initial={{ opacity: 0, x: 12, y: 8 }}
                   animate={{ opacity: 1, x: 0, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.65, ease: [0.16, 1, 0.3, 1] }}
