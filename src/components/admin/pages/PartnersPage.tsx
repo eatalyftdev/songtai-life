@@ -49,7 +49,7 @@ interface FormState {
   heroSubtitleFr: string;
   heroImageUrl: string;
   distributorId: string;
-  status: "pending" | "active";
+  status: "pending" | "active" | "suspended";
   customDomain: string;
 }
 
@@ -123,9 +123,11 @@ export default function PartnersPage() {
   const [createdPartner, setCreatedPartner] = useState<Partner | null>(null);
   const [copiedSlug, setCopiedSlug] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [domainOp, setDomainOp] = useState<"attaching" | "checking" | null>(null);
+  const [domainOp, setDomainOp] = useState<"attaching" | "checking" | "removing" | null>(null);
   const [dnsRecords, setDnsRecords] = useState<{ type: string; domain: string; value: string }[]>([]);
   const [domainOpMsg, setDomainOpMsg] = useState("");
+  const [savedMsg, setSavedMsg] = useState("");
+  const [showSlugWarning, setShowSlugWarning] = useState(false);
 
   // ── Load partners ──────────────────────────────────────────────────────────
   const load = async () => {
@@ -166,6 +168,8 @@ export default function PartnersPage() {
     setCreatedPartner(null);
     setDnsRecords([]);
     setDomainOpMsg("");
+    setSavedMsg("");
+    setShowSlugWarning(false);
     setEditing(p);
     setForm({
       slug: p.slug,
@@ -249,6 +253,14 @@ export default function PartnersPage() {
       if (!editing && json.partner) {
         // Show success panel with the live URL instead of just closing
         setCreatedPartner(json.partner as Partner);
+      } else if (editing && json.partner) {
+        // Keep slide open — refresh editing state so domain section reflects saved values
+        const updated = json.partner as Partner;
+        setEditing(updated);
+        setForm(f => ({ ...f, slug: updated.slug }));
+        setSavedMsg("Changes saved.");
+        setTimeout(() => setSavedMsg(""), 3000);
+        load();
       } else {
         setSlideOpen(false);
       }
@@ -329,6 +341,30 @@ export default function PartnersPage() {
       const newStatus = json.domain_status as Partner["domain_status"];
       setPartners(prev => prev.map(p => p.id === id ? { ...p, domain_status: newStatus } : p));
       if (editing?.id === id) setEditing(e => e ? { ...e, domain_status: newStatus } : e);
+    } catch (err: any) {
+      setDomainOpMsg(err.message ?? "Unexpected error.");
+    } finally {
+      setDomainOp(null);
+    }
+  };
+
+  const removeDomain = async (id: string) => {
+    setDomainOp("removing");
+    setDomainOpMsg("");
+    try {
+      const res = await fetch(`/api/admin/partner/${id}/domain`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) { setDomainOpMsg(json.error ?? "Failed to remove domain."); return; }
+      setDnsRecords([]);
+      setDomainOpMsg(json.message ?? "Domain removed.");
+      setPartners(prev => prev.map(p => p.id === id ? { ...p, custom_domain: null, domain_status: "none" } : p));
+      if (editing?.id === id) {
+        setEditing(e => e ? { ...e, custom_domain: null, domain_status: "none" } : e);
+        setForm(f => ({ ...f, customDomain: "" }));
+      }
     } catch (err: any) {
       setDomainOpMsg(err.message ?? "Unexpected error.");
     } finally {
@@ -550,21 +586,35 @@ export default function PartnersPage() {
             </FormRow>
           </div>
 
-          {/* Slug (immutable after creation) */}
+          {/* Slug */}
           <SectionHeader>Site Identity</SectionHeader>
-          <FormRow label={editing ? "Slug (immutable after creation)" : "Slug *"}>
+          <FormRow label={editing ? "Slug" : "Slug *"}>
             <div className="flex items-center gap-2">
               <span className="text-stone-500 text-xs flex-shrink-0">/p/</span>
               <Input
                 value={form.slug}
-                onChange={v => setForm(f => ({ ...f, slug: v.toLowerCase().replace(/[^a-z0-9-]/g, "") }))}
+                onChange={v => {
+                  const clean = v.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                  setForm(f => ({ ...f, slug: clean }));
+                  if (editing && clean !== editing.slug) setShowSlugWarning(true);
+                  else setShowSlugWarning(false);
+                }}
                 placeholder="jane-doe"
-                disabled={!!editing}
                 mono
               />
             </div>
             {!editing && (
-              <p className="text-[10px] text-stone-600 mt-1">Lowercase, letters/numbers/hyphens only. Cannot be changed later.</p>
+              <p className="text-[10px] text-stone-600 mt-1">Lowercase, letters/numbers/hyphens only.</p>
+            )}
+            {editing && showSlugWarning && form.slug !== editing.slug && (
+              <div className="flex items-start gap-2 mt-2 p-2.5 bg-amber-950/30 border border-amber-800/40 rounded-xl text-[10px] text-amber-300">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>Warning:</strong> Changing the slug means the old URL{" "}
+                  <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{editing.slug}</code> will stop working.
+                  Anyone using that link will see "site not found". Make sure to share the new URL with the partner.
+                </span>
+              </div>
             )}
           </FormRow>
 
@@ -607,39 +657,76 @@ export default function PartnersPage() {
           {/* Custom domain */}
           <SectionHeader>Custom Domain (optional)</SectionHeader>
           <FormRow label="Custom domain">
-            <Input value={form.customDomain} onChange={v => setForm(f => ({ ...f, customDomain: v }))} placeholder="janedoe-wellness.com" />
-            <p className="text-[10px] text-stone-500 mt-1">
-              After saving, configure a CNAME at your registrar pointing to this server's domain.
-              The partner site will remain accessible at its default <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{form.slug || "slug"}</code> URL regardless of custom domain status.
-            </p>
+            <Input
+              value={form.customDomain}
+              onChange={v => setForm(f => ({ ...f, customDomain: v.trim().toLowerCase() }))}
+              placeholder="janedoe-wellness.com"
+            />
+            {!form.customDomain && (
+              <p className="text-[10px] text-stone-500 mt-1">
+                No custom domain yet — the site is live at{" "}
+                <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{form.slug || "slug"}</code>.
+                Add a custom domain anytime.
+              </p>
+            )}
+            {form.customDomain && editing && editing.custom_domain &&
+              form.customDomain !== editing.custom_domain &&
+              (editing.domain_status === "verified" || editing.domain_status === "pending_verification") && (
+              <div className="flex items-start gap-2 mt-2 p-2.5 bg-red-950/30 border border-red-800/40 rounded-xl text-[10px] text-red-300">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>Warning:</strong> Your current domain{" "}
+                  <code className="font-mono bg-stone-900 px-0.5 rounded">{editing.custom_domain}</code>{" "}
+                  will stop working once you save this change. Make sure the new domain is ready before saving.
+                </span>
+              </div>
+            )}
           </FormRow>
 
-          {/* Domain verification — only shown when editing an existing partner with a custom domain */}
-          {editing && editing.custom_domain && (
+          {/* Domain verification — shown when editing and a domain is saved or typed */}
+          {editing && (editing.custom_domain || form.customDomain) && (
             <div className="space-y-3">
               <SectionHeader>Domain Verification</SectionHeader>
 
-              {/* Status badge */}
-              <div className="flex items-center gap-2">
-                {editing.domain_status === "verified" && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-800/40">
-                    <Shield className="w-3 h-3" /> Verified — SSL active
-                  </span>
-                )}
-                {(editing.domain_status === "pending_verification" || editing.domain_status === "none" || !editing.domain_status) && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-900/40 text-amber-400 border border-amber-800/40">
-                    <AlertTriangle className="w-3 h-3" /> {editing.domain_status === "pending_verification" ? "Pending verification" : "Not attached to Vercel"}
-                  </span>
-                )}
-                {editing.domain_status === "failed" && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-900/30 text-red-400 border border-red-800/30">
-                    <XCircle className="w-3 h-3" /> Verification failed
-                  </span>
-                )}
-              </div>
+              {/* Status badge — based on saved editing state */}
+              {editing.custom_domain && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-stone-500 font-mono">{editing.custom_domain}</span>
+                  {editing.domain_status === "verified" && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-900/40 text-emerald-400 border border-emerald-800/40">
+                      <Shield className="w-3 h-3" /> Verified — SSL active
+                    </span>
+                  )}
+                  {editing.domain_status === "pending_verification" && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-900/40 text-amber-400 border border-amber-800/40">
+                      <AlertTriangle className="w-3 h-3" /> Pending DNS verification
+                    </span>
+                  )}
+                  {(editing.domain_status === "none" || !editing.domain_status) && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-stone-800 text-stone-400 border border-stone-700">
+                      Not yet attached to Vercel
+                    </span>
+                  )}
+                  {editing.domain_status === "failed" && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-900/30 text-red-400 border border-red-800/30">
+                      <XCircle className="w-3 h-3" /> Verification failed — check DNS record
+                    </span>
+                  )}
+                </div>
+              )}
 
-              {/* Attach button — only if not yet added to Vercel */}
-              {(editing.domain_status === "none" || !editing.domain_status) && (
+              {/* Hint when domain field has a new unsaved value */}
+              {form.customDomain && form.customDomain !== editing.custom_domain && (
+                <p className="text-[10px] text-amber-400 bg-amber-950/20 border border-amber-800/30 rounded-xl px-3 py-2">
+                  Save changes first, then use "Attach to Vercel" to register{" "}
+                  <span className="font-mono font-bold">{form.customDomain}</span> and get DNS records.
+                </p>
+              )}
+
+              {/* Attach button — only if saved domain matches form and not yet added to Vercel */}
+              {editing.custom_domain &&
+                form.customDomain === editing.custom_domain &&
+                (editing.domain_status === "none" || !editing.domain_status) && (
                 <div className="flex items-center gap-2">
                   <Btn
                     variant="secondary" size="xs"
@@ -649,25 +736,57 @@ export default function PartnersPage() {
                     <Globe className="w-3 h-3" />
                     Attach to Vercel
                   </Btn>
-                  <p className="text-[10px] text-stone-500">Registers this domain with the partner platform — you'll get the DNS records to add at your registrar.</p>
+                  <p className="text-[10px] text-stone-500">Registers the domain and returns the DNS records to set at your registrar.</p>
                 </div>
               )}
 
               {/* Check status button — if pending or failed */}
-              {(editing.domain_status === "pending_verification" || editing.domain_status === "failed") && (
-                <Btn
-                  variant="secondary" size="xs"
-                  loading={domainOp === "checking"}
-                  onClick={() => checkDomainStatus(editing.id)}
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Check verification status
-                </Btn>
+              {editing.custom_domain &&
+                form.customDomain === editing.custom_domain &&
+                (editing.domain_status === "pending_verification" || editing.domain_status === "failed") && (
+                <div className="flex items-center gap-2">
+                  <Btn
+                    variant="secondary" size="xs"
+                    loading={domainOp === "checking"}
+                    onClick={() => checkDomainStatus(editing.id)}
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Check now
+                  </Btn>
+                  <p className="text-[10px] text-stone-500">
+                    Background checks run automatically every ~20 min. Use this to check immediately.
+                  </p>
+                </div>
+              )}
+
+              {/* Remove domain button — always available if a domain is saved */}
+              {editing.custom_domain && (
+                <div className="flex items-center gap-2">
+                  <Btn
+                    variant="danger" size="xs"
+                    loading={domainOp === "removing"}
+                    onClick={() => {
+                      if (window.confirm(`Remove "${editing.custom_domain}" and revert to slug-only URL?`)) {
+                        removeDomain(editing.id);
+                      }
+                    }}
+                  >
+                    <XCircle className="w-3 h-3" />
+                    Remove domain
+                  </Btn>
+                  <p className="text-[10px] text-stone-500">
+                    Detaches from Vercel. The site stays live at its slug URL.
+                  </p>
+                </div>
               )}
 
               {/* Operation message */}
               {domainOpMsg && (
-                <p className={`text-[11px] leading-relaxed ${editing.domain_status === "verified" ? "text-emerald-400" : "text-stone-400"}`}>
+                <p className={`text-[11px] leading-relaxed ${
+                  editing.domain_status === "verified" ? "text-emerald-400" :
+                  domainOp === null && domainOpMsg.includes("removed") ? "text-stone-400" :
+                  "text-stone-400"
+                }`}>
                   {domainOpMsg}
                 </p>
               )}
@@ -675,7 +794,7 @@ export default function PartnersPage() {
               {/* DNS records table */}
               {dnsRecords.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wide">DNS Records to add at your registrar</p>
+                  <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wide">DNS Records — add these at your registrar</p>
                   <div className="rounded-xl border border-stone-800 overflow-hidden">
                     <table className="w-full text-[10px]">
                       <thead className="bg-stone-800/60">
@@ -683,6 +802,7 @@ export default function PartnersPage() {
                           <th className="text-left px-3 py-1.5 text-stone-400 font-semibold">Type</th>
                           <th className="text-left px-3 py-1.5 text-stone-400 font-semibold">Name / Host</th>
                           <th className="text-left px-3 py-1.5 text-stone-400 font-semibold">Value</th>
+                          <th className="px-3 py-1.5" />
                         </tr>
                       </thead>
                       <tbody>
@@ -691,21 +811,33 @@ export default function PartnersPage() {
                             <td className="px-3 py-1.5 font-mono text-amber-400 font-bold">{r.type}</td>
                             <td className="px-3 py-1.5 font-mono text-stone-300">{r.domain}</td>
                             <td className="px-3 py-1.5 font-mono text-stone-400 break-all">{r.value}</td>
+                            <td className="px-3 py-1.5">
+                              <button
+                                type="button"
+                                onClick={() => navigator.clipboard.writeText(r.value)}
+                                className="p-1 rounded hover:bg-stone-700 text-stone-500 hover:text-stone-300 transition-colors"
+                                title="Copy value"
+                              >
+                                <Copy className="w-2.5 h-2.5" />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                   <p className="text-[10px] text-stone-500">
-                    Add these records at your DNS provider, then click "Check verification status". Vercel provisions SSL automatically once verified.
+                    <strong className="text-stone-400">DNS propagation takes time</strong> — from a few minutes to 24–48 hours depending on your registrar and TTL settings. This is completely normal.
+                    Your slug URL keeps working throughout. Background checks run every ~20 min; use "Check now" to verify immediately.
                   </p>
                 </div>
               )}
 
               {/* Verified state — no action needed */}
-              {editing.domain_status === "verified" && dnsRecords.length === 0 && (
+              {editing.domain_status === "verified" && dnsRecords.length === 0 && form.customDomain === editing.custom_domain && (
                 <p className="text-[11px] text-stone-500">
-                  Domain is verified and serving traffic. SSL is active. The site also remains accessible at its default <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{editing.slug}</code> URL.
+                  Domain is verified and serving traffic. SSL is active. The site also remains accessible at its slug URL{" "}
+                  <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{editing.slug}</code>.
                 </p>
               )}
             </div>
@@ -713,9 +845,12 @@ export default function PartnersPage() {
 
           {/* Status */}
           <SectionHeader>Visibility</SectionHeader>
-          <FormRow label="Initial status">
-            <div className="flex gap-3">
-              {(["active", "pending"] as const).map(s => (
+          <FormRow label={editing ? "Status" : "Initial status"}>
+            <div className="flex gap-3 flex-wrap">
+              {(editing
+                ? (["active", "pending", "suspended"] as const)
+                : (["active", "pending"] as const)
+              ).map(s => (
                 <label key={s} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -729,7 +864,9 @@ export default function PartnersPage() {
                 </label>
               ))}
             </div>
-            <p className="text-[10px] text-stone-600 mt-1">Admin-created sites can go live immediately ("active") — you are the approver.</p>
+            {!editing && (
+              <p className="text-[10px] text-stone-600 mt-1">Admin-created sites can go live immediately ("active") — you are the approver.</p>
+            )}
           </FormRow>
 
           {error && (
@@ -739,11 +876,20 @@ export default function PartnersPage() {
             </div>
           )}
 
+          {savedMsg && (
+            <div className="flex items-center gap-2 p-3 bg-emerald-950/30 border border-emerald-800/40 rounded-xl text-xs text-emerald-300">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              {savedMsg}
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <Btn variant="primary" loading={saving} className="flex-1" onClick={() => {}}>
               {editing ? "Save Changes" : "Create Partner Site"}
             </Btn>
-            <Btn variant="secondary" onClick={() => setSlideOpen(false)}>Cancel</Btn>
+            <Btn variant="secondary" onClick={() => { setSlideOpen(false); setShowSlugWarning(false); }}>
+              {editing ? "Close" : "Cancel"}
+            </Btn>
           </div>
         </form>}
       </SlideOver>

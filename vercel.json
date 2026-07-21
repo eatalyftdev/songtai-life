@@ -4,6 +4,12 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/cron/check-partner-domains",
+      "schedule": "*/20 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],

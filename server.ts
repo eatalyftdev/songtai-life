@@ -2083,6 +2083,49 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ success: true, message: `Domain${oldDomain ? ` "${oldDomain}"` : ""} removed. Partner site is now accessible via its slug URL only.` });
   }));
 
+  // ── Cron: background domain verification sweep ────────────────────────────
+  // Called by Vercel Cron every ~20 minutes (see vercel.json).
+  // Protected by CRON_SECRET env var when set.
+  app.get("/api/cron/check-partner-domains", requireDb(async (db, req, res) => {
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const authHeader = (req.headers.authorization ?? "") as string;
+      if (!authHeader.startsWith("Bearer ") || authHeader.slice(7) !== cronSecret) {
+        return res.status(401).json({ error: "Unauthorized." });
+      }
+    }
+
+    if (!process.env.VERCEL_API_TOKEN || !process.env.VERCEL_PROJECT_ID) {
+      return res.json({ success: true, checked: 0, skipped: 0, message: "Vercel not configured — no domain checks performed." });
+    }
+
+    const { data: pending } = await db
+      .from("partners")
+      .select("id, slug, custom_domain")
+      .eq("domain_status", "pending_verification");
+
+    if (!pending || pending.length === 0) {
+      return res.json({ success: true, checked: 0, message: "No partners pending domain verification." });
+    }
+
+    const results: any[] = [];
+    for (const partner of pending) {
+      try {
+        const result = await checkPartnerDomainStatus(db, partner.id as string);
+        results.push({ id: partner.id, slug: partner.slug, domain: partner.custom_domain, ...result });
+      } catch (err: any) {
+        console.error(`[DomainCron] Error checking partner ${partner.slug}:`, err.message);
+        results.push({ id: partner.id, slug: partner.slug, domain: partner.custom_domain, error: err.message });
+      }
+    }
+
+    const verified = results.filter(r => r.domain_status === "verified").length;
+    const failed   = results.filter(r => r.domain_status === "failed").length;
+    console.log(`[DomainCron] Checked ${results.length} partners — ${verified} verified, ${failed} failed, ${results.length - verified - failed} still pending.`);
+
+    return res.json({ success: true, checked: results.length, verified, failed, results });
+  }));
+
   // ── Public partner lookup by slug ─────────────────────────────────────────
   app.get("/api/partner/:slug", requireDb(async (db, req, res) => {
     const { slug } = req.params as { slug: string };
