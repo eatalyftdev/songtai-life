@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
 import crypto from "crypto";
 import { getMeSombClient } from "./server/mesomb";
+import { createDomainProvider } from "./server/domain-provider";
 
 dotenv.config();
 
@@ -331,7 +332,7 @@ async function activateDistributorOnPackPurchase(
         pack_tier:      packTier,
         pack_price_xaf: priceXaf,
         pack_pv:        packPv,
-        referral_link:  `https://songtailife.cm/join?ref=${existing.distributor_code}`,
+        referral_link:  `${SITE_URL}/join?ref=${existing.distributor_code}`,
       }).eq("id", userId);
       console.log(`[PackActivation] Distributor ${userId} re-activated with pack ${packTier} (Order ${orderId})`);
     } else {
@@ -350,7 +351,7 @@ async function activateDistributorOnPackPurchase(
         pack_price_xaf: priceXaf,
         pack_pv:        packPv,
         pv:             packPv,
-        referral_link:  `https://songtailife.cm/join?ref=${code}`,
+        referral_link:  `${SITE_URL}/join?ref=${code}`,
         joined_at:      new Date().toISOString(),
       });
 
@@ -404,7 +405,7 @@ async function sendCustomerWhatsApp(
         `*Order:* ${orderId}`,
         `*Amount:* ${amountXaf.toLocaleString()} XAF`,
         ``,
-        `Your distributor account is now active. Login at songtailife.cm to access your dashboard.`,
+        `Your distributor account is now active. Login at ${SITE_URL.replace(/^https?:\/\//, "")} to access your dashboard.`,
       ].join("\n")
     : [
         `❌ *Payment Not Processed — Songtai Life*`,
@@ -498,33 +499,23 @@ async function sendOrderWhatsApp(
 
 // ── Module-level app + PORT ───────────────────────────────────────────────────
 // Declared here (not inside startServer) so the Express app can be exported as
-// a Vercel serverless handler while still calling app.listen() on Replit/local.
+// a serverless handler while still calling app.listen() on Replit/local/Docker.
 const app = express();
 const _parsedPort = parseInt(process.env.PORT ?? "");
 const PORT = Number.isInteger(_parsedPort) && _parsedPort > 0 && _parsedPort <= 65535 ? _parsedPort : 5000;
 
-// ── Vercel domain management helpers ─────────────────────────────────────────
+// ── Site URL (host-neutral) ───────────────────────────────────────────────────
+// Set SITE_URL in your deployment environment to match the actual domain.
+// All code that builds absolute URLs reads this constant — never hardcodes a domain.
+const SITE_URL = (process.env.SITE_URL ?? "https://songtailife.cm").replace(/\/$/, "");
 
-async function vercelRemoveDomain(domain: string): Promise<{ ok: boolean; error?: string }> {
-  const VERCEL_API_TOKEN  = process.env.VERCEL_API_TOKEN;
-  const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
-  if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) return { ok: false, error: "Vercel not configured." };
-  try {
-    const res = await fetch(
-      `https://api.vercel.com/v9/projects/${encodeURIComponent(VERCEL_PROJECT_ID)}/domains/${encodeURIComponent(domain)}`,
-      { method: "DELETE", headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}` } }
-    );
-    if (!res.ok) {
-      const body: any = await res.json().catch(() => ({}));
-      // 404 / domain_not_found means already gone — treat as success
-      if (res.status === 404 || body?.error?.code === "domain_not_found") return { ok: true };
-      return { ok: false, error: body?.error?.message ?? `Vercel returned ${res.status}` };
-    }
-    return { ok: true };
-  } catch (err: any) {
-    return { ok: false, error: err.message ?? "Network error removing domain." };
-  }
-}
+// ── Domain provider (platform-agnostic) ──────────────────────────────────────
+// Resolved once at startup from DOMAIN_PROVIDER env var (default: "vercel").
+// All custom-domain lifecycle code calls this — never a platform-specific API directly.
+// Swap DOMAIN_PROVIDER=netlify (and add credentials) to change platforms.
+const domainProvider = createDomainProvider();
+
+// ── Domain verification helper ───────────────────────────────────────────────
 
 const DOMAIN_FAILURE_THRESHOLD_DAYS = 7;
 
@@ -532,13 +523,6 @@ async function checkPartnerDomainStatus(db: any, partnerId: string): Promise<{
   verified: boolean; domain_status: string; verification: any[];
   domain_check_attempts: number; message: string;
 }> {
-  const VERCEL_API_TOKEN  = process.env.VERCEL_API_TOKEN;
-  const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
-  if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
-    return { verified: false, domain_status: "pending_verification", verification: [],
-             domain_check_attempts: 0, message: "Vercel not configured." };
-  }
-
   const { data: partner } = await db.from("partners")
     .select("id, slug, custom_domain, domain_status, domain_check_attempts, vercel_domain_added_at")
     .eq("id", partnerId).maybeSingle();
@@ -550,30 +534,22 @@ async function checkPartnerDomainStatus(db: any, partnerId: string): Promise<{
   const now = new Date().toISOString();
   const attempts = ((partner.domain_check_attempts as number) ?? 0) + 1;
 
-  let vercelData: any = {};
-  let vercelOk = false;
-  try {
-    const vercelRes = await fetch(
-      `https://api.vercel.com/v9/projects/${encodeURIComponent(VERCEL_PROJECT_ID)}/domains/${encodeURIComponent(partner.custom_domain as string)}`,
-      { headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}` } }
-    );
-    vercelData = await vercelRes.json();
-    vercelOk = vercelRes.ok;
-  } catch (err: any) {
-    console.error(`[DomainCheck] Network error for ${partner.custom_domain}:`, err.message);
-  }
+  let verified = false;
+  let verification: any[] = [];
 
-  if (!vercelOk) {
+  try {
+    const result = await domainProvider.checkVerification(partner.custom_domain as string);
+    verified    = result.verified;
+    verification = result.dnsRecords;
+  } catch (err: any) {
+    console.error(`[DomainCheck] Provider error for ${partner.custom_domain}:`, err.message);
     await db.from("partners").update({ domain_last_checked_at: now, domain_check_attempts: attempts }).eq("id", partnerId);
     return { verified: false, domain_status: partner.domain_status as string, verification: [],
-             domain_check_attempts: attempts, message: vercelData?.error?.message ?? "Vercel API unreachable — will retry." };
+             domain_check_attempts: attempts, message: `Domain provider unreachable — will retry. (${err.message})` };
   }
 
-  const verified   = vercelData.verified === true;
-  const verification: any[] = vercelData.verification ?? [];
-
-  const addedAt     = partner.vercel_domain_added_at ? new Date(partner.vercel_domain_added_at as string) : null;
-  const threshold   = new Date(Date.now() - DOMAIN_FAILURE_THRESHOLD_DAYS * 86_400_000);
+  const addedAt       = partner.vercel_domain_added_at ? new Date(partner.vercel_domain_added_at as string) : null;
+  const threshold     = new Date(Date.now() - DOMAIN_FAILURE_THRESHOLD_DAYS * 86_400_000);
   const pastThreshold = addedAt !== null && addedAt < threshold;
 
   const newStatus = verified ? "verified" : pastThreshold ? "failed" : "pending_verification";
@@ -585,7 +561,7 @@ async function checkPartnerDomainStatus(db: any, partnerId: string): Promise<{
   }
 
   const message = verified
-    ? "Domain is verified! Vercel will provision SSL automatically within minutes."
+    ? "Domain is verified! Your hosting provider will provision SSL automatically within minutes."
     : pastThreshold
     ? `Domain has not verified after ${DOMAIN_FAILURE_THRESHOLD_DAYS} days. Check that the DNS record is correctly entered at your registrar — a typo in the CNAME value or an old TTL is usually the cause.`
     : "DNS propagation can take anywhere from a few minutes to 24–48 hours depending on your registrar — this is completely normal. No action needed unless it's still pending after 48 hours.";
@@ -1714,7 +1690,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
       pack_price_xaf: priceMap[packTier] ?? 0,
       pack_pv:        pvMap[packTier] ?? 50,
       pv:             pvMap[packTier] ?? 50,
-      referral_link:  `https://songtailife.cm/join?ref=${code}`,
+      referral_link:  `${SITE_URL}/join?ref=${code}`,
       joined_at:      new Date().toISOString(),
       created_by_admin: actorId,
     });
@@ -1744,7 +1720,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
       `*Temporary Password:* ${tempPassword}`,
       ``,
       `⚠️ Log in and change your password immediately.`,
-      `🔗 https://songtailife.cm/distributor/login`,
+      `🔗 ${SITE_URL}/distributor/login`,
     ].join("\n");
     try {
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -1929,7 +1905,8 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ success: true, partner: data });
   }));
 
-  // ── Admin: attach (or replace) a custom domain via Vercel API ───────────────
+  // ── Admin: attach (or replace) a custom domain ──────────────────────────────
+  // Uses the active DomainProvider (set via DOMAIN_PROVIDER env var, default: vercel).
   app.post("/api/admin/partner/:id/domain/attach", requireDb(async (db, req, res) => {
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
@@ -1937,15 +1914,6 @@ Answer concisely, helpfully, and professionally. Support both English and French
     const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
     if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
       return res.status(403).json({ error: "Admin or superadmin role required." });
-    }
-
-    const VERCEL_API_TOKEN  = process.env.VERCEL_API_TOKEN;
-    const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
-    if (!VERCEL_API_TOKEN || !VERCEL_PROJECT_ID) {
-      return res.status(503).json({
-        error: "Vercel domain integration is not configured. Set VERCEL_API_TOKEN and VERCEL_PROJECT_ID environment secrets.",
-        missing: [!VERCEL_API_TOKEN && "VERCEL_API_TOKEN", !VERCEL_PROJECT_ID && "VERCEL_PROJECT_ID"].filter(Boolean),
-      });
     }
 
     const { id } = req.params;
@@ -1959,49 +1927,38 @@ Answer concisely, helpfully, and professionally. Support both English and French
       .eq("id", id).maybeSingle();
     if (!partner) return res.status(404).json({ error: "Partner not found." });
 
-    // If partner already has a different domain attached, remove it from Vercel first
+    // If partner already has a different domain, remove it from the provider first
     const oldDomain = partner.custom_domain as string | null;
     if (oldDomain && oldDomain !== domain) {
-      const removeResult = await vercelRemoveDomain(oldDomain);
-      if (!removeResult.ok) {
-        console.warn(`[DomainAttach] Could not remove old domain "${oldDomain}": ${removeResult.error}`);
+      try {
+        await domainProvider.removeDomain(oldDomain);
+        console.log(`[DomainAttach] Removed old domain "${oldDomain}".`);
+      } catch (err: any) {
+        console.warn(`[DomainAttach] Could not remove old domain "${oldDomain}": ${err.message}`);
         // Continue anyway — don't block adding the new domain over an old-domain removal failure
-      } else {
-        console.log(`[DomainAttach] Removed old domain "${oldDomain}" from Vercel.`);
       }
     }
 
-    // Add the new domain to Vercel
-    const vercelRes = await fetch(
-      `https://api.vercel.com/v10/projects/${encodeURIComponent(VERCEL_PROJECT_ID)}/domains`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${VERCEL_API_TOKEN}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: domain }),
-      }
-    );
-    const vercelData = await vercelRes.json() as any;
-
-    if (!vercelRes.ok && vercelData.error?.code !== "domain_already_in_use") {
-      console.error("[DomainAttach] Vercel API error:", vercelData);
-      return res.status(502).json({
-        error: vercelData.error?.message ?? "Vercel API rejected the domain. Check the domain name and try again.",
-        vercel_code: vercelData.error?.code,
-      });
+    // Register the new domain with the provider
+    let dnsRecords: any[] = [];
+    try {
+      const result = await domainProvider.addDomain(domain);
+      dnsRecords = result.dnsRecords;
+    } catch (err: any) {
+      console.error("[DomainAttach] Provider error:", err.message);
+      return res.status(502).json({ error: err.message ?? "Domain provider rejected the domain. Check the domain name and try again." });
     }
 
-    const verification: any[] = vercelData.verification ?? [];
     const now = new Date().toISOString();
-
     const updatePayload: Record<string, any> = {
       custom_domain:            domain,
       domain_status:            "pending_verification",
-      vercel_domain_added_at:   now,
+      vercel_domain_added_at:   now,   // column name retained for DB compat; records attach time for any provider
       domain_check_attempts:    0,
       domain_last_checked_at:   null,
     };
-    if (verification.length > 0) {
-      updatePayload.domain_verification_token = JSON.stringify(verification);
+    if (dnsRecords.length > 0) {
+      updatePayload.domain_verification_token = JSON.stringify(dnsRecords);
     }
     await db.from("partners").update(updatePayload).eq("id", id);
 
@@ -2013,10 +1970,10 @@ Answer concisely, helpfully, and professionally. Support both English and French
     } catch {}
 
     return res.json({
-      success: true, domain, domain_status: "pending_verification", verification,
+      success: true, domain, domain_status: "pending_verification", verification: dnsRecords,
       message: oldDomain && oldDomain !== domain
-        ? `Old domain "${oldDomain}" removed from Vercel. New domain "${domain}" added — configure the DNS records below at your registrar.`
-        : "Domain added to Vercel. Configure the DNS records below at your registrar, then check status. DNS propagation can take minutes to 48 hours — this is normal.",
+        ? `Old domain "${oldDomain}" detached. New domain "${domain}" registered — configure the DNS records below at your registrar.`
+        : "Domain registered. Configure the DNS records below at your registrar, then click 'Check now'. DNS propagation can take minutes to 48 hours — this is normal.",
     });
   }));
 
@@ -2028,9 +1985,6 @@ Answer concisely, helpfully, and professionally. Support both English and French
     const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
     if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
       return res.status(403).json({ error: "Admin or superadmin role required." });
-    }
-    if (!process.env.VERCEL_API_TOKEN || !process.env.VERCEL_PROJECT_ID) {
-      return res.status(503).json({ error: "Vercel domain integration is not configured." });
     }
     const { id } = req.params;
     const { data: partner } = await db.from("partners").select("id, custom_domain").eq("id", id).maybeSingle();
@@ -2057,10 +2011,11 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
     const oldDomain = partner.custom_domain as string | null;
     if (oldDomain) {
-      const removeResult = await vercelRemoveDomain(oldDomain);
-      if (!removeResult.ok) {
-        console.warn(`[DomainRemove] Could not remove "${oldDomain}" from Vercel: ${removeResult.error}`);
-        // Continue — still clear it from the DB even if Vercel removal failed
+      try {
+        await domainProvider.removeDomain(oldDomain);
+      } catch (err: any) {
+        console.warn(`[DomainRemove] Could not remove "${oldDomain}" from provider: ${err.message}`);
+        // Continue — still clear it from the DB even if provider removal failed
       }
     }
 
@@ -2083,9 +2038,16 @@ Answer concisely, helpfully, and professionally. Support both English and French
     return res.json({ success: true, message: `Domain${oldDomain ? ` "${oldDomain}"` : ""} removed. Partner site is now accessible via its slug URL only.` });
   }));
 
-  // ── Cron: background domain verification sweep ────────────────────────────
-  // Called by Vercel Cron every ~20 minutes (see vercel.json).
-  // Protected by CRON_SECRET env var when set.
+  // ── Scheduled job: background domain verification sweep ──────────────────
+  // Platform-agnostic HTTP endpoint — triggered by whichever scheduler is
+  // configured for the deployment:
+  //   • Vercel:          vercel.json "crons" block (*/20 * * * *)
+  //   • Netlify:         netlify.toml [functions] scheduled-function or external cron
+  //   • Any host:        GitHub Actions scheduled workflow, cron-job.org, Supabase pg_cron
+  //                      — anything that can HTTP GET this URL with the Bearer token
+  //
+  // Protected by CRON_SECRET env var (recommended in production). If unset, the
+  // endpoint is open — fine for local dev, not for production.
   app.get("/api/cron/check-partner-domains", requireDb(async (db, req, res) => {
     const cronSecret = process.env.CRON_SECRET;
     if (cronSecret) {
@@ -2093,10 +2055,6 @@ Answer concisely, helpfully, and professionally. Support both English and French
       if (!authHeader.startsWith("Bearer ") || authHeader.slice(7) !== cronSecret) {
         return res.status(401).json({ error: "Unauthorized." });
       }
-    }
-
-    if (!process.env.VERCEL_API_TOKEN || !process.env.VERCEL_PROJECT_ID) {
-      return res.json({ success: true, checked: 0, skipped: 0, message: "Vercel not configured — no domain checks performed." });
     }
 
     const { data: pending } = await db
@@ -2476,10 +2434,12 @@ export default async function handler(req: any, res: any) {
   return (app as any)(req, res);
 }
 
-// ── Replit / local: start the TCP listener ───────────────────────────────────
-// process.env.VERCEL is injected automatically by Vercel's runtime.
-// When absent (Replit, Docker, local dev) we start a normal HTTP server.
-if (!process.env.VERCEL) {
+// ── Start the TCP listener when running as a long-lived process ──────────────
+// Set SERVERLESS_PLATFORM=vercel|netlify|cloudflare (or the platform-injected
+// variable) to suppress app.listen() when the module is imported as a
+// serverless handler. Vercel injects VERCEL=1; Netlify injects NETLIFY=true.
+// Any other serverless host: set SERVERLESS_PLATFORM=1 in its env config.
+if (!process.env.VERCEL && !process.env.NETLIFY && !process.env.SERVERLESS_PLATFORM) {
   serverReady.then(() => {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server listening on host 0.0.0.0, port ${PORT}`);

@@ -1,0 +1,89 @@
+# Claude Code Build Prompt — Make the Full System Platform-Agnostic (Vercel, Netlify, or Any Host)
+
+Paste this into Claude Code inside the `songtai-life` repo. Apply to both `main` and `partners-platform` branches — audit each independently, since they may have diverged in what platform-specific features they lean on.
+
+---
+
+## 0. Skill activation
+
+Activate **Infrastructure**, **DevOps**, **Backend**, **API/Architecture**, and **Quality/Testing** skills from the `jeffallan/claude-skills` framework before coding. State which skills you're activating.
+
+## 1. Why this matters right now
+
+Several features built in earlier prompts leaned on Vercel-specific capabilities by default — the custom-domain automation calls Vercel's Domains API directly, and the domain-verification polling was specified as "Vercel Cron." Those choices work, but they quietly lock the whole system to one host. The goal now is: **the site and all its functionality (payments, distributor dashboard, admin panel, partner sites, custom domains, media center, everything) must work correctly whether deployed to Vercel, Netlify, or any other Next.js-capable host**, without app logic needing to know or care which one it's running on.
+
+## 2. Audit first — find every point of lock-in before changing anything
+
+Go through both branches and report on each of these before writing fixes:
+
+- **Scheduled jobs / cron**: the domain-verification polling job (and any other scheduled task) — is it implemented as Vercel Cron specifically? That's the biggest lock-in risk found in this codebase so far.
+- **Domain management API calls**: the custom-domain add/remove/verify-status calls to Vercel's Domains API — these are inherently Vercel-specific; there's no way to make "attach a custom domain" truly platform-neutral since each host has its own domain API (Netlify has its own, for example). The fix here isn't to eliminate the Vercel-specific code, but to isolate it behind a clean interface (see section 4).
+- **Image optimization**: confirm `next/image` usage doesn't assume Vercel's default image loader without a fallback — Netlify's official Next.js runtime handles this differently, and a fully platform-neutral deployment (e.g. a plain Node server) needs the built-in Next.js image optimization server, not a host-specific CDN transform.
+- **Edge Runtime usage**: any API route or middleware explicitly set to `runtime: 'edge'` — confirm the target platforms actually support the specific Edge APIs used (e.g. certain Node APIs aren't available at the edge on every host); default to the standard Node.js runtime unless there's a specific reason for Edge, since Node runtime is universally supported.
+- **Environment variable conventions**: any code reading Vercel-specific auto-injected env vars (`VERCEL_URL`, `VERCEL_ENV`, etc.) directly, without a fallback for hosts that don't set them.
+- **`vercel.json`-only configuration**: redirects, headers, or rewrites defined only in `vercel.json` — these need Next.js-native equivalents (`next.config.js` `redirects()`/`headers()`/`rewrites()`) so they apply regardless of host, with `vercel.json` kept only for genuinely Vercel-specific settings that have no portable equivalent.
+- **File storage**: confirm all file uploads (product images, media center assets, gallery, hero images) go through Supabase Storage, not any Vercel-specific blob/storage product — this should already be the case per the earlier builds, just confirm no exceptions crept in.
+- **Multi-tenant middleware** (subdomain/path routing for partner sites): confirm this uses standard Next.js middleware conventions rather than anything Vercel-specific, and works the same whether the wildcard domain is configured through Vercel's or Netlify's DNS/domain tooling.
+- **Webhook endpoint** (MeSomb payments): confirm it's a standard Next.js API route/route handler with no platform-specific request/response assumptions (e.g. relying on a Vercel-specific request object property).
+
+Report every finding with file paths before moving to fixes.
+
+## 3. Fix pattern for scheduled jobs — move off platform-specific cron entirely
+
+Rather than depending on whichever host's cron product happens to be configured, move scheduled work (the domain-verification poller, and any future scheduled task) to a **host-independent trigger**:
+
+- Preferred: implement the actual polling logic as a plain, callable API route (e.g. `/api/jobs/check-domain-verification`) that requires a secret/auth token to invoke, and trigger it externally via either:
+  - A Supabase scheduled Edge Function / `pg_cron` job calling that route on a schedule (keeps the trigger tied to the shared Supabase backend, not the hosting platform), **or**
+  - A free external scheduler (e.g. a GitHub Actions scheduled workflow, or a service like cron-job.org) hitting the route on an interval
+- This way, the actual job logic lives in ordinary application code, works identically regardless of host, and the "what triggers it" question becomes a small, swappable piece of config rather than something baked into app logic.
+- If Vercel Cron or Netlify Scheduled Functions are still used as the trigger on a given deployment, that's fine — but the route they call must not assume anything about how it was invoked.
+
+## 4. Fix pattern for domain management — adapter interface
+
+Custom-domain automation genuinely differs by host (Vercel Domains API vs. Netlify's own API vs. manual DNS elsewhere) — don't pretend otherwise. Instead:
+
+- Define a small adapter interface, e.g. `lib/domain-provider.ts`:
+  ```
+  interface DomainProvider {
+    addDomain(domain: string): Promise<{ dnsRecords: DnsRecord[] }>
+    checkVerification(domain: string): Promise<'pending' | 'verified' | 'failed'>
+    removeDomain(domain: string): Promise<void>
+  }
+  ```
+- Implement `VercelDomainProvider` (wrapping the existing Vercel Domains API calls from the earlier build) behind this interface.
+- Implement a `NetlifyDomainProvider` using Netlify's equivalent domain API, if/when the partners platform is actually deployed there.
+- Select the active provider via a single environment variable (e.g. `DOMAIN_PROVIDER=vercel|netlify`) read once at startup — all the domain-lifecycle logic built in the previous prompt (pending → verified flow, background polling, admin UI) calls the interface, never the platform-specific implementation directly.
+- This means adding support for a third host later is "write one new adapter file," not "rewrite the domain feature."
+
+## 5. Fix pattern for image optimization
+
+- Keep using `next/image` everywhere (already required by the earlier CDN prompt) — it works on any platform running actual Next.js, including a plain Node server, Netlify, or Vercel; each host just optimizes/serves it slightly differently under the hood.
+- Do not hardcode any Vercel-specific image URL transformation logic outside of `next/image`'s own loader system. If a custom loader is ever needed for a specific host, implement it through Next.js's supported `images.loader`/`loaderFile` config, not ad hoc URL string building in components.
+- Confirm the build works and images render correctly under `next build && next start` locally (the platform-neutral baseline) as the ground-truth test, in addition to testing on each actual host.
+
+## 6. Fix pattern for redirects/headers/config
+
+- Move any redirect, header, or rewrite rule currently living only in `vercel.json` into `next.config.js` (`redirects()`, `headers()`, `rewrites()`) so it's respected by any host running the Next.js build, not just Vercel.
+- Keep `vercel.json` and add a `netlify.toml` (or the config file for whichever additional host is targeted) only for settings that are genuinely platform-specific and have no Next.js-native equivalent (e.g. Netlify's `@netlify/plugin-nextjs` configuration).
+
+## 7. Environment variables
+- Audit for any direct reads of Vercel auto-injected variables (`VERCEL_URL`, `VERCEL_ENV`, `VERCEL_GIT_COMMIT_SHA`, etc.) used for actual application logic (not just logging/debugging) — replace with an explicitly-set, host-neutral environment variable (e.g. `NEXT_PUBLIC_SITE_URL`) that gets set the same way regardless of host.
+- Document every required environment variable in a `.env.example` (if one doesn't already exist) so setting up a deployment on a new host doesn't require reverse-engineering what's needed from the code.
+
+## 8. Non-negotiables
+- No feature should silently fail or behave differently on Netlify vs. Vercel except where the underlying capability is genuinely host-specific (domain management) — and even there, the *app-facing behavior* (pending → verified flow, admin UI, dual slug+custom-domain availability) must be identical, only the adapter implementation differs.
+- Don't over-engineer: this is about removing real lock-in found in the audit, not adding abstraction layers for things that were never platform-specific to begin with (e.g. Supabase-backed data/storage is already portable — leave it alone).
+- Keep the multi-tenant partner-site routing behavior (built earlier) fully intact through this work — this is a portability pass, not a re-architecture.
+
+## 9. QA checklist before deploy
+- [ ] Full audit report delivered per section 2, with file paths, before any fix is made
+- [ ] Confirm `next build && next start` runs the entire site correctly locally with no host-specific behavior required
+- [ ] Deploy `main` to a second host (Netlify, using `@netlify/plugin-nextjs`) as a real test, alongside its existing Vercel deployment — click through every page (About, Products, video showcase, FAQ, Blog, Media Center, distributor dashboard, admin panel) and confirm full functionality on both
+- [ ] Deploy `partners-platform` to the second host as well — confirm a test partner site renders correctly, including hero image, theme, and i18n
+- [ ] Test the payment webhook flow works correctly regardless of which host receives the incoming webhook
+- [ ] Test the domain-verification job trigger independently of any specific host's cron product (per section 3's chosen implementation)
+- [ ] Confirm the `DomainProvider` adapter is genuinely swappable — verify by pointing `DOMAIN_PROVIDER` at each implementation in a test environment and confirming both work against their respective host's real domain API
+- [ ] Confirm no remaining direct reads of Vercel-only environment variables in application logic
+- [ ] Run existing lint/test suite on both branches against both hosting targets
+
+Report back: the audit findings from section 2 (with file paths), confirmation both branches are live and fully functional on at least two different hosts, and the `.env.example` documenting every required variable.
