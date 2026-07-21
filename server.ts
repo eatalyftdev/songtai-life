@@ -35,7 +35,23 @@ function requireDb(handler: (db: any, req: any, res: any) => Promise<any>) {
         .status(503)
         .json({ error: "Database not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY." });
     }
-    return handler(db, req, res);
+    try {
+      return await handler(db, req, res);
+    } catch (err: any) {
+      console.error("[requireDb] Unhandled route error:", err?.message ?? err);
+      // Postgres/Supabase constraint codes — return actionable JSON, never HTML
+      if (err?.code === "23505") {
+        const detail = err.detail ?? "";
+        const field  = detail.includes("slug") ? "slug"
+                     : detail.includes("custom_domain") ? "custom domain"
+                     : "value";
+        return res.status(409).json({ error: `This ${field} is already taken. Choose a different one.`, detail });
+      }
+      if (err?.code === "23503") {
+        return res.status(400).json({ error: "Invalid reference — the linked record does not exist.", detail: err.detail ?? "" });
+      }
+      return res.status(500).json({ error: err?.message ?? "An unexpected server error occurred." });
+    }
   };
 }
 

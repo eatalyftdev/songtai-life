@@ -387,7 +387,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         </svg>
 
         <div className="max-w-7xl mx-auto w-full relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center text-left">
-          <div className="lg:col-span-7 space-y-6 sm:space-y-8">
+          <div className={`${partner?.hero_image_url ? "lg:col-span-6" : "lg:col-span-7"} space-y-6 sm:space-y-8`}>
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
@@ -456,19 +456,50 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
           </div>
 
           <motion.div
-            className="lg:col-span-5"
+            className={partner?.hero_image_url ? "lg:col-span-6" : "lg:col-span-5"}
             initial={{ opacity: 0, scale: 0.93 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
-            {/* On partner sites with a custom hero image, show it instead of the carousel */}
+            {/* Partner site: large portrait hero image with floating trust badges */}
             {partner?.hero_image_url ? (
-              <div className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-2xl">
-                <img
-                  src={partner.hero_image_url}
-                  alt={heroHeadline}
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative">
+                {/* Main hero image — portrait ratio, larger visual anchor */}
+                <div className="relative rounded-3xl overflow-hidden aspect-[3/4] sm:aspect-[4/5] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.6)]">
+                  <img
+                    src={partner.hero_image_url}
+                    alt={heroHeadline}
+                    className="w-full h-full object-cover"
+                    fetchPriority="high"
+                    decoding="async"
+                  />
+                  {/* Subtle gradient at bottom for any future overlay text */}
+                  <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-stone-950/50 to-transparent pointer-events-none" />
+                </div>
+
+                {/* Floating certification badge — top-left */}
+                <motion.div
+                  className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 flex items-center gap-2 px-3 py-2 rounded-2xl shadow-lg border backdrop-blur-sm"
+                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "var(--color-gold)", borderOpacity: 0.4 }}
+                  initial={{ opacity: 0, x: -12, y: -8 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <Award className="w-4 h-4 flex-shrink-0" style={{ color: "var(--color-gold)" }} />
+                  <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--color-gold)" }}>ISO / GMP Certified</span>
+                </motion.div>
+
+                {/* Floating stat badge — bottom-right */}
+                <motion.div
+                  className="absolute -bottom-3 -right-3 sm:-bottom-4 sm:-right-4 flex items-center gap-2 px-3 py-2 rounded-2xl shadow-lg border backdrop-blur-sm"
+                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "rgba(var(--color-primary-rgb,16,185,129),0.35)" }}
+                  initial={{ opacity: 0, x: 12, y: 8 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  transition={{ duration: 0.7, delay: 0.65, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <Sparkles className={`w-4 h-4 flex-shrink-0 ${accentGreen}`} />
+                  <span className={`text-[10px] font-bold uppercase tracking-wide ${accentGreen}`}>100% Natural</span>
+                </motion.div>
               </div>
             ) : (
               <HeroCarousel />

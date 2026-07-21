@@ -117,6 +117,7 @@ export default function PartnersPage() {
   const [form, setForm] = useState<FormState>(BLANK);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [createdPartner, setCreatedPartner] = useState<Partner | null>(null);
   const [copiedSlug, setCopiedSlug] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [domainOp, setDomainOp] = useState<"attaching" | "checking" | null>(null);
@@ -152,12 +153,14 @@ export default function PartnersPage() {
   // ── Open create / edit slide-over ──────────────────────────────────────────
   const openCreate = () => {
     setEditing(null);
+    setCreatedPartner(null);
     setForm(BLANK);
     setError("");
     setSlideOpen(true);
   };
 
   const openEdit = (p: Partner) => {
+    setCreatedPartner(null);
     setDnsRecords([]);
     setDomainOpMsg("");
     setEditing(p);
@@ -222,14 +225,30 @@ export default function PartnersPage() {
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      // Safe JSON parse — the server might return HTML on unhandled errors
+      const contentType = res.headers.get("content-type") ?? "";
+      let json: any = {};
+      if (contentType.includes("application/json")) {
+        json = await res.json();
+      } else {
+        const raw = await res.text();
+        console.error("[PartnersPage] Non-JSON response:", res.status, raw.slice(0, 300));
+        setError(`Server error (${res.status}). Check console for details.`);
+        return;
+      }
+
       if (!res.ok) {
         setError(json.error ?? "Failed to save partner.");
         return;
       }
 
-      setSlideOpen(false);
       load();
+      if (!editing && json.partner) {
+        // Show success panel with the live URL instead of just closing
+        setCreatedPartner(json.partner as Partner);
+      } else {
+        setSlideOpen(false);
+      }
     } catch (err: any) {
       setError(err.message ?? "Unexpected error.");
     } finally {
@@ -463,12 +482,59 @@ export default function PartnersPage() {
       {/* ── Create / Edit Slide-Over ── */}
       <SlideOver
         open={slideOpen}
-        onClose={() => setSlideOpen(false)}
-        title={editing ? `Edit: /p/${editing.slug}` : "New Partner Site"}
-        subtitle={editing ? "Changes take effect immediately." : "Partner sites go live at /p/[slug] with no redeploy needed."}
+        onClose={() => { setSlideOpen(false); setCreatedPartner(null); }}
+        title={createdPartner ? "Partner Site Created!" : editing ? `Edit: /p/${editing.slug}` : "New Partner Site"}
+        subtitle={createdPartner ? "The site is live. Share the URL with the partner." : editing ? "Changes take effect immediately." : "Partner sites go live at /p/[slug] with no redeploy needed."}
         width="w-full max-w-2xl"
       >
-        <form onSubmit={handleSave} className="space-y-5 pb-6">
+        {/* ── Post-creation success panel ── */}
+        {createdPartner && (
+          <div className="space-y-5 pb-6">
+            <div className="flex items-center gap-3 p-4 bg-emerald-950/40 border border-emerald-800/40 rounded-2xl">
+              <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-emerald-300">Partner site is live</p>
+                <p className="text-[11px] text-emerald-500 mt-0.5">Slug: <span className="font-mono">{createdPartner.slug}</span> · Status: {createdPartner.status}</p>
+              </div>
+            </div>
+
+            <SectionHeader>Live URL (default)</SectionHeader>
+            <div className="flex items-center gap-2 bg-stone-900 border border-stone-800 rounded-xl px-3 py-2.5">
+              <code className="flex-1 text-[11px] text-stone-300 font-mono break-all">
+                {window.location.origin}/p/{createdPartner.slug}
+              </code>
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${createdPartner.slug}`); setCopiedSlug(createdPartner.slug); setTimeout(() => setCopiedSlug(""), 2000); }}
+                className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 text-[10px] font-semibold rounded-lg transition-colors"
+              >
+                {copiedSlug === createdPartner.slug ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                {copiedSlug === createdPartner.slug ? "Copied!" : "Copy"}
+              </button>
+              <a href={`/p/${createdPartner.slug}`} target="_blank" rel="noreferrer" className="flex-shrink-0 p-1.5 rounded-lg hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+
+            {createdPartner.custom_domain && (
+              <>
+                <SectionHeader>Custom Domain</SectionHeader>
+                <div className="flex items-center gap-2 p-3 bg-amber-950/20 border border-amber-800/30 rounded-xl text-[11px] text-amber-300">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span><span className="font-mono font-bold">{createdPartner.custom_domain}</span> — not yet attached to Vercel. Open the partner's Edit panel to configure DNS.</span>
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Btn variant="primary" onClick={() => { openEdit(createdPartner); }} className="flex-1">Edit This Partner</Btn>
+              <Btn variant="secondary" onClick={() => { setSlideOpen(false); setCreatedPartner(null); }}>Done</Btn>
+            </div>
+          </div>
+        )}
+
+        {/* ── Create / Edit form (hidden after creation success) ── */}
+        {!createdPartner && <form onSubmit={handleSave} className="space-y-5 pb-6">
 
           {/* Contact info */}
           <SectionHeader>Contact Information</SectionHeader>
@@ -676,7 +742,7 @@ export default function PartnersPage() {
             </Btn>
             <Btn variant="secondary" onClick={() => setSlideOpen(false)}>Cancel</Btn>
           </div>
-        </form>
+        </form>}
       </SlideOver>
     </PageShell>
   );
