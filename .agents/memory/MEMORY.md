@@ -17,3 +17,4 @@
 - [Partner Sites Multi-Tenant Architecture](partner-sites-architecture.md) — /p/:slug path routing, PartnerProvider context, component hook points, RLS requirement for anon reads.
 - [Platform-agnostic domain provider](domain-provider-pattern.md) — DomainProvider interface in server/domain-provider.ts; DOMAIN_PROVIDER env var selects impl; NullDomainProvider used when creds absent.
 - [SITE_URL pattern](site-url-pattern.md) — module-level SITE_URL constant in server.ts; VITE_SITE_URL for client; never hardcode songtailife.cm in application logic.
+- [Netlify deployment](netlify-deployment.md) — netlify.toml + netlify/functions/server.ts (serverless-http wrapper); app/serverReady exported from server.ts; NETLIFY=true suppresses app.listen().
