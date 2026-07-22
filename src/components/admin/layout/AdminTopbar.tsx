@@ -30,7 +30,7 @@ export default function AdminTopbar({ theme, toggleTheme, onMenuClick }: AdminTo
   const [pendingCount, setPendingCount] = useState(0);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Breadcrumbs from path
   const segments = location.pathname.split("/").filter(Boolean);

@@ -219,7 +219,7 @@ export default function HeroCarousel() {
 
   const imgTransition = reducedMotion
     ? { duration: 0.15 }
-    : { duration: 0.65, ease: [0.16, 1, 0.3, 1] };
+    : { duration: 0.65, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] };
 
   // Determine click target for a slide
   const slideCta = (s: CarouselSlide): string | null =>

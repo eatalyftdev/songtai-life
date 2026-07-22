@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 
 export interface UserProfile {
@@ -37,6 +37,7 @@ export interface Wallet {
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   userProfile: UserProfile | null;
   distributorProfile: DistributorProfile | null;
   wallet: Wallet | null;
@@ -95,6 +96,7 @@ function mapProfile(uid: string, row: any): UserProfile {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [distributorProfile, setDistributorProfile] = useState<DistributorProfile | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -114,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Auth state listener
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        setSession(session);
         const supabaseUser = session?.user ?? null;
         setUser(supabaseUser);
 
@@ -366,6 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        session,
         userProfile,
         distributorProfile,
         wallet,

@@ -1404,7 +1404,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
       const kidIds = kids.map((k: any) => k.id);
       const { data: profs } = await db.from("profiles")
         .select("id, display_name, email").in("id", kidIds);
-      const pmap = new Map((profs ?? []).map((p: any) => [p.id, p]));
+      const pmap = new Map<string, any>((profs ?? []).map((p: any) => [p.id, p]));
 
       const nextLevel: any[] = [];
       for (const kid of kids) {

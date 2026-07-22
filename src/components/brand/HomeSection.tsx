@@ -480,7 +480,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                 {/* Floating certification badge — top-left */}
                 <motion.div
                   className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 flex items-center gap-2 px-3 py-2 rounded-2xl shadow-lg border backdrop-blur-sm"
-                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "var(--color-gold)", borderOpacity: 0.4 }}
+                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "var(--color-gold)" }}
                   initial={{ opacity: 0, x: -12, y: -8 }}
                   animate={{ opacity: 1, x: 0, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
