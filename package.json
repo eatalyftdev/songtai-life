@@ -51,6 +51,7 @@
     "react-i18next": "^17.0.8",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.9.1",
+    "serverless-http": "^4.0.0",
     "tus-js-client": "^4.3.1",
     "vite": "^6.2.3",
     "ws": "^8.21.0",

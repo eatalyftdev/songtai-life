@@ -1,0 +1,116 @@
+# ── Netlify build + deploy configuration ──────────────────────────────────────
+#
+# This file lets the exact same repo deploy to Netlify alongside its existing
+# Vercel deployment.  Build command and publish directory are identical to
+# Vercel; only the function/redirect layer is Netlify-specific.
+#
+# Prerequisites before deploying here:
+#  1. Connect this repo to a Netlify site (netlify.com → "Add new site")
+#  2. Set all environment variables listed in .env.example in
+#     Netlify → Site configuration → Environment variables.
+#     In particular: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY,
+#     GEMINI_API_KEY, SITE_URL, VITE_SITE_URL, SESSION_SECRET,
+#     MESOMB_*, TWILIO_*, DOMAIN_PROVIDER, VERCEL_API_TOKEN (if using Vercel
+#     domain provider), VERCEL_PROJECT_ID, CRON_SECRET.
+#  3. Netlify automatically injects NETLIFY=true, which suppresses
+#     app.listen() in server.ts — no manual flag needed.
+
+[build]
+  command         = "npm run build"
+  publish         = "dist"
+  functions       = "netlify/functions"
+
+[build.environment]
+  # Node version — keep in sync with .nvmrc / engines in package.json
+  NODE_VERSION = "20"
+
+[dev]
+  # Local Netlify Dev server — proxies to the Express dev server.
+  command     = "npm run dev"
+  port        = 5000
+  publish     = "dist"
+  autoLaunch  = false
+
+# ── Function routing ──────────────────────────────────────────────────────────
+# API routes and dynamic server-rendered paths (sitemap, robots) go to the
+# Express function; all other paths are served from the static Vite build with
+# a SPA fallback so client-side routing works correctly.
+
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/server"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/sitemap.xml"
+  to     = "/.netlify/functions/server"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/robots.txt"
+  to     = "/.netlify/functions/server"
+  status = 200
+  force  = true
+
+# SPA fallback — let React Router handle client-side routes
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# ── Security headers ──────────────────────────────────────────────────────────
+# Mirrors the headers already set by Express middleware (server.ts) and
+# vercel.json so behavior is identical regardless of hosting platform.
+# Express middleware takes precedence for /api/* responses; these headers
+# apply to everything Netlify's CDN serves directly (HTML, assets, fonts).
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy         = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.supabase.in wss://*.supabase.in https://www.google-analytics.com https://www.googletagmanager.com; frame-src 'self' https://www.googletagmanager.com https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    X-Frame-Options                 = "SAMEORIGIN"
+    X-Content-Type-Options          = "nosniff"
+    Referrer-Policy                 = "strict-origin-when-cross-origin"
+    Permissions-Policy              = "camera=(), microphone=(), geoleration=(self), interest-cohort=()"
+    Cross-Origin-Opener-Policy      = "same-origin"
+    Cross-Origin-Resource-Policy    = "same-site"
+
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# ── Scheduled domain-verification job ────────────────────────────────────────
+# The domain-verification polling endpoint (/api/cron/check-partner-domains)
+# is a plain HTTP GET protected by CRON_SECRET.  It can be triggered by any
+# external scheduler.  Choose ONE of the following approaches:
+#
+#  Option A — Netlify Scheduled Functions (Netlify-native):
+#   Create netlify/functions/cron-check-domains.ts and configure it:
+#
+#     import { schedule } from "@netlify/functions";
+#     import fetch from "node-fetch";
+#     export const handler = schedule("*/20 * * * *", async () => {
+#       await fetch(`${process.env.SITE_URL}/api/cron/check-partner-domains`, {
+#         headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+#       });
+#       return { statusCode: 200 };
+#     });
+#
+#  Option B — GitHub Actions (host-agnostic, works on Vercel AND Netlify):
+#   See .github/workflows/cron-check-domains.yml (add if needed).
+#
+#  Option C — cron-job.org (free external scheduler):
+#   Register a job hitting GET ${SITE_URL}/api/cron/check-partner-domains
+#   with header Authorization: Bearer ${CRON_SECRET}, every 20 minutes.
+#
+#  The Vercel Cron entry in vercel.json continues to work when deployed there.
+#  This file has no Vercel Cron equivalent because it isn't needed on Netlify
+#  — implement Option A or B instead.

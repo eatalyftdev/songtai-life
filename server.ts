@@ -1866,10 +1866,11 @@ Answer concisely, helpfully, and professionally. Support both English and French
       const domainChanging = newDomain !== oldDomain;
 
       if (domainChanging && oldDomain) {
-        // Remove old domain from Vercel silently (don't fail the whole request if this fails)
-        const removeResult = await vercelRemoveDomain(oldDomain);
-        if (!removeResult.ok) {
-          console.warn(`[PartnerUpdate] Could not remove old domain "${oldDomain}" from Vercel: ${removeResult.error}`);
+        // Remove old domain from the provider silently (don't fail the whole request if this fails)
+        try {
+          await domainProvider.removeDomain(oldDomain);
+        } catch (err: any) {
+          console.warn(`[PartnerUpdate] Could not remove old domain "${oldDomain}" from provider: ${err.message}`);
         }
       }
 
@@ -2425,10 +2426,15 @@ const serverReady = startServer().catch((err) => {
   process.exit(1);
 });
 
-// ── Vercel serverless export ──────────────────────────────────────────────────
-// @vercel/node picks up the default export as the HTTP handler.
-// We await serverReady so all middleware and routes are registered before the
-// first request arrives, even though setup is asynchronous.
+// ── Named exports for serverless adapters ────────────────────────────────────
+// Any platform adapter (Vercel, Netlify, Cloudflare Workers, etc.) can import
+// `app` and `serverReady` and wrap them with its own handler shim.
+// `serverReady` resolves once startServer() has finished registering all routes.
+export { app, serverReady };
+
+// ── Vercel serverless handler ─────────────────────────────────────────────────
+// @vercel/node resolves the default export as the HTTP request handler.
+// Awaiting serverReady ensures all routes are registered before the first request.
 export default async function handler(req: any, res: any) {
   await serverReady;
   return (app as any)(req, res);

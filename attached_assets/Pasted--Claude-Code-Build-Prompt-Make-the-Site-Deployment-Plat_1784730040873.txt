@@ -1,0 +1,80 @@
+# Claude Code Build Prompt — Make the Site Deployment-Platform-Agnostic (Vercel, Netlify, or Any Host)
+
+Paste this into Claude Code inside the `songtai-life` repo. This touches both `main` and `partners-platform` — audit and fix each.
+
+---
+
+## 0. Skill activation
+
+Activate **Infrastructure**, **DevOps**, **Backend**, **API/Architecture**, and **Quality/Testing** skills from the `jeffallan/claude-skills` framework before coding. State which skills you're activating.
+
+## 1. Be honest about what's actually portable vs. what genuinely isn't
+
+Most of this codebase (Next.js pages/routes, Supabase for database/auth/storage, the payment webhook, the theme system, i18n) is already platform-agnostic by nature — Next.js runs on Vercel, Netlify, or any Node host, and Supabase doesn't care where the app is deployed. The real lock-in risk is the small number of features built in earlier prompts that specifically called Vercel's own platform APIs:
+
+- **Vercel Cron** (the custom-domain verification background job)
+- **Vercel Domains API** (adding/removing custom domains for partner sites)
+- **`next/image`'s default Vercel-optimized loader** (works out of the box on Vercel; needs explicit configuration elsewhere)
+- Any implicit reliance on Vercel-injected environment variables (`VERCEL_URL`, `VERCEL_ENV`, etc.)
+
+Don't pretend these can be made "fully agnostic" without a real decision — some of them need either an abstraction layer with a swappable provider, or a deliberate choice to use a third-party service that isn't tied to any hosting platform at all. Do the actual audit before assuming which path each one needs.
+
+## 2. Audit checklist — find every point of lock-in first
+
+Grep the codebase for:
+- `@vercel/*` package imports (`@vercel/kv`, `@vercel/blob`, `@vercel/edge-config`, `@vercel/analytics`, etc.)
+- `vercel.json` and any Vercel-specific config (cron schedules, rewrites/redirects defined only there)
+- References to `process.env.VERCEL_URL`, `VERCEL_ENV`, or other Vercel-auto-injected variables used without a fallback
+- The Vercel Domains API calls built in the partner custom-domain work
+- Any hardcoded assumption that the app is served from a `*.vercel.app` domain (URL construction, CORS allow-lists, absolute URLs used in emails/WhatsApp messages, OG/meta tags)
+- `next.config.js` — check `images.domains`/`remotePatterns`, `output` mode, and any Vercel-only experimental flags
+
+Produce a written list of every file/feature that's currently Vercel-specific before touching code.
+
+## 3. Fix each lock-in point
+
+### 3.1 Scheduled jobs (domain verification polling, and any others)
+Vercel Cron only runs when deployed on Vercel. Replace the dependency with a **host-agnostic pattern**: expose the job's logic as a protected API route (e.g. `POST /api/jobs/check-domain-verification`, secured with a secret header/token so it can't be triggered by the public) and trigger it externally via any of:
+- A free external scheduler (e.g. cron-job.org, GitHub Actions scheduled workflow) hitting the route on an interval
+- Netlify Scheduled Functions if deployed there
+- Supabase's own scheduled Edge Functions, if preferred, calling the same logic directly against the database instead of through the Next.js API layer
+
+Build the job's actual logic as a plain, importable function/module that any of these triggers can call — don't couple the business logic itself to whichever trigger mechanism ends up being used.
+
+### 3.2 Custom domain management for partner sites
+This is the one piece that's genuinely tied to whichever platform is hosting the app, because "add this domain to my project" is a hosting-platform-specific concept (Vercel Domains API vs. Netlify's own domain API are different APIs entirely). Two honest options — implement the first, document the second as a fast-follow:
+
+- **Recommended**: build a small provider-agnostic interface (`lib/domains/provider.ts` exporting `addDomain()`, `removeDomain()`, `checkVerification()`), with the current Vercel implementation as one concrete provider (`lib/domains/providers/vercel.ts`), selected via an env var (e.g. `HOSTING_PROVIDER=vercel`). This means the domain-lifecycle logic built in the earlier prompt keeps working unchanged, but a Netlify (or other) implementation can be dropped in later behind the same interface without touching the calling code.
+- **Worth raising with Zayne explicitly, not deciding silently**: consider whether custom domain / DNS management should be handled through a neutral DNS provider (e.g. Cloudflare's API) instead of whichever host serves the app — this decouples "where partner domains are managed" from "where the app happens to be deployed," which is more robust long-term if hosting is ever migrated or split across providers. Flag this as a recommendation, don't silently implement a Cloudflare migration as part of this pass unless asked.
+
+### 3.3 Image optimization
+- Confirm `next/image` is configured with an explicit loader/remote-patterns setup in `next.config.js` rather than silently relying on Vercel's built-in image optimization endpoint, which isn't available off-Vercel.
+- On Netlify, the official Next.js Netlify plugin provides equivalent image optimization automatically — confirm the plugin is present in the Netlify build config so this isn't a manual fallback.
+- Where images are already served via Supabase Storage's own transform/CDN URLs (per the earlier CDN work), that layer is already host-agnostic — don't rebuild it, just confirm `next/image`'s `remotePatterns` allows the Supabase Storage domain regardless of which host serves the app itself.
+
+### 3.4 Environment variables and URLs
+- Replace any use of `VERCEL_URL`/`VERCEL_ENV` with a generic `NEXT_PUBLIC_SITE_URL` (and equivalent for the partners platform) set explicitly in each environment's config, with a sensible local-dev fallback (`http://localhost:3000`) — never assume a Vercel-specific variable will exist.
+- Produce (or update) a complete `.env.example` covering every variable the app actually needs, so setting it up on any host is a documented, mechanical process, not tribal knowledge.
+- Audit anywhere an absolute URL is constructed (WhatsApp messages, emails, OG tags, canonical URLs, the partner referral link format) to use this generic site-URL variable, not a Vercel-specific one.
+
+### 3.5 Build configuration for multiple hosts
+- Confirm `next.config.js` has no Vercel-only experimental settings blocking a build elsewhere.
+- Add a `netlify.toml` (with the official `@netlify/plugin-nextjs` configured) alongside the existing `vercel.json`, so the same repository can be built and deployed to either platform without code changes — just platform-specific config files living side by side.
+- Confirm any custom middleware (tenant resolution for partner sites, auth checks) uses only standard Next.js Edge Runtime APIs, not anything Vercel-Edge-specific, so it runs correctly under Netlify's Edge Functions too.
+
+## 4. Non-negotiables
+- Every page and feature (homepage, About/Story/Mission/Vision, Products + video showcase, FAQ, Blog, Media Center, distributor dashboard with the binary tree, admin panel including god-mode and partner management, the partners-platform multi-tenant sites, and the MeSomb payment webhook) must work correctly on both a Vercel deployment and a Netlify deployment of the same branch — verify this by actually deploying preview instances to both, not by assumption.
+- The Supabase backend stays exactly as-is — none of this work should require any database changes; the portability problem is entirely in the hosting/deployment layer, not the data layer.
+- Don't silently pick a DNS/domain strategy that locks the project into a different platform-specific dependency while "fixing" the Vercel one — if a swap is warranted (e.g. moving domain management to Cloudflare), that's a decision for Zayne, flagged clearly, not something to implement unasked.
+
+## 5. QA checklist before deploy
+- [ ] Full written audit of every point of platform lock-in found, before any fixes
+- [ ] Scheduled domain-verification job runs correctly when triggered externally (not via Vercel Cron) — test with at least one alternative trigger method
+- [ ] Custom domain add/remove/check-verification works identically through the new provider-agnostic interface (functionally unchanged from the admin's perspective)
+- [ ] Deploy a preview build to Netlify from the exact same branch already deployed on Vercel — click through every page and major flow (join/payment webhook test, admin god-mode creation, partner site creation, hero rendering, media center upload/download, theme toggle, EN/FR toggle) and confirm parity
+- [ ] Confirm no hardcoded `*.vercel.app` URLs or Vercel-only env vars remain anywhere in the codebase
+- [ ] Confirm images load correctly and remain optimized on both platforms
+- [ ] Run existing lint/test suite on both branches
+- [ ] Deploy to the existing production Vercel projects as usual (this work makes Netlify *possible*, it doesn't require actually switching production off Vercel unless Zayne decides to)
+
+Report back: the full lock-in audit list from section 2, what was fixed vs. what's flagged as a Zayne decision (per 3.2), and confirmation of a working Netlify preview deployment with the parity checklist results.
