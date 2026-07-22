@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" fill="none">
+  <!-- Outer ring -->
+  <circle cx="22" cy="22" r="20.5" stroke="#C9922A" stroke-width="1.25" stroke-opacity="0.45"/>
+  <!-- Main leaf body -->
+  <path d="M22 7C15 11.5 10.5 18 12 25.5C13.5 32.5 18.5 37 22 38C25.5 37 30.5 32.5 32 25.5C33.5 18 29 11.5 22 7Z" fill="#0A7D32"/>
+  <!-- Highlight on leaf -->
+  <path d="M22 7C18 12 16 18 17 24C18 28.5 20 33 22 38C20.5 35 17.5 29 17 24C16.5 18.5 18 12 22 7Z" fill="#1EAA56" fill-opacity="0.35"/>
+  <!-- Central vein (gold) -->
+  <line x1="22" y1="38" x2="22" y2="16" stroke="#C9922A" stroke-width="1.4" stroke-linecap="round"/>
+  <!-- Branch veins (gold) -->
+  <path d="M22 28L17 23M22 23L27 18" stroke="#C9922A" stroke-width="1.1" stroke-linecap="round"/>
+</svg>
