@@ -1,0 +1,89 @@
+# Claude Code Build Prompt — Fix Logo Placement + Interactive Auto-Playing Product Carousel (Hero)
+
+Paste this into Claude Code inside the `songtai-life` repo. A reference screenshot with hand-drawn annotations has been provided — read section 1 alongside it.
+
+---
+
+## 0. Skill activation
+
+Activate **Frontend/Mobile** and **API/Architecture** skills from the `jeffallan/claude-skills` framework before coding, plus review `/mnt/skills/public/frontend-design/SKILL.md`-equivalent guidance already applied in the earlier theme build. State which skills you're activating.
+
+---
+
+## 1. Reading the annotated screenshot
+
+Two things are circled in red on the current live homepage:
+
+1. **"Logo"** — circled around the top-left header area, next to the "Songtai / Life" wordmark. The current header shows a small generic icon mark next to the text — this needs to actually be the real brand logo asset (the one sampled for exact brand colors in the earlier theme build, `/public/brand/logo.png` or its SVG equivalent), rendered clearly and at a sensible size — not a placeholder shape. Audit the current header component, confirm what's actually being rendered there right now, and replace it with the real logo asset if it isn't already.
+2. **"Product Carousel"** — circled around the entire right-hand hero panel, which currently shows a single static promotional image (toothpaste product, "Featured Solution" badge, benefit icon row, floating "Ask AI" and WhatsApp buttons layered on top). This whole panel needs to become a live, admin-managed, auto-playing, interactive carousel — not a single static image — sized and positioned to fit exactly the space it currently occupies in the hero layout.
+
+## 2. Schema already in place (no migration needed)
+
+`hero_carousel` already existed from earlier work and has just been extended:
+
+```
+hero_carousel (
+  id, image_url, title_en/fr, subtitle_en/fr, sort_order, is_active, created_at,
+  badge_label_en/fr,       -- new: the small pill badge over the slide, e.g. "Featured Solution"
+  benefits jsonb,          -- new: array of {icon, label_en, label_fr} — the small benefit
+                           --      chip row under the slide copy (e.g. natural formula,
+                           --      fresh breath, whitening — as seen in the reference screenshot)
+  cta_link,                -- new: optional, where the slide's CTA points
+  linked_product_id        -- new: optional FK to products, so a slide can link through
+                           --      to that product's detail page
+)
+```
+
+## 3. Design reference — interaction pattern, not source code
+
+For inspiration on making this feel like a premium, interactive carousel rather than a plain static image or a basic fade slideshow, reference the *interaction concept* at `https://horizonx.so/explore/interactive-carousel` — this is a paid, commercially licensed component; **do not copy its source code or attempt to extract/replicate its actual implementation**, since Songtai Life has no license for it. Build an original implementation inspired only by the described interaction pattern:
+
+- Square/tile-shaped preview images arranged in a gentle curved arc, bending around the currently active/selected slide (which displays larger and more prominent than the others)
+- Smooth, spring-like motion when transitioning between slides (a duration around 600–700ms feels right, matching the reference's cited timing, but tune to taste — don't chase an exact number)
+- A slim progress rail beneath or alongside the carousel indicating position among slides
+- Support both automatic advancement and direct interaction: clicking/tapping a tile brings it to the active position; dragging (mouse or touch) can also step through slides
+- Subtle depth cues (slight tilt/scale/opacity falloff on the non-active tiles) rather than a flat, static row of thumbnails
+
+Adapt this concept to Songtai Life's actual content and space constraints — the reference is a general-purpose gallery of landscape photos; ours is a product-marketing carousel that also needs to carry a badge label, headline/subtitle copy, and a benefit-icon row per slide (per the `hero_carousel` schema above), so the layout will necessarily differ from the reference — take the *feel* (curved arrangement, active slide prominence, tunable spread/tilt/duration, draggable), not a literal visual clone.
+
+## 4. Required behavior
+
+- **Auto-play every 2 seconds** — the carousel automatically advances to the next active `hero_carousel` slide (where `is_active = true`, ordered by `sort_order`) every 2 seconds, looping back to the first after the last.
+- **Pause on interaction**: auto-play pauses when the user is actively dragging/hovering/interacting with the carousel, and resumes after a short idle period — don't fight the user's own input.
+- **Respect `prefers-reduced-motion`**: if set, disable auto-play and the spring/curve motion, falling back to a simple, instant slide change on manual interaction only.
+- Per slide, render: the image, `badge_label_en/fr` as a small pill (localized), `title_en/fr`/`subtitle_en/fr` if the layout has room (matching the reference screenshot's copy density — keep it tight, this is a compact hero panel, not a full-width hero), the `benefits` array as small icon+label chips, and if `linked_product_id` is set, make the slide clickable through to that product's detail page.
+- Preserve the floating "Ask AI" and WhatsApp action buttons as an overlay on top of the carousel, positioned consistently regardless of which slide is active — they are not part of any individual slide's content, they're a persistent UI layer above it.
+- Sizing: match the aspect ratio and footprint of the current static image panel in the hero exactly (per the screenshot) — this is a redesign of what fills that space, not a resize of the hero section itself.
+- Fully responsive — confirm this collapses sensibly on mobile (likely a simpler single-image auto-advancing slideshow with dot indicators is the right mobile fallback, since the full curved-tile interaction needs horizontal room the mobile hero doesn't have; use judgment, but don't force the full desktop interaction pattern into a cramped mobile viewport).
+- Bilingual: badge, title, subtitle, and benefit labels all switch correctly with the site's EN/FR toggle.
+- Performance: images lazy-load appropriately except the currently active/first slide (which should be `priority`-loaded like any other above-the-fold hero content, per the CDN/image work already done), and the whole component must not regress the homepage's Core Web Vitals — check Lighthouse before/after.
+
+## 5. Admin panel — managing these carousel slides
+
+This extends the hero carousel admin section from the earlier build (same table, more fields now):
+
+- Add/edit/delete slides with: image upload, `badge_label_en/fr`, `title_en/fr`, `subtitle_en/fr`, a repeatable benefits editor (icon picker or icon-name input + label EN/FR per benefit, add/remove rows), optional `cta_link`, optional linked product (search/select from `products`)
+- Reorder (`sort_order`) via drag-and-drop or up/down controls
+- Toggle `is_active` per slide — inactive slides don't appear in the live carousel at all
+- Live preview of how a slide will look before publishing, if feasible without excessive scope — otherwise, at minimum, show a clear thumbnail preview of the uploaded image and entered text in the admin form itself
+
+## 6. Non-negotiables
+- No hardcoded promotional content — everything currently static in that hero panel (the toothpaste image, "Featured Solution" label, benefit icons) must be fully replaceable/removable by an admin, not left as a hardcoded default with the database content added alongside it.
+- This is an *original* implementation of the interaction concept — don't import, embed, or attempt to reverse-engineer the HorizonX commercial component.
+- No autoplaying audio/video is introduced by this work (the carousel is images only, per current scope) — if a future slide type needs video, that's a separate scoping conversation, don't quietly add it here.
+- Logo fix and carousel rebuild both respect the light/dark theme token system and WCAG AA contrast requirements already established — badge/benefit chip text must stay legible in both modes.
+
+## 7. QA checklist before deploy
+- [ ] Confirm the real logo asset renders correctly and clearly in the header, replacing whatever placeholder/generic icon was there before
+- [ ] Add 3+ test slides via admin with different badges/benefits/images — confirm they auto-advance every 2 seconds, loop correctly, and pause appropriately on user interaction
+- [ ] Confirm dragging/clicking a tile brings it to the active position and pauses/resumes auto-play sensibly
+- [ ] Confirm `prefers-reduced-motion` disables auto-play and simplifies the transition
+- [ ] Toggle EN/FR — confirm badge, title, subtitle, and every benefit label switch correctly per slide
+- [ ] Deactivate a slide from admin — confirm it disappears from the live carousel immediately
+- [ ] Confirm the floating Ask AI / WhatsApp buttons remain correctly positioned above the carousel regardless of active slide
+- [ ] Test on mobile — confirm a sensible simplified fallback, not a cramped attempt at the full desktop interaction
+- [ ] Run Lighthouse on the homepage before/after — confirm no regression in LCP/CLS from the new carousel
+- [ ] Confirm text/badge contrast passes WCAG AA in both light and dark mode
+- [ ] Run existing lint/test suite, then deploy to the existing Vercel project (`songtai-life`) — do not create a new project
+
+Report back the live URL, deployment ID, and before/after Lighthouse scores for the homepage.
