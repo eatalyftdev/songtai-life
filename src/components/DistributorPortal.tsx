@@ -437,7 +437,8 @@ export default function DistributorPortal({ addNotification }: { addNotification
 
   const copyReferralLink = () => {
     if (!distributorProfile) return;
-    const link = `https://songtailife.cm/join?ref=${distributorProfile.distributorCode}`;
+    const siteOrigin = import.meta.env.VITE_SITE_URL ?? window.location.origin;
+    const link = `${siteOrigin}/join?ref=${distributorProfile.distributorCode}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     addNotification("Referral link copied!", "success");
@@ -1085,7 +1086,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                   <div className="p-3.5 bg-[color:var(--color-bg)] rounded-xl border border-[color:var(--color-border)] flex items-center gap-2">
                     <ExternalLink className="w-3.5 h-3.5 text-[color:var(--color-muted)] flex-shrink-0" />
                     <span className="text-[11px] text-[color:var(--color-muted)] truncate">
-                      songtailife.cm/join?ref={distributorProfile?.distributorCode ?? "…"}
+                      {(import.meta.env.VITE_SITE_URL ?? window.location.origin).replace(/^https?:\/\//, "")}/join?ref={distributorProfile?.distributorCode ?? "…"}
                     </span>
                   </div>
                 </div>
@@ -1113,7 +1114,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
               {distributorProfile?.distributorCode && (
                 <div className="p-4 bg-white rounded-2xl shadow-lg">
                   <QRCodeSVG
-                    value={`https://songtailife.cm/join?ref=${distributorProfile.distributorCode}`}
+                    value={`${import.meta.env.VITE_SITE_URL ?? window.location.origin}/join?ref=${distributorProfile.distributorCode}`}
                     size={160}
                     bgColor="#FFFFFF"
                     fgColor="#016934"
@@ -1121,7 +1122,7 @@ export default function DistributorPortal({ addNotification }: { addNotification
                 </div>
               )}
               <p className="text-[10px] text-[color:var(--color-muted)] text-center">
-                Scans link to: songtailife.cm/join?ref={distributorProfile?.distributorCode}
+                Scans link to: {(import.meta.env.VITE_SITE_URL ?? window.location.origin).replace(/^https?:\/\//, "")}/join?ref={distributorProfile?.distributorCode}
               </p>
             </Card>
           </div>

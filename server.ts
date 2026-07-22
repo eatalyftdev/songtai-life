@@ -2241,7 +2241,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
   // ── robots.txt ──────────────────────────────────────────────────────────────
   app.get("/robots.txt", (_req, res) => {
-    const base = process.env.SITE_URL ?? "https://songtailife.cm";
+    const base = SITE_URL;
     res.type("text/plain").send(
       [
         "User-agent: *",
@@ -2257,7 +2257,7 @@ Answer concisely, helpfully, and professionally. Support both English and French
 
   // ── sitemap.xml — dynamic from Supabase content ──────────────────────────
   app.get("/sitemap.xml", async (_req, res) => {
-    const base = process.env.SITE_URL ?? "https://songtailife.cm";
+    const base = SITE_URL;
     const now = new Date().toISOString();
 
     try {
