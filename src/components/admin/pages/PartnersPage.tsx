@@ -202,20 +202,22 @@ export default function PartnersPage() {
 
     setSaving(true);
     try {
-      const payload = {
-        slug: form.slug,
-        pendingContactName: form.pendingContactName || null,
-        pendingContactPhone: form.pendingContactPhone || null,
-        whatsappNumber: form.whatsappNumber || null,
-        contactEmail: form.contactEmail || null,
-        heroTitleEn: form.heroTitleEn || null,
-        heroTitleFr: form.heroTitleFr || null,
-        heroSubtitleEn: form.heroSubtitleEn || null,
-        heroSubtitleFr: form.heroSubtitleFr || null,
-        heroImageUrl: form.heroImageUrl || null,
-        distributorId: form.distributorId || null,
-        status: form.status,
-        customDomain: form.customDomain || null,
+      const payload: Record<string, any> = {
+        slug:               form.slug,
+        pendingContactName: form.pendingContactName  || null,
+        pendingContactPhone:form.pendingContactPhone || null,
+        whatsappNumber:     form.whatsappNumber      || null,
+        contactEmail:       form.contactEmail        || null,
+        heroTitleEn:        form.heroTitleEn         || null,
+        heroTitleFr:        form.heroTitleFr         || null,
+        heroSubtitleEn:     form.heroSubtitleEn      || null,
+        heroSubtitleFr:     form.heroSubtitleFr      || null,
+        heroImageUrl:       form.heroImageUrl        || null,
+        distributorId:      form.distributorId       || null,
+        status:             form.status,
+        // customDomain is only sent on edit — the create endpoint ignores it;
+        // custom domain setup is an explicit post-creation step via /domain/attach
+        ...(editing ? { customDomain: form.customDomain || null } : {}),
       };
 
       const url = editing
@@ -654,34 +656,40 @@ export default function PartnersPage() {
             <Input value={form.heroImageUrl} onChange={v => setForm(f => ({ ...f, heroImageUrl: v }))} placeholder="https://..." />
           </FormRow>
 
-          {/* Custom domain */}
-          <SectionHeader>Custom Domain (optional)</SectionHeader>
-          <FormRow label="Custom domain">
-            <Input
-              value={form.customDomain}
-              onChange={v => setForm(f => ({ ...f, customDomain: v.trim().toLowerCase() }))}
-              placeholder="janedoe-wellness.com"
-            />
-            {!form.customDomain && (
-              <p className="text-[10px] text-stone-500 mt-1">
-                No custom domain yet — the site is live at{" "}
-                <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{form.slug || "slug"}</code>.
-                Add a custom domain anytime.
-              </p>
-            )}
-            {form.customDomain && editing && editing.custom_domain &&
-              form.customDomain !== editing.custom_domain &&
-              (editing.domain_status === "verified" || editing.domain_status === "pending_verification") && (
-              <div className="flex items-start gap-2 mt-2 p-2.5 bg-red-950/30 border border-red-800/40 rounded-xl text-[10px] text-red-300">
-                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          {/* Custom domain — edit only. On create, the site is immediately live at /p/:slug.
+              Custom domain is a distinct opt-in step added after creation. */}
+          {editing && (
+            <>
+              <SectionHeader>Custom Domain (optional)</SectionHeader>
+              <div className="flex items-start gap-2 p-2.5 bg-stone-900/60 border border-stone-800 rounded-xl text-[10px] text-stone-400 mb-1">
+                <Globe className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-stone-500" />
                 <span>
-                  <strong>Warning:</strong> Your current domain{" "}
-                  <code className="font-mono bg-stone-900 px-0.5 rounded">{editing.custom_domain}</code>{" "}
-                  will stop working once you save this change. Make sure the new domain is ready before saving.
+                  The partner site is always live at its{" "}
+                  <code className="font-mono bg-stone-900 px-0.5 rounded">/p/{editing.slug}</code>{" "}
+                  URL. A custom domain is an opt-in addition — the slug URL keeps working alongside it.
                 </span>
               </div>
-            )}
-          </FormRow>
+              <FormRow label="Custom domain">
+                <Input
+                  value={form.customDomain}
+                  onChange={v => setForm(f => ({ ...f, customDomain: v.trim().toLowerCase() }))}
+                  placeholder="janedoe-wellness.com"
+                />
+                {form.customDomain && editing.custom_domain &&
+                  form.customDomain !== editing.custom_domain &&
+                  (editing.domain_status === "verified" || editing.domain_status === "pending_verification") && (
+                  <div className="flex items-start gap-2 mt-2 p-2.5 bg-red-950/30 border border-red-800/40 rounded-xl text-[10px] text-red-300">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Warning:</strong> Your current domain{" "}
+                      <code className="font-mono bg-stone-900 px-0.5 rounded">{editing.custom_domain}</code>{" "}
+                      will stop working once you save this change. Make sure the new domain is ready before saving.
+                    </span>
+                  </div>
+                )}
+              </FormRow>
+            </>
+          )}
 
           {/* Domain verification — shown when editing and a domain is saved or typed */}
           {editing && (editing.custom_domain || form.customDomain) && (
@@ -718,8 +726,8 @@ export default function PartnersPage() {
               {/* Hint when domain field has a new unsaved value */}
               {form.customDomain && form.customDomain !== editing.custom_domain && (
                 <p className="text-[10px] text-amber-400 bg-amber-950/20 border border-amber-800/30 rounded-xl px-3 py-2">
-                  Save changes first, then use "Attach to Vercel" to register{" "}
-                  <span className="font-mono font-bold">{form.customDomain}</span> and get DNS records.
+                  Save changes first, then use "Attach domain" to register{" "}
+                  <span className="font-mono font-bold">{form.customDomain}</span> with the hosting provider and get DNS records.
                 </p>
               )}
 
@@ -734,9 +742,9 @@ export default function PartnersPage() {
                     onClick={() => attachDomain(editing.id, editing.custom_domain!)}
                   >
                     <Globe className="w-3 h-3" />
-                    Attach to Vercel
+                    Attach domain
                   </Btn>
-                  <p className="text-[10px] text-stone-500">Registers the domain and returns the DNS records to set at your registrar.</p>
+                  <p className="text-[10px] text-stone-500">Registers the domain with the hosting provider and returns real DNS records to set at your registrar.</p>
                 </div>
               )}
 

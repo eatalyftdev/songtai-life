@@ -18,10 +18,20 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 let db: any = null;
 
 if (supabaseUrl && supabaseServiceKey) {
-  db = createClient(supabaseUrl, supabaseServiceKey, {
-    realtime: { transport: ws as any },
-  });
-  console.log("Supabase Admin client initialized successfully");
+  // In serverless environments (Netlify Functions / Vercel) there is no
+  // persistent process so the Supabase Realtime WebSocket transport is both
+  // useless and dangerous — it can cause the Lambda cold-start to hang while
+  // trying to open a WebSocket connection, which manifests as a 502 on EVERY
+  // route before a single request is handled.  Skip the ws transport in those
+  // environments; it is only needed for server-side Realtime subscriptions
+  // which are not used in serverless deployments.
+  const isServerless = !!(process.env.NETLIFY || process.env.VERCEL);
+  db = createClient(
+    supabaseUrl,
+    supabaseServiceKey,
+    isServerless ? {} : { realtime: { transport: ws as any } },
+  );
+  console.log(`[DB] Supabase Admin client initialized (serverless=${isServerless})`);
 } else {
   console.warn(
     "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — Supabase-backed routes (payments, MLM) will return 503 until configured."
@@ -1752,66 +1762,106 @@ Answer concisely, helpfully, and professionally. Support both English and French
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
     const actorId = sessionUser.claims.sub as string;
-    const { data: actor } = await db.from("profiles").select("role").eq("id", actorId).maybeSingle();
+
+    const { data: actor, error: actorErr } = await db.from("profiles").select("role").eq("id", actorId).maybeSingle();
+    if (actorErr) {
+      console.error("[GET /api/admin/partners] profiles lookup error:", actorErr.message);
+      return res.status(500).json({ error: "Failed to verify admin role.", detail: actorErr.message });
+    }
     if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
       return res.status(403).json({ error: "Admin or superadmin role required." });
     }
-    const { data } = await db.from("partners").select("*").order("created_at", { ascending: false });
+
+    const { data, error } = await db.from("partners").select("*").order("created_at", { ascending: false });
+    if (error) {
+      // Surface the real DB error so it shows in function logs — not silently swallowed
+      console.error("[GET /api/admin/partners] partners query error:", error.message, "| code:", error.code);
+      return res.status(500).json({ error: "Failed to load partner list.", detail: error.message });
+    }
+
+    console.log(`[GET /api/admin/partners] returned ${(data ?? []).length} rows for admin ${actorId}`);
     return res.json(data ?? []);
   }));
 
   // ── Admin: create a partner site ──────────────────────────────────────────
+  // Partner sites work immediately on the shared platform URL (/p/:slug) with
+  // NO custom domain required. Custom domain setup is a separate opt-in step
+  // initiated from the partner's edit screen after creation.
   app.post("/api/admin/partner/create", requireDb(async (db, req, res) => {
     const sessionUser = (req as any).user;
     if (!sessionUser?.claims?.sub) return res.status(401).json({ error: "Authorization required." });
     const actorId = sessionUser.claims.sub as string;
-    const { data: actor } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+
+    const { data: actor, error: actorErr } = await db.from("profiles").select("role, email").eq("id", actorId).maybeSingle();
+    if (actorErr) {
+      console.error("[POST /api/admin/partner/create] profiles lookup error:", actorErr.message);
+      return res.status(500).json({ error: "Failed to verify admin role.", detail: actorErr.message });
+    }
     if (!actor || !["admin", "superadmin"].includes(actor.role ?? "")) {
       return res.status(403).json({ error: "Admin or superadmin role required." });
     }
 
     const { slug, pendingContactName, pendingContactPhone, whatsappNumber, contactEmail,
             heroTitleEn, heroTitleFr, heroSubtitleEn, heroSubtitleFr, heroImageUrl,
-            distributorId, status, customDomain } = req.body;
+            distributorId, status } = req.body;
+    // NOTE: customDomain is intentionally NOT accepted on create — custom domain
+    // is a distinct opt-in step done from the partner edit screen after the site
+    // is live on its shared URL. This prevents domain-provider errors from
+    // blocking partner creation.
 
     if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       return res.status(400).json({ error: "slug is required and must be URL-safe (lowercase letters, numbers, hyphens)." });
     }
 
-    // Check slug uniqueness
-    const { data: existing } = await db.from("partners").select("id").eq("slug", slug).maybeSingle();
-    if (existing) return res.status(409).json({ error: `Slug "${slug}" is already taken.` });
+    // Check slug uniqueness with explicit error surfacing
+    const { data: existing, error: slugCheckErr } = await db.from("partners").select("id").eq("slug", slug).maybeSingle();
+    if (slugCheckErr) {
+      console.error("[POST /api/admin/partner/create] slug check error:", slugCheckErr.message, "| code:", slugCheckErr.code);
+      return res.status(500).json({ error: "Failed to check slug availability.", detail: slugCheckErr.message });
+    }
+    if (existing) return res.status(409).json({ error: `Slug "${slug}" is already taken. Choose a different one.` });
 
     const now = new Date().toISOString();
     const initialStatus = status === "active" ? "active" : "pending";
 
     const { data, error } = await db.from("partners").insert({
       slug,
-      whatsapp_number:      whatsappNumber || null,
-      contact_email:        contactEmail || null,
-      hero_title_en:        heroTitleEn || null,
-      hero_title_fr:        heroTitleFr || null,
-      hero_subtitle_en:     heroSubtitleEn || null,
-      hero_subtitle_fr:     heroSubtitleFr || null,
-      hero_image_url:       heroImageUrl || null,
-      distributor_id:       distributorId || null,
-      pending_contact_name: pendingContactName || null,
-      pending_contact_phone:pendingContactPhone || null,
-      custom_domain:        customDomain || null,
-      status:               initialStatus,
-      created_by_admin:     actorId,
+      whatsapp_number:       whatsappNumber      || null,
+      contact_email:         contactEmail        || null,
+      hero_title_en:         heroTitleEn         || null,
+      hero_title_fr:         heroTitleFr         || null,
+      hero_subtitle_en:      heroSubtitleEn      || null,
+      hero_subtitle_fr:      heroSubtitleFr      || null,
+      hero_image_url:        heroImageUrl        || null,
+      distributor_id:        distributorId       || null,
+      pending_contact_name:  pendingContactName  || null,
+      pending_contact_phone: pendingContactPhone || null,
+      // custom_domain intentionally omitted — added later via /domain/attach
+      domain_status:         "none",
+      domain_check_attempts: 0,
+      status:                initialStatus,
+      created_by_admin:      actorId,
       ...(initialStatus === "active" ? { approved_by: actorId, approved_at: now } : {}),
     }).select().single();
-    if (error) throw error;
+
+    if (error) {
+      console.error("[POST /api/admin/partner/create] insert error:", error.message, "| code:", error.code, "| detail:", error.details);
+      throw error; // requireDb catches and returns structured 500 JSON
+    }
+
+    // The shared-platform URL is available immediately — no custom domain needed.
+    // It is derived from SITE_URL + /p/:slug (the SPA route handled by PartnerProvider).
+    const sharedDomainUrl = `${SITE_URL}/p/${slug}`;
 
     try {
       await db.from("audit_logs").insert({
-        action: "Partner Site Created",
-        details: `Admin ${actor.email ?? actorId} created partner site "${slug}" (status: ${initialStatus}). Contact: ${pendingContactName ?? "—"} / ${pendingContactPhone ?? "—"}.`,
+        action:   "Partner Site Created",
+        details:  `Admin ${actor.email ?? actorId} created partner site "${slug}" (status: ${initialStatus}). Shared URL: ${sharedDomainUrl}. Contact: ${pendingContactName ?? "—"} / ${pendingContactPhone ?? "—"}.`,
       });
-    } catch {}
+    } catch { /* audit log failure must never block the response */ }
 
-    return res.json({ success: true, partner: data });
+    console.log(`[POST /api/admin/partner/create] created partner "${slug}" (${initialStatus}) shared_url=${sharedDomainUrl}`);
+    return res.json({ success: true, partner: data, shared_domain_url: sharedDomainUrl });
   }));
 
   // ── Admin: update a partner site ──────────────────────────────────────────
