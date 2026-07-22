@@ -1133,3 +1133,265 @@ begin
     alter table public.products add constraint products_video_source_fr_check check (video_source_fr in ('upload', 'youtube'));
   end if;
 end $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 0015: Media Center (admin + public + distributor)
+-- Run via: Supabase Dashboard > SQL Editor, or `supabase db push`
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists media_categories (
+  id uuid primary key default uuid_generate_v4(),
+  category_key text not null unique,
+  name_en text not null,
+  name_fr text not null,
+  display_order integer not null default 0,
+  created_at timestamptz default now()
+);
+
+create table if not exists media_assets (
+  id uuid primary key default uuid_generate_v4(),
+  category_id uuid not null references media_categories(id) on delete cascade,
+  title_en text not null,
+  title_fr text not null,
+  description_en text,
+  description_fr text,
+  file_url text not null,
+  thumbnail_url text,
+  file_type text not null check (file_type in ('video', 'audio', 'document', 'image', 'archive')),
+  mime_type text,
+  file_size_bytes bigint,
+  visibility text not null default 'public' check (visibility in ('public', 'distributor_only')),
+  is_published boolean not null default true,
+  download_count integer not null default 0,
+  display_order integer not null default 0,
+  uploaded_by uuid references profiles(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists media_assets_category_idx on media_assets(category_id);
+create index if not exists media_assets_visibility_idx on media_assets(visibility, is_published);
+
+create or replace function update_media_assets_timestamp()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists media_assets_updated_at on media_assets;
+create trigger media_assets_updated_at
+  before update on media_assets
+  for each row execute function update_media_assets_timestamp();
+
+insert into media_categories (category_key, name_en, name_fr, display_order) values
+  ('corporate_videos',    'Corporate Videos',     'Vidéos corporatives',        1),
+  ('anthem_audio',        'Brand Anthem',         'Hymne de la marque',         2),
+  ('brand_documents',     'Brand Documents',      'Documents de marque',        3),
+  ('marketing_materials', 'Marketing Materials',  'Supports marketing',         4),
+  ('product_media',       'Product Media',        'Médias produits',           5),
+  ('training_materials',  'Training Materials',   'Supports de formation',      6)
+on conflict (category_key) do nothing;
+
+-- ── Helper: is the current user an authenticated distributor? ─────────────
+create or replace function is_distributor()
+returns boolean language sql security definer stable as $$
+  select exists (select 1 from distributors where id = auth.uid());
+$$;
+
+-- ── Atomic, server-trusted download counter ────────────────────────────────
+create or replace function increment_media_download_count(p_asset_id uuid)
+returns void language sql security definer as $$
+  update media_assets set download_count = download_count + 1 where id = p_asset_id;
+$$;
+
+alter table media_categories enable row level security;
+alter table media_assets     enable row level security;
+
+drop policy if exists "public_read_media_categories" on media_categories;
+create policy "public_read_media_categories" on media_categories for select using (true);
+
+drop policy if exists "admin_media_categories_all" on media_categories;
+create policy "admin_media_categories_all" on media_categories for all
+  using (is_admin()) with check (is_admin());
+
+drop policy if exists "public_read_public_media_assets" on media_assets;
+create policy "public_read_public_media_assets" on media_assets for select
+  using (visibility = 'public' and is_published = true);
+
+drop policy if exists "distributor_read_media_assets" on media_assets;
+create policy "distributor_read_media_assets" on media_assets for select
+  using (is_published = true and is_distributor());
+
+drop policy if exists "admin_media_assets_all" on media_assets;
+create policy "admin_media_assets_all" on media_assets for all
+  using (is_admin()) with check (is_admin());
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Storage: media-center bucket (public read, admin-only write — same model
+-- as the existing `media` / `product-videos` buckets in this project).
+-- Note: distributor_only gating happens at the media_assets row level (RLS
+-- above); the storage bucket itself is public like the project's other
+-- buckets, so a raw storage URL is not access-controlled by itself.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+insert into storage.buckets (id, name, public)
+values ('media-center', 'media-center', true)
+on conflict (id) do nothing;
+
+drop policy if exists "public_read_media_center"  on storage.objects;
+drop policy if exists "admin_insert_media_center"  on storage.objects;
+drop policy if exists "admin_update_media_center"  on storage.objects;
+drop policy if exists "admin_delete_media_center"  on storage.objects;
+
+create policy "public_read_media_center"
+  on storage.objects for select
+  using (bucket_id = 'media-center');
+
+create policy "admin_insert_media_center"
+  on storage.objects for insert
+  with check (bucket_id = 'media-center' and is_admin());
+
+create policy "admin_update_media_center"
+  on storage.objects for update
+  using (bucket_id = 'media-center' and is_admin());
+
+create policy "admin_delete_media_center"
+  on storage.objects for delete
+  using (bucket_id = 'media-center' and is_admin());
+
+-- Migration: extend hero_carousel with badge, benefits, CTA, and product link fields
+-- Run this in the Supabase SQL editor or via `supabase db push`
+
+ALTER TABLE hero_carousel
+  ADD COLUMN IF NOT EXISTS badge_label_en  TEXT,
+  ADD COLUMN IF NOT EXISTS badge_label_fr  TEXT,
+  ADD COLUMN IF NOT EXISTS benefits        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS cta_link        TEXT,
+  ADD COLUMN IF NOT EXISTS linked_product_id UUID REFERENCES products(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN hero_carousel.badge_label_en IS 'Small pill badge shown over the slide, e.g. "Featured Solution" (English)';
+COMMENT ON COLUMN hero_carousel.badge_label_fr IS 'Small pill badge shown over the slide (French)';
+COMMENT ON COLUMN hero_carousel.benefits IS 'JSON array of {icon: string, label_en: string, label_fr: string} — benefit chips shown under slide copy';
+COMMENT ON COLUMN hero_carousel.cta_link IS 'Optional URL the slide links to (overridden by linked_product_id if set)';
+COMMENT ON COLUMN hero_carousel.linked_product_id IS 'Optional FK to products — clicking the slide navigates to this product';
+
+-- ── Migration 0017: partners table — full schema reconciliation ──────────────
+--
+-- The partners table was originally created manually in the Supabase dashboard
+-- without a tracked migration. This file creates it idempotently (using
+-- CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS) so it can be applied
+-- safely to both fresh databases and the existing live database.
+--
+-- Run this in: Supabase Dashboard → SQL Editor, or `supabase db push`
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ── Create table (no-op if it already exists) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.partners (
+  id              UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  slug            TEXT        NOT NULL UNIQUE,
+  status          TEXT        NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'active', 'suspended')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── Add all columns that may be missing (safe to re-run) ─────────────────────
+ALTER TABLE public.partners
+  ADD COLUMN IF NOT EXISTS whatsapp_number         TEXT,
+  ADD COLUMN IF NOT EXISTS contact_email           TEXT,
+  ADD COLUMN IF NOT EXISTS hero_title_en           TEXT,
+  ADD COLUMN IF NOT EXISTS hero_title_fr           TEXT,
+  ADD COLUMN IF NOT EXISTS hero_subtitle_en        TEXT,
+  ADD COLUMN IF NOT EXISTS hero_subtitle_fr        TEXT,
+  ADD COLUMN IF NOT EXISTS hero_image_url          TEXT,
+  ADD COLUMN IF NOT EXISTS distributor_id          UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS pending_contact_name    TEXT,
+  ADD COLUMN IF NOT EXISTS pending_contact_phone   TEXT,
+  ADD COLUMN IF NOT EXISTS custom_domain           TEXT UNIQUE,
+  ADD COLUMN IF NOT EXISTS domain_status           TEXT NOT NULL DEFAULT 'none'
+                             CHECK (domain_status IN ('none', 'pending_verification', 'verified', 'failed')),
+  ADD COLUMN IF NOT EXISTS domain_verification_token TEXT,   -- JSON string of DNS records from provider
+  ADD COLUMN IF NOT EXISTS domain_check_attempts   INTEGER  NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS domain_last_checked_at  TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS vercel_domain_added_at  TIMESTAMPTZ,  -- records domain-attach time for any provider
+  ADD COLUMN IF NOT EXISTS created_by_admin        UUID,          -- FK to auth.users; set on row creation
+  ADD COLUMN IF NOT EXISTS approved_by             UUID,          -- FK to auth.users; set on status → active
+  ADD COLUMN IF NOT EXISTS approved_at             TIMESTAMPTZ;
+
+-- Add domain_status CHECK constraint separately (guards against stale rows)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+     WHERE table_schema = 'public'
+       AND table_name   = 'partners'
+       AND constraint_name = 'partners_domain_status_check'
+  ) THEN
+    ALTER TABLE public.partners
+      ADD CONSTRAINT partners_domain_status_check
+        CHECK (domain_status IN ('none', 'pending_verification', 'verified', 'failed'));
+  END IF;
+END $$;
+
+-- ── Row Level Security ────────────────────────────────────────────────────────
+-- Service-role key (used server-side) bypasses RLS automatically.
+-- Anon/authenticated reads need an explicit policy so the public partner
+-- site page (/p/:slug) can call Supabase directly if needed.
+
+ALTER TABLE public.partners ENABLE ROW LEVEL SECURITY;
+
+-- Allow anyone to read active partner rows (public partner site pages)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+     WHERE schemaname = 'public'
+       AND tablename  = 'partners'
+       AND policyname = 'partners_public_read_active'
+  ) THEN
+    CREATE POLICY partners_public_read_active
+      ON public.partners
+      FOR SELECT
+      TO anon, authenticated
+      USING (status = 'active');
+  END IF;
+END $$;
+
+-- Admins (service role) can do everything — no explicit policy needed because
+-- the service-role key bypasses RLS. The policy below covers authenticated
+-- admin users making direct Supabase calls (not via the server-side API).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+     WHERE schemaname = 'public'
+       AND tablename  = 'partners'
+       AND policyname = 'partners_admin_full_access'
+  ) THEN
+    CREATE POLICY partners_admin_full_access
+      ON public.partners
+      FOR ALL
+      TO authenticated
+      USING (
+        EXISTS (
+          SELECT 1 FROM public.profiles
+           WHERE profiles.id = auth.uid()
+             AND profiles.role IN ('admin', 'superadmin')
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM public.profiles
+           WHERE profiles.id = auth.uid()
+             AND profiles.role IN ('admin', 'superadmin')
+        )
+      );
+  END IF;
+END $$;
+
+-- ── Indexes ───────────────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS partners_slug_idx           ON public.partners (slug);
+CREATE INDEX IF NOT EXISTS partners_status_idx         ON public.partners (status);
+CREATE INDEX IF NOT EXISTS partners_domain_status_idx  ON public.partners (domain_status);
+CREATE INDEX IF NOT EXISTS partners_custom_domain_idx  ON public.partners (custom_domain) WHERE custom_domain IS NOT NULL;
