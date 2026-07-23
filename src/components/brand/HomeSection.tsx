@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, FormEvent } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from "motion/react";
 import { useTranslation } from "react-i18next";
 import HeroCarousel from "./HeroCarousel";
 import {
@@ -43,6 +43,19 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith("fr") ? "fr" : "en";
   const partner = usePartner();
+
+  // ── Reduced-motion preference ──────────────────────────────────────────
+  const reducedMotion = typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  // ── Hero image pointer-tracking tilt (dimensional treatment) ──────────
+  const heroMouseX = useMotionValue(0.5);
+  const heroMouseY = useMotionValue(0.5);
+  const tiltY = useTransform(heroMouseX, [0, 1], [-4, 4]);
+  const tiltX = useTransform(heroMouseY, [0, 1], [4, -4]);
+  const springTiltX = useSpring(tiltX, { stiffness: 80, damping: 22, restDelta: 0.001 });
+  const springTiltY = useSpring(tiltY, { stiffness: 80, damping: 22, restDelta: 0.001 });
+
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [currentTestimonialIdx, setCurrentTestimonialIdx] = useState(0);
   const [selectedGalleryImg, setSelectedGalleryImg] = useState<string | null>(null);
@@ -403,21 +416,31 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
               className={`text-[2rem] leading-[1.1] tracking-[-0.02em] sm:text-5xl sm:leading-[1.05] sm:tracking-[-0.03em] lg:text-7xl lg:leading-[1.0] font-extrabold font-display ${textPrimary}`}
               aria-label={heroHeadline}
             >
-              {heroWords.map((word, i) => (
-                <motion.span
-                  key={`${word}-${i}`}
-                  className="inline-block mr-[0.25em] last:mr-0"
-                  initial={{ opacity: 0, y: 32 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    duration: 0.7,
-                    delay: 0.1 + i * 0.08,
-                    ease: [0.16, 1, 0.3, 1],
-                  }}
-                >
-                  {word}
-                </motion.span>
-              ))}
+              {heroWords.map((word, i) => {
+                // Apply Songtai signature gradient to the last 2 words of longer headlines
+                const isGradient = !reducedMotion && heroWords.length > 3 && i >= heroWords.length - 2;
+                return (
+                  <motion.span
+                    key={`${word}-${i}`}
+                    className="inline-block mr-[0.25em] last:mr-0"
+                    initial={{ opacity: 0, y: 32 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.7,
+                      delay: 0.1 + i * 0.08,
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                    style={isGradient ? {
+                      backgroundImage: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%)",
+                      backgroundClip: "text",
+                      WebkitBackgroundClip: "text",
+                      color: "transparent",
+                    } : {}}
+                  >
+                    {word}
+                  </motion.span>
+                );
+              })}
             </h1>
 
             <motion.p
@@ -461,11 +484,38 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
-            {/* Partner site: large portrait hero image with floating trust badges */}
+            {/* Partner site: dimensional portrait hero image with floating trust badges */}
             {partner?.hero_image_url ? (
-              <div className="relative">
-                {/* Main hero image — portrait ratio, larger visual anchor */}
-                <div className="relative rounded-3xl overflow-hidden aspect-[3/4] sm:aspect-[4/5] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.6)]">
+              <motion.div
+                className="relative"
+                style={reducedMotion ? {} : {
+                  rotateX: springTiltX,
+                  rotateY: springTiltY,
+                  transformStyle: "preserve-3d",
+                  transformPerspective: 900,
+                }}
+                onMouseMove={reducedMotion ? undefined : (e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  heroMouseX.set((e.clientX - rect.left) / rect.width);
+                  heroMouseY.set((e.clientY - rect.top) / rect.height);
+                }}
+                onMouseLeave={reducedMotion ? undefined : () => {
+                  heroMouseX.set(0.5);
+                  heroMouseY.set(0.5);
+                }}
+              >
+                {/* Colored glow shadow — behind the image, Songtai green + vermillion */}
+                {!reducedMotion && (
+                  <div
+                    className="absolute -inset-4 rounded-[36px] opacity-60 blur-2xl pointer-events-none"
+                    style={{
+                      background: "radial-gradient(ellipse at 40% 60%, rgba(1,105,52,0.25) 0%, rgba(231,56,13,0.12) 60%, transparent 100%)",
+                    }}
+                  />
+                )}
+
+                {/* Main hero image — portrait ratio, dimensional focal point */}
+                <div className="relative rounded-3xl overflow-hidden aspect-[3/4] sm:aspect-[4/5] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.7),0_8px_24px_-4px_rgba(1,105,52,0.2)]">
                   <img
                     src={partner.hero_image_url}
                     alt={heroHeadline}
@@ -473,11 +523,11 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                     fetchPriority="high"
                     decoding="async"
                   />
-                  {/* Subtle gradient at bottom for any future overlay text */}
+                  {/* Subtle gradient at bottom for depth */}
                   <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-stone-950/50 to-transparent pointer-events-none" />
                 </div>
 
-                {/* Floating certification badge — top-left */}
+                {/* Floating certification badge — top-left (gold, per token system) */}
                 <motion.div
                   className="absolute -top-3 -left-3 sm:-top-4 sm:-left-4 flex items-center gap-2 px-3 py-2 rounded-2xl shadow-lg border backdrop-blur-sm"
                   style={{ background: "rgba(12,10,9,0.85)", borderColor: "var(--color-gold)" }}
@@ -489,10 +539,10 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                   <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: "var(--color-gold)" }}>ISO / GMP Certified</span>
                 </motion.div>
 
-                {/* Floating stat badge — bottom-right */}
+                {/* Floating stat badge — bottom-right (Songtai green) */}
                 <motion.div
                   className="absolute -bottom-3 -right-3 sm:-bottom-4 sm:-right-4 flex items-center gap-2 px-3 py-2 rounded-2xl shadow-lg border backdrop-blur-sm"
-                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "rgba(30,154,86,0.35)" }}
+                  style={{ background: "rgba(12,10,9,0.85)", borderColor: "rgba(1,105,52,0.4)" }}
                   initial={{ opacity: 0, x: 12, y: 8 }}
                   animate={{ opacity: 1, x: 0, y: 0 }}
                   transition={{ duration: 0.7, delay: 0.65, ease: [0.16, 1, 0.3, 1] }}
@@ -500,7 +550,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                   <Sparkles className={`w-4 h-4 flex-shrink-0 ${accentGreen}`} />
                   <span className={`text-[10px] font-bold uppercase tracking-wide ${accentGreen}`}>100% Natural</span>
                 </motion.div>
-              </div>
+              </motion.div>
             ) : (
               <HeroCarousel />
             )}
@@ -576,10 +626,15 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {filteredProducts.map(p => (
-            <div
+          {filteredProducts.map((p, pIdx) => (
+            <motion.div
               key={p.id}
-              className={`${cardBg} ${cardHover} rounded-[20px] sm:rounded-[24px] p-4 flex flex-col justify-between group transition-all duration-200 border relative`}
+              className={`${cardBg} ${cardHover} rounded-[20px] sm:rounded-[24px] p-4 flex flex-col justify-between group transition-colors duration-200 border relative`}
+              initial={reducedMotion ? {} : { opacity: 0, y: 20 }}
+              whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.5, delay: (pIdx % 4) * 0.07, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={reducedMotion ? {} : { y: -5, boxShadow: "0 20px 48px -8px rgba(1,105,52,0.18), 0 4px 12px -2px rgba(1,105,52,0.08)" }}
             >
               <div className="space-y-4">
                 <div className="relative aspect-square rounded-2xl overflow-hidden bg-stone-950">
@@ -609,7 +664,7 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
                   {t("products.addToCart")}
                 </button>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </section>
@@ -654,13 +709,21 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 sm:gap-6">
           {BENEFIT_CARDS.map(({ icon, title, desc }, idx) => (
-            <div key={idx} className={`${cardBg} border p-6 sm:p-8 rounded-[24px] sm:rounded-[28px] space-y-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg`}>
+            <motion.div
+              key={idx}
+              className={`${cardBg} border p-6 sm:p-8 rounded-[24px] sm:rounded-[28px] space-y-4 transition-colors duration-200`}
+              initial={reducedMotion ? {} : { opacity: 0, y: 24 }}
+              whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.55, delay: idx * 0.1, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={reducedMotion ? {} : { y: -6, boxShadow: "0 20px 48px -8px rgba(1,105,52,0.18)" }}
+            >
               <div className={`p-3 bg-emerald-600/10 border border-emerald-600/20 ${accentGold} rounded-xl w-fit`}>
                 <DynIcon name={icon} className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <h4 className={`font-extrabold ${textPrimary} text-base sm:text-lg`}>{title}</h4>
               <p className={`${textMuted} text-xs leading-relaxed`}>{desc}</p>
-            </div>
+            </motion.div>
           ))}
         </div>
       </section>

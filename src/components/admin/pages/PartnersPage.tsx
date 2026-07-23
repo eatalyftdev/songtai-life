@@ -2,13 +2,14 @@ import { useState, useEffect, FormEvent, ReactNode } from "react";
 import {
   Globe, Plus, Edit2, CheckCircle, PauseCircle, PlayCircle,
   Link2, Copy, Check, ExternalLink, AlertTriangle, User,
-  RefreshCw, Shield, XCircle
+  RefreshCw, Shield, XCircle, Link as LinkIcon
 } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import PageShell, { Card, TableWrapper, Th, Td, Btn, SearchInput, Select } from "../shared/PageShell";
 import SlideOver from "../shared/SlideOver";
 import { SkeletonTable } from "../shared/Skeleton";
 import EmptyState from "../shared/EmptyState";
+import MediaUploader from "../../MediaUploader";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Partner {
@@ -104,6 +105,51 @@ function SectionHeader({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-2 pt-2 pb-1 border-b border-stone-800">
       <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{children}</span>
+    </div>
+  );
+}
+
+// ── Hero image field: upload-first with URL fallback ─────────────────────────
+function HeroImageField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [showUrl, setShowUrl] = useState(false);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Hero image</Label>
+        <button
+          type="button"
+          onClick={() => setShowUrl(v => !v)}
+          className="flex items-center gap-1 text-[10px] text-stone-500 hover:text-stone-300 transition-colors cursor-pointer"
+        >
+          <LinkIcon className="w-3 h-3" />
+          {showUrl ? "Hide URL field" : "Use URL instead"}
+        </button>
+      </div>
+
+      {/* Primary: drag-and-drop uploader */}
+      <MediaUploader
+        bucket="media"
+        folder="partners"
+        currentUrl={value || undefined}
+        onUploaded={url => onChange(url)}
+        onRemoved={() => onChange("")}
+        accept="image/*"
+        maxSizeMb={8}
+        label="Drop partner photo here or click to browse"
+      />
+
+      {/* Fallback: raw URL input (advanced / already-hosted images) */}
+      {showUrl && (
+        <div className="flex items-center gap-2 mt-1">
+          <input
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder="https://…  (already-hosted image URL)"
+            className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-xs text-white placeholder-stone-600 focus:outline-none focus:border-emerald-600 transition-colors"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -652,9 +698,11 @@ export default function PartnersPage() {
               <Input value={form.heroSubtitleFr} onChange={v => setForm(f => ({ ...f, heroSubtitleFr: v }))} placeholder="Produits de santé premium" />
             </FormRow>
           </div>
-          <FormRow label="Hero image URL (upload to Media Library first)">
-            <Input value={form.heroImageUrl} onChange={v => setForm(f => ({ ...f, heroImageUrl: v }))} placeholder="https://..." />
-          </FormRow>
+          {/* ── Hero image — upload-first with URL fallback ───────────── */}
+          <HeroImageField
+            value={form.heroImageUrl}
+            onChange={url => setForm(f => ({ ...f, heroImageUrl: url }))}
+          />
 
           {/* Custom domain — edit only. On create, the site is immediately live at /p/:slug.
               Custom domain is a distinct opt-in step added after creation. */}
