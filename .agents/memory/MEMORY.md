@@ -18,3 +18,4 @@
 - [Platform-agnostic domain provider](domain-provider-pattern.md) — DomainProvider interface in server/domain-provider.ts; DOMAIN_PROVIDER env var selects impl; NullDomainProvider used when creds absent.
 - [SITE_URL pattern](site-url-pattern.md) — module-level SITE_URL constant in server.ts; VITE_SITE_URL for client; never hardcode songtailife.cm in application logic.
 - [Netlify deployment](netlify-deployment.md) — netlify.toml + netlify/functions/server.ts (serverless-http wrapper); app/serverReady exported from server.ts; NETLIFY=true suppresses app.listen().
+- [Partner routes 502 fix + build](partner-502-fix-and-build.md) — ws transport serverless fix, partners migration 0017, custom-domain meta SSR, Gap 1/2/3 status (all largely pre-built).

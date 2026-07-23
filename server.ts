@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -2462,9 +2463,130 @@ Answer concisely, helpfully, and professionally. Support both English and French
   } else {
     console.log("Starting server in production mode...");
     const distPath = path.join(process.cwd(), "dist");
+    const htmlPath = path.join(distPath, "index.html");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+
+    // ── Custom domain meta injection ─────────────────────────────────────────
+    // For partner custom domains (e.g. janedoe-wellness.com), inject partner-
+    // specific <title>, <meta name="description">, and OG tags into the initial
+    // HTML response before the SPA boots. This ensures search crawlers and link
+    // previewers see the partner's content, not generic Songtai meta tags.
+    //
+    // Resolution logic mirrors PartnerContext.tsx isMainSiteHostname():
+    //  • Main site hosts (localhost, Replit previews, configured SITE_URL) → serve
+    //    static index.html unchanged.
+    //  • Any other hostname → query partners table for a verified custom_domain match.
+    //    - If found → inject partner meta and serve modified HTML.
+    //    - If NOT found → 404 with a clear "domain not configured" page.
+    //    A custom domain must NEVER silently serve the main company site.
+
+    let _baseHtmlCache = "";
+    function getBaseHtml(): string {
+      if (!_baseHtmlCache && fs.existsSync(htmlPath)) {
+        _baseHtmlCache = fs.readFileSync(htmlPath, "utf-8");
+      }
+      return _baseHtmlCache;
+    }
+
+    let _mainHost = "";
+    try { _mainHost = new URL(SITE_URL).hostname; } catch { /* SITE_URL malformed */ }
+
+    app.get("*", async (req, res) => {
+      // Strip port from Host header so "example.com:443" → "example.com"
+      const host = (req.headers.host ?? "").split(":")[0].toLowerCase().trim();
+
+      const isMainHost =
+        !host ||
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        (_mainHost && host === _mainHost) ||
+        host.endsWith(".replit.dev") ||
+        host.endsWith(".replit.app") ||
+        host.endsWith(".riker.replit.dev") ||
+        host.endsWith(".netlify.app") ||
+        host.endsWith(".vercel.app");
+
+      if (isMainHost || !db) {
+        return res.sendFile(htmlPath);
+      }
+
+      // ── Custom domain — look up partner and inject meta ──────────────────
+      try {
+        const base = getBaseHtml();
+        if (!base) return res.sendFile(htmlPath); // build output missing; fail safe
+
+        const { data: partner } = await db
+          .from("partners")
+          .select("hero_title_en, hero_title_fr, hero_subtitle_en, hero_subtitle_fr, hero_image_url")
+          .eq("custom_domain", host)
+          .eq("status", "active")
+          .eq("domain_status", "verified")
+          .maybeSingle();
+
+        if (!partner) {
+          // Unrecognised custom domain — must not silently render the main company site
+          console.warn(`[Partner SSR] Unrecognised custom domain: "${host}" — serving 404`);
+          return res.status(404).type("text/html").send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Site not available</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#0b0a09;color:#a8a29e;display:flex;align-items:center;justify-content:center;min-height:100svh;margin:0;padding:2rem;text-align:center}
+    h1{color:#fff;font-size:1.5rem;margin-bottom:0.5rem}
+    p{max-width:28rem;line-height:1.6;font-size:0.875rem}
+  </style>
+</head>
+<body>
+  <div>
+    <h1>Site not available</h1>
+    <p>This domain is not configured as a partner site. If you believe this is an error, please contact the site administrator.</p>
+  </div>
+</body>
+</html>`);
+        }
+
+        // HTML-escape helper prevents XSS via injected content
+        const esc = (s: string) =>
+          s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+        const title       = esc(partner.hero_title_en    || `${host} — Songtai Life Partner`);
+        const description = esc(partner.hero_subtitle_en || "Premium wellness products from Songtai Life.");
+        const imageUrl    = (partner.hero_image_url ?? "").replace(/"/g, "&quot;");
+        const canonicalUrl = `https://${esc(host)}/`;
+
+        const injectedMeta = [
+          `<meta property="og:title" content="${title}">`,
+          `<meta property="og:description" content="${description}">`,
+          `<meta property="og:type" content="website">`,
+          `<meta property="og:url" content="${canonicalUrl}">`,
+          imageUrl ? `<meta property="og:image" content="${imageUrl}">` : "",
+          `<meta name="twitter:card" content="summary_large_image">`,
+          `<meta name="twitter:title" content="${title}">`,
+          `<meta name="twitter:description" content="${description}">`,
+          imageUrl ? `<meta name="twitter:image" content="${imageUrl}">` : "",
+          `<link rel="canonical" href="${canonicalUrl}">`,
+        ].filter(Boolean).join("\n    ");
+
+        const html = base
+          // Replace <title> with partner title
+          .replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`)
+          // Replace or add meta description
+          .replace(
+            /<meta name="description"[^>]*>/i,
+            `<meta name="description" content="${description}">`,
+          )
+          // Inject OG/Twitter/canonical tags before </head>
+          .replace("</head>", `    ${injectedMeta}\n  </head>`);
+
+        console.log(`[Partner SSR] Served custom domain "${host}" with partner meta (title="${title}")`);
+        return res.type("text/html").send(html);
+
+      } catch (err: any) {
+        console.error(`[Partner SSR] Meta injection error for "${host}":`, err?.message);
+        return res.sendFile(htmlPath); // safe fallback
+      }
     });
   }
 

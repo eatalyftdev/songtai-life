@@ -587,15 +587,23 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
 
           <div className="lg:col-span-6 grid grid-cols-2 gap-3 sm:gap-4">
             {[
-              { value: `${((companyIntroSection.stat_members as number) / 1000).toFixed(1)}k+`, labelKey: "stats.members", colorCls: textPrimary },
-              { value: `+${companyIntroSection.stat_countries}`, labelKey: "stats.countries", colorCls: accentGreen },
-              { value: `${companyIntroSection.stat_products}`,   labelKey: "stats.products",  colorCls: textPrimary },
-              { value: `${companyIntroSection.stat_awards}`,     labelKey: "stats.awards",    colorCls: accentGold },
+              { value: `${((companyIntroSection.stat_members as number) / 1000).toFixed(1)}k+`, labelKey: "stats.members", colorCls: textPrimary,  hoverShadow: "0 20px 48px -8px rgba(1,105,52,0.15), 0 4px 12px -2px rgba(1,105,52,0.08)" },
+              { value: `+${companyIntroSection.stat_countries}`, labelKey: "stats.countries", colorCls: accentGreen, hoverShadow: "0 20px 48px -8px rgba(1,105,52,0.28), 0 4px 12px -2px rgba(1,105,52,0.14)" },
+              { value: `${companyIntroSection.stat_products}`,   labelKey: "stats.products",  colorCls: textPrimary, hoverShadow: "0 20px 48px -8px rgba(1,105,52,0.15), 0 4px 12px -2px rgba(1,105,52,0.08)" },
+              { value: `${companyIntroSection.stat_awards}`,     labelKey: "stats.awards",    colorCls: accentGold,  hoverShadow: "0 20px 48px -8px rgba(217,169,75,0.25), 0 4px 12px -2px rgba(217,169,75,0.10)" },
             ].map((stat, i) => (
-              <div key={i} className={`${statsCard} border p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] space-y-2 hover:scale-[1.02] transition-transform duration-200`}>
+              <motion.div
+                key={i}
+                className={`${statsCard} border p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] space-y-2`}
+                initial={reducedMotion ? {} : { opacity: 0, y: 16 }}
+                whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                whileHover={reducedMotion ? {} : { y: -4, boxShadow: stat.hoverShadow }}
+              >
                 <h3 className={`text-xl sm:text-2xl lg:text-3xl font-extrabold ${stat.colorCls}`}>{stat.value}</h3>
                 <p className={`text-xs ${textDim} font-medium uppercase tracking-wider`}>{t(stat.labelKey)}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -670,26 +678,50 @@ export default function HomeSection({ onNavigate, onAddToCart, theme = "dark" }:
       </section>
 
       {/* ── SECTION 4: OPPORTUNITY TIMELINE ──────────────────────────── */}
-      <section className={`${sectionBg} py-16 sm:py-20 text-left`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 sm:space-y-16">
-          <div className="max-w-xl">
+      <section className={`${sectionBg} py-16 sm:py-20 text-left relative overflow-hidden`}>
+        {/* Atmospheric blob backgrounds — purely decorative, never over text */}
+        <div className="absolute top-[-10%] right-[5%] w-[350px] sm:w-[600px] h-[350px] sm:h-[600px] rounded-full bg-emerald-600/8 blur-[100px] sm:blur-[140px] pointer-events-none" />
+        <div className="absolute bottom-[-5%] left-[5%] w-[250px] sm:w-[450px] h-[250px] sm:h-[450px] rounded-full bg-amber-500/8 blur-[80px] sm:blur-[120px] pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 sm:space-y-16 relative z-10">
+          <motion.div
+            className="max-w-xl"
+            initial={reducedMotion ? {} : { opacity: 0, y: 20 }}
+            whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          >
             <span className={`text-xs uppercase tracking-widest ${accentGold} font-bold`}>{t("home.opp.label")}</span>
             <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display ${textPrimary} mt-1`}>{t("home.opp.heading")}</h2>
             <p className={`${textMuted} text-sm mt-2 leading-relaxed`}>{t("home.opp.body")}</p>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 relative">
             <div className="hidden md:block absolute top-[28px] left-[10%] right-[10%] h-0.5 bg-gradient-to-r from-emerald-900 to-yellow-900" />
             {OPPORTUNITY_STEPS.map((item, idx) => (
-              <div key={idx} className="space-y-4 relative z-10 group">
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full ${timelineCircle} border flex items-center justify-center font-extrabold text-sm ${accentGold} shadow-xl transition-transform duration-200 group-hover:scale-110`}>
+              <motion.div
+                key={idx}
+                className="space-y-4 relative z-10 group"
+                initial={reducedMotion ? {} : { opacity: 0, y: 24 }}
+                whileInView={reducedMotion ? {} : { opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.55, delay: idx * 0.1, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <motion.div
+                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full ${timelineCircle} border flex items-center justify-center font-extrabold text-sm ${accentGold}`}
+                  whileHover={reducedMotion ? {} : {
+                    scale: 1.12,
+                    boxShadow: "0 0 0 4px rgba(217,169,75,0.15), 0 8px 24px -4px rgba(217,169,75,0.20)",
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                >
                   {item.step}
-                </div>
+                </motion.div>
                 <div className="space-y-1.5">
                   <h4 className={`font-extrabold ${textPrimary} text-sm sm:text-base`}>{item.label}</h4>
                   <p className={`${textMuted} text-xs leading-relaxed`}>{item.desc}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
