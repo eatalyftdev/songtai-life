@@ -1,0 +1,64 @@
+# Claude Code Build Prompt — Fix SITE_URL Misconfiguration (Partner Links Point to an Unconfigured Domain)
+
+Paste this into Claude Code inside the `songtai-life` repo.
+
+---
+
+## 0. Skill activation
+
+Activate **Infrastructure**, **DevOps**, and **Backend** skills from the `jeffallan/claude-skills` framework before making changes. State which skills you're activating.
+
+## 1. Root cause, found directly in the code — this is not a partner-resolution bug
+
+`server.ts` line 520:
+```ts
+const SITE_URL = (process.env.SITE_URL ?? "https://songtailife.cm").replace(/\/$/, "");
+```
+and `.env.example`:
+```
+SITE_URL="https://songtailife.cm"
+VITE_SITE_URL="https://songtailife.cm"
+```
+
+**`songtailife.cm` is a custom domain that is not yet configured/live.** Every generated partner/referral link in the system — including the "shared platform URL" shown to the admin right after creating a partner (`server.ts` ~line 1854: `` `${SITE_URL}/p/${slug}` ``), WhatsApp notification messages, and sitemap URLs — is built from this value. If the deployment's real, reachable address is actually `something.vercel.app` or `something.netlify.app` (because the real custom domain isn't live yet), then **every link the system generates is pointing at a domain that doesn't resolve**, which is exactly what produces the symptom "the main site can't load, it's trying to load a partner site" — the browser isn't failing to load the actual app; it's failing to load a broken link that was generated with the wrong base URL. `PartnerContext.tsx` and `App.tsx`'s routing were checked directly and do not contain any logic that would block the plain `/` route from loading — this is an environment configuration issue, not an application bug.
+
+## 2. The fix
+
+1. **Determine the actual live URL(s)** the app is currently reachable at — check the Vercel project dashboard and/or Netlify site dashboard for the real assigned domain (e.g. `songtai-life-main.vercel.app`, or whatever Netlify assigned).
+2. **Set `SITE_URL` and `VITE_SITE_URL` to that real, currently-reachable URL** in the environment variables of whichever platform(s) are actually serving traffic right now — not the aspirational `songtailife.cm` domain until that domain is actually purchased, pointed at the deployment, and verified live.
+3. If **both** Vercel and Netlify are live simultaneously (per the platform-agnostic deployment work) with two different default domains, each platform's own environment variables should hold **its own** correct `SITE_URL`/`VITE_SITE_URL` — don't set the same single value in both if their actual reachable domains differ. Every partner link generated must resolve correctly regardless of which deployment served the admin's request.
+4. Once a real custom domain (e.g. `songtailife.cm`) is actually purchased and fully verified/live in DNS, `SITE_URL`/`VITE_SITE_URL` can be updated to that domain across all environments — at that point it becomes the correct canonical value. Until then, it must reflect wherever the app is genuinely reachable today.
+5. **Remove the hardcoded fallback risk**: change the fallback in `server.ts` from defaulting to a specific domain name to either (a) failing loudly at startup with a clear log message if `SITE_URL` isn't set in production, so a missing env var is caught immediately rather than silently generating broken links, or (b) falling back to something guaranteed reachable in that environment (e.g. derived from the request's own host header for locally-generated links) — pick whichever is more appropriate for this codebase's deployment practices, but do not leave a silent fallback to an unverified domain in place.
+
+## 3. Test data already seeded for verification
+
+A test partner already exists in the live database for you to verify against once the fix is in:
+
+```
+slug: demo-partner
+status: active
+distributor_id: null (uses pending_contact_name/phone — no account required, per the existing "create without an account" flow)
+whatsapp_number: +237600000000
+hero_title_en: "Health, Opportunity, Prosperity — With Me"
+hero_title_fr: "Santé, Opportunité, Prospérité — Avec Moi"
+custom_domain: none (shared-platform URL only, as intended by default)
+```
+
+Once `SITE_URL` is corrected, this partner should be reachable at `{corrected SITE_URL}/p/demo-partner` and render correctly with its own hero title/subtitle overriding the default homepage content, exactly per the existing `usePartner()` logic in `HomeSection.tsx`.
+
+## 4. Non-negotiables
+- A partner site (`/p/:slug`) must always be reachable at `{whichever domain is actually serving the app}/p/:slug` — this must work correctly on a bare `*.vercel.app` or `*.netlify.app` default domain with zero custom domain configured, exactly as already designed; this fix is about correcting a wrong configuration value, not building new capability.
+- Do not touch `PartnerContext.tsx`'s path-matching logic as part of this fix — it was verified correct; the bug is entirely in what base URL gets prepended to the links shown to admins/distributors/customers, not in how the app resolves a partner once a correct link is actually visited.
+- Confirm this fix on both hosting environments currently live, if more than one is.
+
+## 5. QA checklist before deploy
+- [ ] Confirm the real, currently-reachable domain(s) for every live deployment (Vercel/Netlify)
+- [ ] Set `SITE_URL`/`VITE_SITE_URL` correctly in each environment's config
+- [ ] Create a new test partner (or use the seeded `demo-partner`) and confirm the "shared platform URL" shown in the admin panel is a real, clickable, working link
+- [ ] Visit `{corrected SITE_URL}/p/demo-partner` directly — confirm it loads correctly with the seeded hero content, not a broken page
+- [ ] Visit the bare root URL (`{corrected SITE_URL}/`) — confirm the main site still loads normally, unaffected
+- [ ] Check a WhatsApp-notification-generated link (e.g. from the distributor referral flow) — confirm it also now points to a working URL
+- [ ] Confirm the startup-time safeguard from step 2.5 actually triggers if `SITE_URL` is unset in a test environment, rather than silently defaulting again
+- [ ] Run existing lint/test suite, then redeploy
+
+Report back: the actual real domain(s) found for each live environment, and confirmation that `{SITE_URL}/p/demo-partner` now loads correctly.

@@ -518,7 +518,25 @@ const PORT = Number.isInteger(_parsedPort) && _parsedPort > 0 && _parsedPort <= 
 // ── Site URL (host-neutral) ───────────────────────────────────────────────────
 // Set SITE_URL in your deployment environment to match the actual domain.
 // All code that builds absolute URLs reads this constant — never hardcodes a domain.
-const SITE_URL = (process.env.SITE_URL ?? "https://songtailife.cm").replace(/\/$/, "");
+const _rawSiteUrl = process.env.SITE_URL;
+if (!_rawSiteUrl) {
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[FATAL] SITE_URL environment variable is not set. Every generated partner link, " +
+      "referral link, and sitemap URL will be broken. Set SITE_URL to the actual " +
+      "reachable domain (e.g. https://your-app.vercel.app or https://your-app.netlify.app) " +
+      "in your deployment environment, then redeploy."
+    );
+    process.exit(1);
+  } else {
+    console.warn(
+      `[WARNING] SITE_URL is not set — falling back to http://localhost:${PORT}. ` +
+      "Set SITE_URL (and VITE_SITE_URL) in your .env file to the real reachable URL " +
+      "so generated partner/referral links actually work."
+    );
+  }
+}
+const SITE_URL = (_rawSiteUrl ?? `http://localhost:${PORT}`).replace(/\/$/, "");
 
 // ── Domain provider (platform-agnostic) ──────────────────────────────────────
 // Resolved once at startup from DOMAIN_PROVIDER env var (default: "vercel").
