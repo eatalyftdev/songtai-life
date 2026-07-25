@@ -19,6 +19,7 @@
   command         = "npm run build"
   publish         = "dist"
   functions       = "netlify/functions"
+  SECRETS_SCAN_OMIT_PATHS = ".agents/memory/MEMORY.md,.env.example"
 
 [build.environment]
   # Node version — keep in sync with .nvmrc / engines in package.json
