@@ -19,11 +19,14 @@
   command         = "npm run build"
   publish         = "dist"
   functions       = "netlify/functions"
-  SECRETS_SCAN_OMIT_PATHS = ".agents/memory/MEMORY.md,.env.example"
 
 [build.environment]
   # Node version — keep in sync with .nvmrc / engines in package.json
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
+  # These files contain documented placeholders rather than deploy credentials.
+  SECRETS_SCAN_OMIT_PATHS = ".agents/memory/MEMORY.md,.env.example"
+  # This environment value identifies the host and is not a credential.
+  SECRETS_SCAN_OMIT_KEYS = "SERVERLESS_PLATFORM"
 
 [dev]
   # Local Netlify Dev server — proxies to the Express dev server.
