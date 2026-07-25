@@ -26,7 +26,7 @@
   # These files contain documented placeholders rather than deploy credentials.
   SECRETS_SCAN_OMIT_PATHS = ".agents/memory/MEMORY.md,.env.example"
   # This environment value identifies the host and is not a credential.
-  SECRETS_SCAN_OMIT_KEYS = "SERVERLESS_PLATFORM"
+  SECRETS_SCAN_OMIT_KEYS = "SERVERLESS_PLATFORM,SUPABASE_URL,VITE_SUPABASE_URL"
 
 [dev]
   # Local Netlify Dev server — proxies to the Express dev server.
@@ -35,7 +35,7 @@
   publish     = "dist"
   autoLaunch  = false
 
-# ── Function routing ──────────────────────────────────────────────────────────
+# ── Function routing ────────────────────────────────────────────────────────
 # API routes and dynamic server-rendered paths (sitemap, robots) go to the
 # Express function; all other paths are served from the static Vite build with
 # a SPA fallback so client-side routing works correctly.
@@ -64,7 +64,7 @@
   to     = "/index.html"
   status = 200
 
-# ── Security headers ──────────────────────────────────────────────────────────
+# ── Security headers ────────────────────────────────────────────────────────
 # Mirrors the headers already set by Express middleware (server.ts) and
 # vercel.json so behavior is identical regardless of hosting platform.
 # Express middleware takes precedence for /api/* responses; these headers
